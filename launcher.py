@@ -874,6 +874,27 @@ def main(no_tunnel: bool = False, tunnel_only: bool = False) -> int:
     # Вступительная анимация (проявление из шума)
     intro_animation()
 
+    # ── Выбор: настроить .env или запустить сразу ─────────────
+    sep = "─" * 54
+    print(f"\n  {C['cyan']}{sep}{RESET}")
+    print(f"  {BOLD}{C['white']}  [1] Запустить бота{RESET}")
+    print(f"  {BOLD}{C['white']}  [2] Настроить .env  →  затем запуск{RESET}")
+    print(f"  {C['cyan']}{sep}{RESET}")
+    print()
+
+    while True:
+        try:
+            choice = input(f"  {C['dark_yellow']}Выбор (1/2): {RESET}").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+        if choice in ("1", "2", ""):
+            break
+        cprint("  Введите 1 или 2", "yellow")
+
+    if choice == "2":
+        env_wizard()
+
     # Запускаем непрерывную анимацию баннера в фоне
     animator = BannerAnimator()
     animator.start()
