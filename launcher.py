@@ -9,11 +9,14 @@ CERBER Bot Launcher — интерактивный запуск с анимир�
 from __future__ import annotations
 
 import argparse
+import math
 import os
+import random
 import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -42,6 +45,7 @@ LOGS = {
 # ── ANSI-утилиты ─────────────────────────────────────────────
 RESET = "\033[0m"
 BOLD = "\033[1m"
+DIM = "\033[2m"
 
 
 def rgb(r: int, g: int, b: int) -> str:
@@ -53,15 +57,30 @@ def _move(row: int, col: int) -> str:
 
 
 def _clear():
-    print("\033[2J\033[H", end="", flush=True)
+    sys.stdout.write("\033[2J\033[H")
+    sys.stdout.flush()
 
 
 def _hide_cursor():
-    print("\033[?25l", end="", flush=True)
+    sys.stdout.write("\033[?25l")
+    sys.stdout.flush()
 
 
 def _show_cursor():
-    print("\033[?25h", end="", flush=True)
+    sys.stdout.write("\033[?25h")
+    sys.stdout.flush()
+
+
+def _save_cursor() -> str:
+    return "\033[s"
+
+
+def _restore_cursor() -> str:
+    return "\033[u"
+
+
+def _clamp(v: int, lo: int = 0, hi: int = 255) -> int:
+    return max(lo, min(hi, v))
 
 
 # ── Палитра ───────────────────────────────────────────────────
@@ -87,103 +106,229 @@ BANNER = [
     r"  ╚═════╝╚══════╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚═╝  ╚═╝",
 ]
 
-# Огненный градиент: тёмно-красный → алый → оранжевый → жёлтый
-FIRE = [
-    (140, 20, 0),
-    (200, 40, 0),
-    (240, 80, 0),
-    (255, 130, 10),
-    (255, 180, 40),
-    (255, 220, 80),
+# Неоновый градиент: зелёный → бирюзовый (стиль кряков / warez NFO)
+CRACK_GRADIENT = [
+    (0, 255, 65),
+    (0, 240, 90),
+    (0, 220, 110),
+    (0, 200, 125),
+    (0, 180, 105),
+    (0, 160, 85),
 ]
 
+# Символы глитча, шума, «битых пикселей»
+GLITCH_BLOCK = "░▒▓█▄▀▐▌╬╫╪"
+GLITCH_NOISE = "!@#$%&*<>?/\\|~^;:="
 
-def _fire_color(row: int) -> tuple[int, int, int]:
-    return FIRE[min(row, len(FIRE) - 1)]
+# Цвета артефактов
+GLITCH_COLORS = [
+    (255, 0, 80),    # розовый
+    (0, 255, 255),   # cyan
+    (255, 0, 255),   # magenta
+    (255, 255, 255), # белый
+    (120, 0, 220),   # фиолетовый
+    (255, 200, 0),   # тёплый жёлтый
+]
+
+# Высота области баннера (строки терминала 1..BANNER_HEIGHT)
+BANNER_HEIGHT = len(BANNER) + 3  # banner + пустая строка + subtitle + separator
+
+# Потокобезопасный вывод
+_io_lock = threading.Lock()
 
 
-# ── Анимация баннера ──────────────────────────────────────────
-def animate_banner():
-    """Огненная анимация ASCII-баннера CERBER."""
+# ── Непрерывная анимация баннера ──────────────────────────────
+
+class BannerAnimator:
+    """Фоновый поток: рисует баннер с глитч-эффектами в стиле битых пикселей."""
+
+    def __init__(self) -> None:
+        self._stop_evt = threading.Event()
+        self._active = threading.Event()
+        self._active.set()  # по умолчанию НЕ на паузе
+        self._thread: threading.Thread | None = None
+        self._frame = 0
+
+    # ── управление ────────────────────────────────────────────
+
+    def start(self) -> None:
+        _hide_cursor()
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop_evt.set()
+        self._active.set()
+        if self._thread:
+            self._thread.join(timeout=2)
+        _show_cursor()
+
+    def pause(self) -> None:
+        self._active.clear()
+
+    def resume(self) -> None:
+        self._active.set()
+
+    # ── основной цикл ────────────────────────────────────────
+
+    def _loop(self) -> None:
+        while not self._stop_evt.is_set():
+            self._active.wait()
+            if self._stop_evt.is_set():
+                break
+            self._render()
+            self._frame += 1
+            self._stop_evt.wait(0.08)  # ~12 FPS
+
+    # ── рендер одного кадра ──────────────────────────────────
+
+    def _render(self) -> None:
+        f = self._frame
+        buf: list[str] = []
+
+        # === Периодические глобальные события ===
+        # «Сбой развёртки» — вся картинка на 1 кадр сдвигается
+        global_shift = 0
+        if random.random() < 0.005:
+            global_shift = random.choice([-3, -2, 2, 3])
+
+        # «Инверсия строки» — одна случайная строка полностью глитчит
+        corrupt_row = -1
+        if random.random() < 0.012:
+            corrupt_row = random.randint(0, len(BANNER) - 1)
+
+        for i, line in enumerate(BANNER):
+            row = i + 1
+            r0, g0, b0 = CRACK_GRADIENT[min(i, len(CRACK_GRADIENT) - 1)]
+
+            # Медленный пульс яркости
+            pulse = math.sin(f * 0.06 + i * 0.4) * 0.15
+            r0 = _clamp(int(r0 + 50 * pulse))
+            g0 = _clamp(int(g0 + 80 * pulse))
+            b0 = _clamp(int(b0 + 50 * pulse))
+
+            # Горизонтальный дрожание (VHS-эффект)
+            jitter = global_shift
+            if random.random() < 0.018:
+                jitter += random.choice([-2, -1, 1, 2])
+            col = max(1, 3 + jitter)
+
+            # Скан-линия (яркая полоса бежит сверху вниз)
+            scan_pos = (f % 80) / 80.0 * (len(BANNER) + 6) - 2
+            scan_dist = abs(i - scan_pos)
+
+            # Полностью «битая» строка?
+            is_corrupt = i == corrupt_row
+
+            parts: list[str] = []
+            for j, ch in enumerate(line):
+                # 1. Глитч отдельных символов (~0.7 % шанс)
+                if random.random() < 0.007:
+                    gch = random.choice(GLITCH_BLOCK)
+                    gr, gg, gb = random.choice(GLITCH_COLORS)
+                    parts.append(f"{rgb(gr, gg, gb)}{gch}")
+                # 2. Битая строка целиком
+                elif is_corrupt:
+                    if random.random() < 0.3:
+                        gc = random.choice(GLITCH_BLOCK + GLITCH_NOISE)
+                        gr, gg, gb = random.choice(GLITCH_COLORS)
+                        parts.append(f"{rgb(gr, gg, gb)}{gc}")
+                    else:
+                        cr, cg, cb = random.choice(GLITCH_COLORS)
+                        parts.append(f"{rgb(cr, cg, cb)}{ch}")
+                # 3. Скан-линия — яркое свечение
+                elif scan_dist < 1.5:
+                    t = (1.5 - scan_dist) / 1.5
+                    r = _clamp(int(r0 + (255 - r0) * t * 0.6))
+                    g = _clamp(int(g0 + (255 - g0) * t * 0.6))
+                    b = _clamp(int(b0 + (255 - b0) * t * 0.6))
+                    parts.append(f"{rgb(r, g, b)}{ch}")
+                # 4. Обычный символ с мягкой волной
+                else:
+                    wave = math.sin(f * 0.04 + j * 0.12) * 0.08
+                    r = _clamp(int(r0 + 40 * wave))
+                    g = _clamp(int(g0 + 40 * wave))
+                    b = _clamp(int(b0 + 40 * wave))
+                    parts.append(f"{rgb(r, g, b)}{ch}")
+
+            # Очищаем до конца строки (\033[K) чтобы артефакты от jitter не оставались
+            buf.append(f"{_move(row, col)}{BOLD}{''.join(parts)}{RESET}\033[K")
+
+        # === Подстрочник ===
+        sub_row = len(BANNER) + 2
+        if random.random() < 0.04:
+            variants = [
+                "  ░▒▓ C.R.A.C.K.E.D ▓▒░  ",
+                "  ▓░▒ CRACKED ▒░▓  ",
+                f"  ███ ERR{'O' * random.randint(1, 5)}R ███  ",
+                "  ▒░▒ 0xDEADB33F ▒░▒  ",
+                "  ░▓▒ NFOFORCE ▒▓░  ",
+            ]
+            sub_text = random.choice(variants)
+            sub_color = rgb(*random.choice(GLITCH_COLORS))
+        else:
+            sub_text = "  ▓▒░ Bot Launcher ░▒▓  "
+            glow = math.sin(f * 0.05) * 0.15
+            sr = _clamp(int(0 + 40 * glow))
+            sg = _clamp(int(200 + 55 * glow))
+            sb = _clamp(int(100 + 40 * glow))
+            sub_color = rgb(sr, sg, sb)
+
+        pad = max(0, (52 - len(sub_text)) // 2)
+        buf.append(
+            f"{_move(sub_row, 3 + pad)}{BOLD}{sub_color}{sub_text}{RESET}\033[K"
+        )
+
+        # === Разделитель ===
+        sep_row = len(BANNER) + 3
+        sep = "─" * 54
+        flicker = _clamp(int(60 + 15 * math.sin(f * 0.03)))
+        buf.append(f"{_move(sep_row, 3)}{rgb(flicker, flicker, flicker + 10)}{sep}{RESET}")
+
+        with _io_lock:
+            sys.stdout.write(_save_cursor() + "".join(buf) + _restore_cursor())
+            sys.stdout.flush()
+
+
+# ── Входная анимация (быстрое «проявление из шума») ──────────
+
+def intro_animation() -> None:
+    """Строки баннера проявляются из случайного шума."""
     _hide_cursor()
     _clear()
 
-    try:
-        # Фаза 1 — построчное появление
-        for i, line in enumerate(BANNER):
-            r, g, b = _fire_color(i)
-            print(f"  {BOLD}{rgb(r, g, b)}{line}{RESET}")
-            time.sleep(0.07)
-
-        # Фаза 2 — бегущий блик слева направо (2 волны)
-        banner_row = 1  # 1-based
-        line_len = max(len(l) for l in BANNER)
-
-        for wave in range(2):
-            step = 3 if wave == 0 else 4
-            for wave_pos in range(-8, line_len + 10, step):
-                for i, line in enumerate(BANNER):
-                    r0, g0, b0 = _fire_color(i)
-                    parts: list[str] = []
-                    for j, ch in enumerate(line):
-                        dist = abs(j - wave_pos)
-                        if dist < 7:
-                            t = (7 - dist) / 7.0
-                            r = min(255, int(r0 + (255 - r0) * t * 0.8))
-                            g = min(255, int(g0 + (255 - g0) * t * 0.8))
-                            b = min(255, int(b0 + (255 - b0) * t * 0.8))
-                            parts.append(f"{rgb(r, g, b)}{ch}")
-                        else:
-                            parts.append(f"{rgb(r0, g0, b0)}{ch}")
-                    print(
-                        f"{_move(banner_row + i, 3)}{BOLD}{''.join(parts)}{RESET}",
-                        end="",
-                    )
-                sys.stdout.flush()
-                time.sleep(0.012)
-
-        # Фаза 3 — пульс (2 вспышки: ярче → тише)
-        for pulse in range(2):
-            for brightness in (0.5, 0.25, 0.0):
-                for i, line in enumerate(BANNER):
-                    r0, g0, b0 = _fire_color(i)
-                    r = min(255, int(r0 + (255 - r0) * brightness))
-                    g = min(255, int(g0 + (255 - g0) * brightness))
-                    b = min(255, int(b0 + (255 - b0) * brightness))
-                    print(
-                        f"{_move(banner_row + i, 3)}{BOLD}{rgb(r, g, b)}{line}{RESET}",
-                        end="",
-                    )
-                sys.stdout.flush()
-                time.sleep(0.05)
-
-        # Финальный вид
-        for i, line in enumerate(BANNER):
-            r, g, b = _fire_color(i)
-            print(
-                f"{_move(banner_row + i, 3)}{BOLD}{rgb(r, g, b)}{line}{RESET}",
-                end="",
-            )
-
-        # Курсор под баннер
-        below = banner_row + len(BANNER) + 1
-        print(f"{_move(below, 1)}", end="")
-
-        sep = "─" * 54
-        print(f"  {C['gray']}{sep}{RESET}")
-        print(f"  {BOLD}{C['white']}          Bot Launcher{RESET}")
-        print(f"  {C['gray']}{sep}{RESET}")
-        print()
-    finally:
-        _show_cursor()
-
-
-def print_static_banner():
-    """Статичный баннер (для Clear screen)."""
     for i, line in enumerate(BANNER):
-        r, g, b = _fire_color(i)
-        print(f"  {BOLD}{rgb(r, g, b)}{line}{RESET}")
-    print()
+        row = i + 1
+        r0, g0, b0 = CRACK_GRADIENT[min(i, len(CRACK_GRADIENT) - 1)]
+
+        # 4 фазы: шум → шум с текстом → почти текст → чистый текст
+        for phase in range(4):
+            parts: list[str] = []
+            for j, ch in enumerate(line):
+                noise_chance = [1.0, 0.6, 0.2, 0.0][phase]
+                if random.random() < noise_chance:
+                    nc = random.choice(GLITCH_BLOCK + GLITCH_NOISE)
+                    nr, ng, nb = random.choice(GLITCH_COLORS)
+                    parts.append(f"{rgb(nr, ng, nb)}{nc}")
+                else:
+                    parts.append(f"{rgb(r0, g0, b0)}{ch}")
+            sys.stdout.write(f"{_move(row, 3)}{BOLD}{''.join(parts)}{RESET}")
+            sys.stdout.flush()
+            time.sleep(0.03)
+
+    # Подстрочник
+    sub_row = len(BANNER) + 2
+    sub_text = "  ▓▒░ Bot Launcher ░▒▓  "
+    pad = max(0, (52 - len(sub_text)) // 2)
+    print(f"{_move(sub_row, 3 + pad)}{BOLD}{rgb(0, 200, 100)}{sub_text}{RESET}")
+
+    sep_row = len(BANNER) + 3
+    sep = "─" * 54
+    print(f"{_move(sep_row, 3)}{rgb(60, 60, 70)}{sep}{RESET}")
+
+    # Курсор ниже баннера
+    print(f"{_move(BANNER_HEIGHT + 1, 1)}", end="")
+    _show_cursor()
 
 
 # ── Утилиты ──────────────────────────────────────────────────
@@ -194,7 +339,8 @@ def log(msg: str):
 
 
 def cprint(msg: str, color: str = "white"):
-    print(f"  {C.get(color, '')}{msg}{RESET}")
+    with _io_lock:
+        print(f"  {C.get(color, '')}{msg}{RESET}")
 
 
 def read_env_lines() -> list[str]:
@@ -226,6 +372,122 @@ def set_env(key: str, value: str):
     if not found:
         result.append(f"{key}={value}")
     ENV_FILE.write_text("\n".join(result) + "\n", encoding="utf-8")
+
+
+# ── Проверка доступности сервисов и API ──────────────────────
+
+# Целевые хосты для проверки прокси
+PROXY_TEST_TARGETS: dict[str, str] = {
+    "TELEGRAM_PROXY": "https://api.telegram.org",
+    "NICEPAY_PROXY": "https://nicepay.io",
+}
+
+# Все внешние сервисы, от которых зависит бот.
+# (имя, env-ключ URL, env-ключ прокси или None, URL по умолчанию, env-флаг включения)
+SERVICE_CHECKS: list[tuple[str, str, str | None, str, str | None]] = [
+    ("Telegram API",  "TELEGRAM_API_URL", "TELEGRAM_PROXY", "https://api.telegram.org", None),
+    ("NicePay",       "NICEPAY_BASE_URL", "NICEPAY_PROXY",  "https://nicepay.io",       None),
+    ("GiftAPI",       "GIFTAPI_BASE_URL", None,             "https://api.giftapi.io",   "ENABLE_GIFTAPI_PROVIDER"),
+]
+
+
+def _check_url(url: str, proxy_url: str | None = None, timeout: int = 10) -> tuple[bool, int | None, str]:
+    """HEAD-запрос к url (опционально через прокси).
+
+    Возвращает (ok, http_status_or_None, message).
+    """
+    import urllib.request
+    import urllib.error
+
+    try:
+        if proxy_url:
+            handler = urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
+            opener = urllib.request.build_opener(handler)
+        else:
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+        req = urllib.request.Request(url, method="HEAD")
+        req.add_header("User-Agent", "CERBER-Launcher/1.0")
+        resp = opener.open(req, timeout=timeout)
+        return True, resp.status, "OK"
+    except urllib.error.HTTPError as exc:
+        # HTTP ответ получен (сервер доступен), просто не 2xx
+        return True, exc.code, f"HTTP {exc.code}"
+    except urllib.error.URLError as exc:
+        return False, None, str(exc.reason)
+    except Exception as exc:
+        return False, None, str(exc)
+
+
+def check_proxy(proxy_url: str, target_url: str, timeout: int = 10) -> tuple[bool, str]:
+    """Обратная совместимость: проверка прокси."""
+    if not proxy_url:
+        return True, "(пусто — прямое подключение)"
+    ok, _status, msg = _check_url(target_url, proxy_url=proxy_url, timeout=timeout)
+    return ok, msg
+
+
+def check_proxy_interactive(key: str, proxy_url: str) -> None:
+    """Проверяет прокси и выводит результат пользователю."""
+    if not proxy_url:
+        return
+    target = PROXY_TEST_TARGETS.get(key)
+    if not target:
+        return
+    cprint(f"  ⏳ Проверяю прокси {proxy_url} → {target} ...", "dark_cyan")
+    ok, msg = check_proxy(proxy_url, target)
+    if ok:
+        cprint(f"  ✓ Прокси работает: {msg}", "green")
+    else:
+        cprint(f"  ✗ Прокси НЕ работает: {msg}", "red")
+        cprint("    Бот может не подключиться через этот прокси.", "yellow")
+
+
+def preflight_check_services() -> None:
+    """Проверяет доступность всех внешних сервисов перед запуском бота.
+
+    Для каждого сервиса:
+    - Определяет URL из .env (или берёт дефолт)
+    - Если есть прокси — проверяет через прокси
+    - Если прокси нет — проверяет напрямую
+    - Показывает ✓ / ✗ с пояснением
+    """
+    cprint("[*] Проверка доступности сервисов...", "cyan")
+    all_ok = True
+
+    for name, url_key, proxy_key, default_url, enable_key in SERVICE_CHECKS:
+        # Пропускаем отключённые сервисы
+        if enable_key:
+            enabled = get_env(enable_key, "true").lower()
+            if enabled not in ("true", "1", "yes"):
+                cprint(f"    {name}: пропуск (отключён)", "dark_gray")
+                continue
+
+        url = get_env(url_key, default_url) or default_url
+        proxy = get_env(proxy_key, "") if proxy_key else ""
+
+        via = f" через прокси {proxy}" if proxy else ""
+        cprint(f"    {name} ({url}){via}", "dark_cyan")
+
+        ok, status, msg = _check_url(url, proxy_url=proxy or None, timeout=10)
+        if ok:
+            status_str = f" [{status}]" if status else ""
+            cprint(f"      ✓ Доступен{status_str}", "green")
+        else:
+            all_ok = False
+            cprint(f"      ✗ Недоступен: {msg}", "red")
+            if proxy:
+                cprint(f"      ⚠ Проверьте прокси {proxy_key} в .env", "yellow")
+            else:
+                cprint("      ⚠ Проверьте интернет, VPN или настройте прокси в .env", "yellow")
+
+    if all_ok:
+        cprint("[OK] Все сервисы доступны.", "green")
+    else:
+        cprint("[!] Некоторые сервисы недоступны. Бот может работать с ограничениями.", "yellow")
+
+    with _io_lock:
+        print()
 
 
 def wait_tunnel_url(log_file: Path, timeout: int = 30) -> Optional[str]:
@@ -520,6 +782,9 @@ def env_wizard():
                 set_env(key, answer)
                 changed += 1
                 cprint(f"  ✓ {key} обновлён", "green")
+                # Проверяем прокси сразу после ввода
+                if key in PROXY_TEST_TARGETS:
+                    check_proxy_interactive(key, answer)
             else:
                 # Оставляем текущее; если нет текущего и есть default, ставим default
                 if not current and default:
@@ -543,49 +808,52 @@ def env_wizard():
 
 # ── UI ────────────────────────────────────────────────────────
 def show_tail(filepath: Path, lines: int = 30, label: str = ""):
-    print()
-    print(f"  {C['cyan']}=== {label} (last {lines} lines) ==={RESET}")
-    print(f"  {C['dark_gray']}File: {filepath}{RESET}")
-    print()
-    if filepath.exists():
-        all_lines = filepath.read_text(encoding="utf-8", errors="replace").splitlines()
-        tail = all_lines[-lines:] if len(all_lines) > lines else all_lines
-        if tail:
-            for ln in tail:
-                print(f"    {ln}")
+    with _io_lock:
+        print()
+        print(f"  {C['cyan']}=== {label} (last {lines} lines) ==={RESET}")
+        print(f"  {C['dark_gray']}File: {filepath}{RESET}")
+        print()
+        if filepath.exists():
+            all_lines = filepath.read_text(encoding="utf-8", errors="replace").splitlines()
+            tail = all_lines[-lines:] if len(all_lines) > lines else all_lines
+            if tail:
+                for ln in tail:
+                    print(f"    {ln}")
+            else:
+                print(f"    {C['dark_gray']}(empty){RESET}")
         else:
-            print(f"    {C['dark_gray']}(empty){RESET}")
-    else:
-        print(f"    {C['dark_gray']}(file not found){RESET}")
-    print()
+            print(f"    {C['dark_gray']}(file not found){RESET}")
+        print()
 
 
 def show_status(
     components: list[tuple[str, subprocess.Popen[bytes]]],
     tunnel_url: str | None,
 ):
-    print()
-    print(f"  {C['cyan']}=== Component Status ==={RESET}")
-    print()
-    for name, proc in components:
-        if proc.poll() is not None:
-            print(f"    {C['red']}[{name}] STOPPED (exit code {proc.returncode}){RESET}")
-        else:
-            print(f"    {C['green']}[{name}] RUNNING (PID {proc.pid}){RESET}")
-    if tunnel_url:
+    with _io_lock:
         print()
-        print(f"    {C['dark_cyan']}Tunnel URL: {tunnel_url}{RESET}")
-    print()
+        print(f"  {C['cyan']}=== Component Status ==={RESET}")
+        print()
+        for name, proc in components:
+            if proc.poll() is not None:
+                print(f"    {C['red']}[{name}] STOPPED (exit code {proc.returncode}){RESET}")
+            else:
+                print(f"    {C['green']}[{name}] RUNNING (PID {proc.pid}){RESET}")
+        if tunnel_url:
+            print()
+            print(f"    {C['dark_cyan']}Tunnel URL: {tunnel_url}{RESET}")
+        print()
 
 
 def show_menu():
-    sep = "─" * 42
-    print(f"  {C['gray']}{sep}{RESET}")
-    print(f"  {C['white']}  [1] Bot log          [4] Status{RESET}")
-    print(f"  {C['white']}  [2] Bot errors       [5] Clear screen{RESET}")
-    print(f"  {C['white']}  [3] Tunnel log       [Q] Quit{RESET}")
-    print(f"  {C['white']}  [6] Launcher log{RESET}")
-    print(f"  {C['gray']}{sep}{RESET}")
+    with _io_lock:
+        sep = "─" * 42
+        print(f"  {C['gray']}{sep}{RESET}")
+        print(f"  {C['white']}  [1] Bot log          [4] Status{RESET}")
+        print(f"  {C['white']}  [2] Bot errors       [5] Clear screen{RESET}")
+        print(f"  {C['white']}  [3] Tunnel log       [Q] Quit{RESET}")
+        print(f"  {C['white']}  [6] Launcher log{RESET}")
+        print(f"  {C['gray']}{sep}{RESET}")
 
 
 def read_key() -> str:
@@ -603,9 +871,24 @@ def main(no_tunnel: bool = False, tunnel_only: bool = False) -> int:
     for lf in LOGS.values():
         lf.write_text("", encoding="utf-8")
 
-    # Анимация баннера
-    animate_banner()
+    # Вступительная анимация (проявление из шума)
+    intro_animation()
 
+    # Запускаем непрерывную анимацию баннера в фоне
+    animator = BannerAnimator()
+    animator.start()
+
+    try:
+        return _run(animator, no_tunnel, tunnel_only)
+    finally:
+        animator.stop()
+
+
+def _run(
+    animator: BannerAnimator,
+    no_tunnel: bool,
+    tunnel_only: bool,
+) -> int:
     # Предварительные проверки
     if not VENV_PY.exists():
         cprint(
@@ -615,25 +898,8 @@ def main(no_tunnel: bool = False, tunnel_only: bool = False) -> int:
         return 1
 
     if not ENV_FILE.exists():
-        cprint("[!] .env не найден. Создаю из шаблона...", "yellow")
-        example = ROOT / ".env.example"
-        if example.exists():
-            import shutil as _shutil
-            _shutil.copy2(example, ENV_FILE)
-            cprint("    .env создан из .env.example", "green")
-        else:
-            cprint("[!] .env.example тоже не найден. Создайте .env вручную.", "red")
-            return 1
-
-    # ── Предложение настроить .env ────────────────────────────
-    cprint("Настроить .env перед запуском? (y/n): ", "cyan")
-    try:
-        choice = input(f"  {C['dark_yellow']}> {RESET}").strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        choice = "n"
-
-    if choice in ("y", "yes", "д", "да"):
-        env_wizard()
+        cprint("[!] .env not found. Run: Copy-Item .env.example .env", "red")
+        return 1
 
     token = get_env("BOT_TOKEN")
     if not token or token == "your_bot_token_from_botfather":
@@ -641,6 +907,9 @@ def main(no_tunnel: bool = False, tunnel_only: bool = False) -> int:
         return 1
 
     log("Launcher started")
+
+    # ── Проверка доступности сервисов ─────────────────────────
+    preflight_check_services()
 
     web_port = get_env("WEB_PORT", "8088")
     web_enabled = get_env("WEB_ENABLED", "true")
@@ -681,7 +950,8 @@ def main(no_tunnel: bool = False, tunnel_only: bool = False) -> int:
                         "    [!] Tunnel URL not detected (timeout 30s)", "yellow"
                     )
                     log("Tunnel URL detection timeout")
-                print()
+                with _io_lock:
+                    print()
 
         # ── 2. Bot + Web ──────────────────────────────────────
         if not tunnel_only:
@@ -707,10 +977,12 @@ def main(no_tunnel: bool = False, tunnel_only: bool = False) -> int:
             time.sleep(2)
             log(f"Bot started (PID {bot_proc.pid})")
 
-        print()
+        with _io_lock:
+            print()
         cprint("[OK] All components started.", "green")
         cprint(f"    Logs: {LOG_DIR}", "dark_gray")
-        print()
+        with _io_lock:
+            print()
         log("All components running")
 
         # ── Интерактивное меню ────────────────────────────────
@@ -718,7 +990,9 @@ def main(no_tunnel: bool = False, tunnel_only: bool = False) -> int:
         last_check = time.time()
 
         while True:
-            print(f"\r  {C['dark_yellow']}> {RESET}", end="", flush=True)
+            with _io_lock:
+                sys.stdout.write(f"\r  {C['dark_yellow']}> {RESET}")
+                sys.stdout.flush()
 
             ch = ""
             while not ch:
@@ -727,7 +1001,8 @@ def main(no_tunnel: bool = False, tunnel_only: bool = False) -> int:
                     if time.time() - last_check > 5:
                         for name, proc in components:
                             if proc.poll() is not None:
-                                print()
+                                with _io_lock:
+                                    print()
                                 cprint(
                                     f"[!] {name} exited (code {proc.returncode})",
                                     "red",
@@ -736,28 +1011,43 @@ def main(no_tunnel: bool = False, tunnel_only: bool = False) -> int:
                         last_check = time.time()
                     time.sleep(0.1)
 
-            print(ch)
+            with _io_lock:
+                print(ch)
 
             match ch.lower():
                 case "1":
+                    animator.pause()
                     show_tail(LOGS["bot"], 40, "Bot Output")
                     show_menu()
+                    animator.resume()
                 case "2":
+                    animator.pause()
                     show_tail(LOGS["bot_err"], 40, "Bot Errors")
                     show_menu()
+                    animator.resume()
                 case "3":
+                    animator.pause()
                     show_tail(LOGS["tunnel"], 40, "Cloudflare Tunnel")
                     show_menu()
+                    animator.resume()
                 case "4":
+                    animator.pause()
                     show_status(components, tunnel_url)
                     show_menu()
+                    animator.resume()
                 case "5":
                     _clear()
-                    print_static_banner()
+                    # Курсор ниже области баннера
+                    with _io_lock:
+                        sys.stdout.write(f"{_move(BANNER_HEIGHT + 1, 1)}")
+                        sys.stdout.flush()
                     show_menu()
+                    # Анимация продолжается — баннер перерисуется сам
                 case "6":
+                    animator.pause()
                     show_tail(LOGS["launcher"], 40, "Launcher")
                     show_menu()
+                    animator.resume()
                 case "q":
                     raise KeyboardInterrupt
                 case _:
@@ -766,7 +1056,8 @@ def main(no_tunnel: bool = False, tunnel_only: bool = False) -> int:
     except KeyboardInterrupt:
         pass
     finally:
-        print()
+        with _io_lock:
+            print()
         cprint("[*] Shutting down...", "yellow")
         log("Shutdown")
 
@@ -786,7 +1077,8 @@ def main(no_tunnel: bool = False, tunnel_only: bool = False) -> int:
             except Exception:
                 pass
 
-        print()
+        with _io_lock:
+            print()
         cprint(f"[OK] Done. Logs saved in: {LOG_DIR}", "green")
         log("Launcher stopped")
 
