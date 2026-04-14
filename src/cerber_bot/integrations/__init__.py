@@ -1,0 +1,1 @@
+"""External integration layer for CERBER bot."""

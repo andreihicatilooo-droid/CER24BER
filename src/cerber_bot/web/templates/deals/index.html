@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Сделки — CERBER{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6 flex-wrap gap-2">
+    <h1 class="text-xl font-bold">🤝 Гарант-сделки</h1>
+    <div class="flex gap-2">
+        <a href="/deals/create" class="bg-cerber-600 hover:bg-cerber-500 text-white text-sm px-4 py-2 rounded-lg transition-colors">+ Создать сделку</a>
+        <a href="/deals/withdrawal/create" class="bg-gray-800 hover:bg-gray-700 text-sm px-4 py-2 rounded-lg transition-colors">💸 Вывод USDT</a>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="grid grid-cols-2 gap-3 mb-6">
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div class="text-gray-500 text-xs uppercase mb-1">Доступно</div>
+        <div class="text-lg font-bold text-cerber-400">{{ "%.2f"|format(dashboard.balance.available) }} {{ dashboard.balance.currency }}</div>
+    </div>
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div class="text-gray-500 text-xs uppercase mb-1">Заблокировано</div>
+        <div class="text-lg font-bold text-yellow-400">{{ "%.2f"|format(dashboard.balance.held) }} {{ dashboard.balance.currency }}</div>
+    </div>
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div class="text-gray-500 text-xs uppercase mb-1">Всего сделок</div>
+        <div class="text-lg font-bold">{{ dashboard.statistics.total_deals }}</div>
+        <div class="text-gray-600 text-xs">{{ dashboard.statistics.open_deals }} открытых</div>
+    </div>
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div class="text-gray-500 text-xs uppercase mb-1">Оборот</div>
+        <div class="text-lg font-bold">{{ "%.2f"|format(dashboard.statistics.total_volume) }} {{ dashboard.statistics.currency }}</div>
+    </div>
+</div>
+
+{% if dashboard.open_withdrawal %}
+<div class="bg-yellow-900/20 border border-yellow-800 rounded-xl p-4 mb-6">
+    <div class="text-yellow-400 text-sm font-medium">Активная заявка на вывод</div>
+    <div class="text-sm text-gray-400 mt-1">
+        {{ "%.2f"|format(dashboard.open_withdrawal.amount_usdt) }} USDT → {{ dashboard.open_withdrawal.network }} · {{ dashboard.open_withdrawal.status }}
+    </div>
+</div>
+{% endif %}
+
+<!-- Deals list -->
+<h2 class="text-lg font-semibold mb-4">Мои сделки</h2>
+{% if deals %}
+<div class="space-y-3">
+    {% for deal in deals %}
+    <a href="/deals/{{ deal.deal_id }}"
+       class="block bg-gray-900 border border-gray-800 hover:border-cerber-600 rounded-xl p-4 transition-colors group">
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="font-medium group-hover:text-cerber-400 transition-colors">
+                    Сделка #{{ deal.deal_id }} · {{ deal.counterpart_display }}
+                </div>
+                <div class="text-gray-500 text-xs mt-1">Вы — {{ 'покупатель' if deal.viewer_role == 'buyer' else 'продавец' }}</div>
+            </div>
+            <div class="text-right">
+                <div class="text-cerber-400 font-semibold">{{ "%.2f"|format(deal.amount) }} {{ deal.currency }}</div>
+                <span class="inline-block mt-1 text-xs px-2 py-0.5 rounded
+                    {% if deal.status == 'completed' %}bg-cerber-900/30 text-cerber-400
+                    {% elif deal.status == 'disputed' %}bg-red-900/30 text-red-400
+                    {% elif deal.status == 'active' %}bg-blue-900/30 text-blue-400
+                    {% elif deal.status == 'pending_acceptance' %}bg-yellow-900/30 text-yellow-400
+                    {% else %}bg-gray-800 text-gray-500{% endif %}">
+                    {{ deal.status }}
+                </span>
+            </div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-gray-500 py-12">
+    <p class="text-lg mb-2">Сделок пока нет</p>
+    <a href="/deals/create" class="text-cerber-400 hover:text-cerber-300 text-sm">Создать первую сделку →</a>
+</div>
+{% endif %}
+
+{% if page_info and page_info.total_pages > 1 %}
+<div class="flex justify-center gap-2 mt-8">
+    {% if page_info.has_previous %}
+    <a href="/deals/list?page={{ page_info.page - 1 }}" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm transition-colors">← Назад</a>
+    {% endif %}
+    <span class="bg-gray-900 px-4 py-2 rounded-lg text-sm text-gray-400">{{ page_info.page }} / {{ page_info.total_pages }}</span>
+    {% if page_info.has_next %}
+    <a href="/deals/list?page={{ page_info.page + 1 }}" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm transition-colors">Далее →</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Пополнение — CERBER{% endblock %}
+{% block content %}
+
+<div class="max-w-lg mx-auto">
+    <div class="bg-gray-900 border border-cerber-800 rounded-xl p-6 text-center">
+        <div class="text-cerber-400 text-3xl mb-2">💳</div>
+        <h2 class="text-xl font-bold mb-4">Ссылка для оплаты</h2>
+        <div class="space-y-3 text-sm mb-6">
+            <div class="flex justify-between py-2 border-b border-gray-800">
+                <span class="text-gray-500">Сумма</span>
+                <span>{{ "%.2f"|format(link.amount) }} {{ link.currency }}</span>
+            </div>
+            <div class="flex justify-between py-2 border-b border-gray-800">
+                <span class="text-gray-500">Будет зачислено</span>
+                <span class="text-cerber-400">≈ {{ "%.2f"|format(link.estimated_wallet_amount) }} {{ link.wallet_currency }}</span>
+            </div>
+        </div>
+        <a href="{{ link.payment_url }}" target="_blank" rel="noopener"
+           class="inline-block bg-cerber-600 hover:bg-cerber-500 text-white font-medium px-8 py-3 rounded-xl transition-colors">
+            Перейти к оплате →
+        </a>
+        <p class="text-gray-600 text-xs mt-4">После оплаты баланс пополнится автоматически</p>
+        <a href="/wallet" class="inline-block mt-4 text-gray-500 hover:text-cerber-400 text-sm transition-colors">← Вернуться в кошелёк</a>
+    </div>
+</div>
+
+{% endblock %}

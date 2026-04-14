@@ -1,0 +1,2582 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Partner S2S API",
+    "version": "1.1.0",
+    "description": "Server-to-Server API for automated partner integrations with digital goods distribution platform.\n\n## Authentication\n\nAll requests require Bearer token:\n```\nAuthorization: Bearer {your-s2s-token}\n```\n"
+  },
+  "servers": [
+    {
+      "url": "https://sandbox.giftapi.io/api/v1/partner",
+      "description": "Sandbox server"
+    },
+    {
+      "url": "https://api.giftapi.io/v1/partner",
+      "description": "Production server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Info",
+      "description": "Authentication and balance info"
+    },
+    {
+      "name": "Catalog",
+      "description": "Product catalog"
+    },
+    {
+      "name": "Orders",
+      "description": "Order management"
+    },
+    {
+      "name": "Services",
+      "description": "Post-purchase service management (eSIM, subscriptions, etc.)"
+    },
+    {
+      "name": "Webhooks",
+      "description": "Outgoing webhooks sent to your server when order statuses change.\n\n## Setup\n\nConfigure your webhook URL in partner settings. The system will send\nHTTP POST requests to that URL on order events.\n\n## Signature Verification\n\nEvery webhook request includes two headers for authenticity verification:\n\n- `X-Timestamp` — Unix timestamp (seconds)\n- `X-Signature` — HMAC-SHA256 signature\n\n**Signature calculation:**\n```\nmessage   = timestamp + event + idempotency_key\nsignature = HMAC-SHA256(message, partner_secret)\n```\n\nWhere `event` and `idempotency_key` are top-level fields from the webhook JSON body.\nTimestamp tolerance is ±5 minutes.\n\n## Idempotency\n\nEach webhook includes a unique `idempotency_key` (UUID). Use it to safely\nhandle duplicate deliveries — the same event may be retried up to 3 times\nwith exponential backoff (10s, 100s) if your server doesn't return HTTP 2xx.\n\n## Response Requirements\n\nYour endpoint must return HTTP **2xx** within **10 seconds**.\nNon-2xx responses or timeouts are treated as failures and trigger retries.\n"
+    }
+  ],
+  "paths": {
+    "/me": {
+      "get": {
+        "tags": [
+          "Info"
+        ],
+        "summary": "Verify token",
+        "description": "Get authenticated partner information",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "partner": {
+                          "$ref": "#/components/schemas/PartnerWithBalance"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "partner": {
+                      "uuid": "a3c3c002-1bcc-4593-bf39-e591c1d22cf0",
+                      "name": "Partner Name",
+                      "email": "partner@example.com",
+                      "currency": "USD",
+                      "is_active": true,
+                      "balance": {
+                        "balance": -58.18,
+                        "currency": "USD",
+                        "reserved_amount": 0,
+                        "available_balance": 41.82,
+                        "allow_overdraft": true,
+                        "overdraft_limit": 100,
+                        "is_overdrafted": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/balance": {
+      "get": {
+        "tags": [
+          "Info"
+        ],
+        "summary": "Get balance",
+        "description": "Current balance with overdraft information",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Balance"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "balance": -29.09,
+                    "currency": "USD",
+                    "reserved_amount": 0,
+                    "available_balance": 70.91,
+                    "allow_overdraft": true,
+                    "overdraft_limit": 100,
+                    "is_overdrafted": true
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/balance/history": {
+      "get": {
+        "tags": [
+          "Info"
+        ],
+        "summary": "Get balance transaction history",
+        "description": "Paginated balance transaction history",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Pagination cursor from meta.next_cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "description": "Items per page (max 100)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BalanceTransaction"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/CursorMeta"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": [
+                    {
+                      "type": "charge",
+                      "amount": -29.09,
+                      "balance_after": -58.18,
+                      "currency": "USD",
+                      "created_at": "2026-02-24T11:37:58+00:00",
+                      "order_id": "12161770-8560-4377-9795-e8a70aaceb07",
+                      "payment_method": null,
+                      "fee_amount": 0,
+                      "original_amount": null,
+                      "original_currency": null,
+                      "exchange_rate": null
+                    },
+                    {
+                      "type": "topup",
+                      "amount": 500,
+                      "balance_after": 441.82,
+                      "currency": "USD",
+                      "created_at": "2026-02-23T11:37:58+00:00",
+                      "order_id": null,
+                      "payment_method": "bank_transfer",
+                      "fee_amount": 0,
+                      "original_amount": null,
+                      "original_currency": null,
+                      "exchange_rate": null
+                    }
+                  ],
+                  "meta": {
+                    "next_cursor": "eyJjcmVhdGVkX2F0IjoiMjAyNi0wMi0yMyAxMTozNzo1OCIsIl9wb2ludHNUb05leHRJdGVtcyI6dHJ1ZX0",
+                    "prev_cursor": null,
+                    "per_page": 50
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/catalog/products": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "List products",
+        "description": "Get paginated product list with optional filters",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "description": "Locale for translations (defaults to partner's locale)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ],
+              "example": "en"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Pagination cursor from previous response",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "category_id",
+            "in": "query",
+            "description": "Filter by category",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Filter by product type",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "voucher",
+                "recharge_fixed",
+                "recharge",
+                "voucher_open_range",
+                "esim",
+                "other"
+              ]
+            }
+          },
+          {
+            "name": "include_skus",
+            "in": "query",
+            "description": "Include SKU list (without pricing)",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Product"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/CursorMeta"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": [
+                    {
+                      "id": "019bc0dd-8423-739c-a557-5387d900152b",
+                      "name": "Apple gift card | USA",
+                      "type": "voucher",
+                      "denomination_type": "fixed",
+                      "category": {
+                        "id": 18,
+                        "name": "Test"
+                      },
+                      "description": "<p>With the credit from a gift card, you can get music, movies, TV shows, apps, books, audiobooks, Apple Music memberships and more.</p>",
+                      "image": "",
+                      "attributes": {
+                        "digital_acceptance": "online"
+                      },
+                      "fields": [],
+                      "skus": [
+                        {
+                          "id": "019bc0dd-8434-7246-a0fa-a8a29b88eeee",
+                          "name": "$2 Apple Gift Card",
+                          "image": "",
+                          "attributes": {
+                            "denomination": "2",
+                            "denomination_currency": "USD"
+                          }
+                        },
+                        {
+                          "id": "019bc0dd-844e-726d-af0a-24187668feef",
+                          "name": "$3 Apple Gift Card",
+                          "image": "",
+                          "attributes": {
+                            "denomination": "3",
+                            "denomination_currency": "USD"
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "meta": {
+                    "next_cursor": "eyJpZCI6MTIzLCJfcG9pbnRzVG9OZXh0SXRlbXMiOnRydWV9",
+                    "prev_cursor": null,
+                    "per_page": 100
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/catalog/products/{uuid}": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Get product details",
+        "description": "Get product with SKUs, pricing and stock information",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "description": "Locale for translations (defaults to partner's locale)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ],
+              "example": "en"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ProductDetail"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "019bc0dd-8423-739c-a557-5387d900152b",
+                    "name": "Apple gift card | USA",
+                    "type": "voucher",
+                    "denomination_type": "fixed",
+                    "category": {
+                      "id": 18,
+                      "name": "Test"
+                    },
+                    "description": "<p>With the credit from a gift card, you can get music, movies, TV shows, apps, books, audiobooks, Apple Music memberships and more.</p>",
+                    "image": "",
+                    "attributes": {
+                      "digital_acceptance": "online"
+                    },
+                    "skus": [
+                      {
+                        "id": "019bc0dd-8434-7246-a0fa-a8a29b88eeee",
+                        "name": "$2 Apple Gift Card",
+                        "price": 2.2,
+                        "currency": "USD",
+                        "stock": 100,
+                        "max_per_order": 1,
+                        "image": "",
+                        "attributes": {
+                          "denomination": "2",
+                          "denomination_currency": "USD"
+                        }
+                      },
+                      {
+                        "id": "019bc0dd-844e-726d-af0a-24187668feef",
+                        "name": "$3 Apple Gift Card",
+                        "price": 3.3,
+                        "currency": "USD",
+                        "stock": 50,
+                        "max_per_order": 1,
+                        "image": "",
+                        "attributes": {
+                          "denomination": "3",
+                          "denomination_currency": "USD"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/catalog/pricelist": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Get pricelist",
+        "description": "SKU prices and stock status",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "description": "Locale for translations (defaults to partner's locale)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ],
+              "example": "en"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "category_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "voucher",
+                "recharge_fixed",
+                "esim"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PricelistItem"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/CursorMeta"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": [
+                    {
+                      "sku_id": "019bc0dd-8434-7246-a0fa-a8a29b88eeee",
+                      "price": 2.2,
+                      "currency": "USD",
+                      "stock": 100,
+                      "max_per_order": 1
+                    },
+                    {
+                      "sku_id": "019bc0dd-844e-726d-af0a-24187668feef",
+                      "price": 3.3,
+                      "currency": "USD",
+                      "stock": 50,
+                      "max_per_order": 1
+                    },
+                    {
+                      "sku_id": "019bc0dd-8562-7173-afd9-a5cc534fafb7",
+                      "price": null,
+                      "currency": "USD",
+                      "stock": 0,
+                      "max_per_order": 99
+                    }
+                  ],
+                  "meta": {
+                    "next_cursor": "eyJpZCI6MTIzLCJfcG9pbnRzVG9OZXh0SXRlbXMiOnRydWV9",
+                    "prev_cursor": null,
+                    "per_page": 100
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalog/categories": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Get categories",
+        "description": "Available categories with attributes",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "description": "Locale for translations (defaults to partner's locale)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ],
+              "example": "en"
+            }
+          },
+          {
+            "name": "target",
+            "in": "query",
+            "description": "Filter attributes by target",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "product",
+                "sku"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Category"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders": {
+      "get": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "List orders",
+        "description": "Get order history with filters",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "created",
+                "processing",
+                "completed",
+                "cancelled",
+                "failed",
+                "partially_completed"
+              ]
+            }
+          },
+          {
+            "name": "external_id",
+            "in": "query",
+            "description": "Search by your order ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2025-01-01T00:00:00Z"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2025-01-31T23:59:59Z"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Order"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/CursorMeta"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": [
+                    {
+                      "id": "7898e683-4e56-44a3-9782-eca3f758a844",
+                      "external_id": "ORD-12345",
+                      "status": "completed",
+                      "total_amount": 29.09,
+                      "currency": "USD",
+                      "metadata": null,
+                      "created_at": "2026-01-15T11:54:29+00:00",
+                      "items": [
+                        {
+                          "sku_id": "019bc0dd-8562-7173-afd9-a5cc534fafb7",
+                          "sku_name": "$30 Apple Gift Card",
+                          "quantity": 1,
+                          "price": 29.09,
+                          "currency": "USD",
+                          "status": "completed",
+                          "delivery_data": [
+                            {
+                              "pin": "9b329e7e9764a41cf516e7e716035c2e",
+                              "expiration": null,
+                              "serialNumber": ""
+                            }
+                          ],
+                          "customer_data": null,
+                          "error_message": null
+                        }
+                      ]
+                    }
+                  ],
+                  "meta": {
+                    "next_cursor": null,
+                    "prev_cursor": null,
+                    "per_page": 50
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Create order",
+        "description": "Create new order. Requires HMAC-SHA256 signature for S2S authentication.\n\n## Authentication Requirements\n\n- ✅ `X-Timestamp` header is **required**\n- ✅ `X-Signature` header is **required**\n- ✅ `Authorization: Bearer {s2s_token}` is **required**\n\n\n## Signature Calculation\n\n```\nmessage   = timestamp + sku_id + external_id\nsignature = HMAC-SHA256(message, partner_secret)\n```\n\nWhere `timestamp` is the value from `X-Timestamp` header (Unix integer),\n`sku_id` is `item.sku_id` from request body, `external_id` is `external_id` from request body.\n\n**Example:**\n```\ntimestamp   = \"1768478058\"\nsku_id      = \"019bc0dd-8562-7173-afd9-a5cc534fafb7\"\nexternal_id = \"ORD-12345\"\nmessage     = \"1768478058019bc0dd-8562-7173-afd9-a5cc534fafb7ORD-12345\"\nsignature   = hmac_sha256(message, partner_secret)\n```\n\n## Important Notes\n\n- **Timestamp tolerance**: ±5 minutes from server time\n- **Secret location**: Get `partner_secret` from your partner settings (not the API token!)\n- **external_id uniqueness**: Must be unique across all your orders\n- **Balance check**: Ensure sufficient balance (including overdraft if enabled)\n",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Timestamp",
+            "in": "header",
+            "required": true,
+            "description": "Unix timestamp (tolerance ±5 minutes)",
+            "schema": {
+              "type": "integer",
+              "example": 1768478058
+            }
+          },
+          {
+            "name": "X-Signature",
+            "in": "header",
+            "required": true,
+            "description": "HMAC-SHA256 signature (hex)",
+            "schema": {
+              "type": "string",
+              "example": "13fbd7a9a501ea39aeec861a27158dfa00c491aa657798adac8ed9b2066a6fa2"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "external_id",
+                  "item"
+                ],
+                "properties": {
+                  "external_id": {
+                    "type": "string",
+                    "description": "Your unique order identifier",
+                    "example": "ORD-12345"
+                  },
+                  "item": {
+                    "type": "object",
+                    "required": [
+                      "sku_id",
+                      "fields"
+                    ],
+                    "properties": {
+                      "sku_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "SKU ID from catalog",
+                        "example": "019bc0dd-8562-7173-afd9-a5cc534fafb7"
+                      },
+                      "fields": {
+                        "type": "object",
+                        "description": "Required fields for this product.\nCheck product's `fields` array from catalog API for field names, types, and validation rules.\n"
+                      }
+                    }
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "nullable": true,
+                    "description": "Custom metadata for your records"
+                  }
+                }
+              },
+              "examples": {
+                "fixed_denomination": {
+                  "summary": "Fixed denomination product (e.g., gift card)",
+                  "value": {
+                    "external_id": "ORD-12345",
+                    "item": {
+                      "sku_id": "019bc0dd-8562-7173-afd9-a5cc534fafb7",
+                      "fields": {
+                        "quantity": 1
+                      }
+                    }
+                  }
+                },
+                "custom_denomination": {
+                  "summary": "Custom denomination product (e.g., mobile top-up)",
+                  "value": {
+                    "external_id": "ORD-67890",
+                    "item": {
+                      "sku_id": "019cd67c-eed8-7285-8cba-9ddc1e2a4122",
+                      "fields": {
+                        "amount": 1000,
+                        "phone": "+79991234567"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Order created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Order"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "message": "Order created successfully",
+                  "data": {
+                    "id": "12161770-8560-4377-9795-e8a70aaceb07",
+                    "external_id": "ORD-12345",
+                    "status": "completed",
+                    "total_amount": 29.09,
+                    "currency": "USD",
+                    "metadata": null,
+                    "created_at": "2026-01-15T12:58:23+00:00",
+                    "items": [
+                      {
+                        "sku_id": "019bc0dd-8562-7173-afd9-a5cc534fafb7",
+                        "sku_name": "$30 Apple Gift Card",
+                        "quantity": 1,
+                        "price": 29.09,
+                        "currency": "USD",
+                        "status": "completed",
+                        "delivery_data": [
+                          {
+                            "pin": "8f8649ff5c017b31869c99a37749d0d6",
+                            "expiration": null,
+                            "serialNumber": ""
+                          }
+                        ],
+                        "customer_data": null,
+                        "error_message": null
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Business error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "insufficient_balance": {
+                    "value": {
+                      "success": false,
+                      "error": "Insufficient balance"
+                    }
+                  },
+                  "out_of_stock": {
+                    "value": {
+                      "success": false,
+                      "error": "Product out of stock"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication or signature error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalid_signature": {
+                    "value": {
+                      "success": false,
+                      "error": "Invalid signature",
+                      "message": "Signature verification failed. Please check your secret key and signature calculation.",
+                      "hint": "Signature should be HMAC-SHA256(timestamp + sku_id + external_id, secret)"
+                    }
+                  },
+                  "expired_timestamp": {
+                    "value": {
+                      "success": false,
+                      "error": "Invalid timestamp",
+                      "message": "Timestamp outside tolerance window. Difference: 350s, tolerance: 300s"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicate order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "success": false,
+                  "error": "Order with external_id 'ORD-12345' already exists"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{uuid}": {
+      "get": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Get order details",
+        "description": "Get order by UUID",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "description": "Order UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "7898e683-4e56-44a3-9782-eca3f758a844"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Order"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "7898e683-4e56-44a3-9782-eca3f758a844",
+                    "external_id": "ORD-12345",
+                    "status": "completed",
+                    "total_amount": 29.09,
+                    "currency": "USD",
+                    "metadata": null,
+                    "created_at": "2026-01-15T11:54:29+00:00",
+                    "items": [
+                      {
+                        "id": 1,
+                        "sku_id": "019bc0dd-8562-7173-afd9-a5cc534fafb7",
+                        "sku_name": "$30 Apple Gift Card",
+                        "quantity": 1,
+                        "price": 29.09,
+                        "currency": "USD",
+                        "status": "completed",
+                        "delivery_data": [
+                          {
+                            "pin": "9b329e7e9764a41cf516e7e716035c2e",
+                            "expiration": null,
+                            "serialNumber": ""
+                          }
+                        ],
+                        "customer_data": null,
+                        "error_message": null
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/services/esim/{iccid}/status": {
+      "get": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "Get eSIM status",
+        "description": "Get current status, data balance, and details for an eSIM by ICCID.\n",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "iccid",
+            "in": "path",
+            "required": true,
+            "description": "eSIM ICCID (unique identifier)",
+            "schema": {
+              "type": "string",
+              "example": "8944422711108338982"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/EsimStatus"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "esim_id": "6c4045e5-e041-400e-ada1-b5320e20f01d",
+                    "iccid": "8944422711108338982",
+                    "status": "Installed",
+                    "qr_code": "LPA:1$rsp-3104.idemia.io$ABC-123-DEF",
+                    "universal_link": "https://esim.me/activate/abc123",
+                    "can_renew": true,
+                    "last_bundle": "10GB Global Data",
+                    "data_balance": {
+                      "total_gb": 10,
+                      "remaining_gb": 8.5,
+                      "unit": "GB"
+                    },
+                    "active_packages": [
+                      {
+                        "id": "pkg_123",
+                        "name": "10GB Europe Data",
+                        "data_total": 10,
+                        "data_remaining": 8.5,
+                        "data_unit": "GB",
+                        "activated_at": "2026-01-15T10:00:00Z",
+                        "expires_at": "2026-02-15T10:00:00Z",
+                        "status": "active"
+                      }
+                    ],
+                    "coverage": [
+                      {
+                        "country_name": "United Arab Emirates",
+                        "country_code": "AE",
+                        "network_name": "Etisalat"
+                      },
+                      {
+                        "country_name": "United Kingdom",
+                        "country_code": "GB",
+                        "network_name": "Vodafone"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "eSIM not found or not associated with your account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "success": false,
+                  "error": "Product activation not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {
+    "order.status_changed": {
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Order status changed",
+        "description": "Sent when an order reaches status: **completed**, **failed** or **partially_completed**.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderStatusWebhookPayload"
+              },
+              "examples": {
+                "completed": {
+                  "summary": "Gift card order completed",
+                  "value": {
+                    "event": "order.status_changed",
+                    "timestamp": "2026-01-15T12:58:23+00:00",
+                    "idempotency_key": "550e8400-e29b-41d4-a716-446655440000",
+                    "data": {
+                      "order": {
+                        "id": "12161770-8560-4377-9795-e8a70aaceb07",
+                        "external_id": "ORD-12345",
+                        "status": "completed",
+                        "total_amount": 29.09,
+                        "currency": "USD",
+                        "completed_at": "2026-01-15T12:58:23+00:00",
+                        "items": [
+                          {
+                            "sku_id": "019bc0dd-8562-7173-afd9-a5cc534fafb7",
+                            "quantity": 1,
+                            "price": 29.09,
+                            "status": "completed",
+                            "delivery_data": [
+                              {
+                                "pin": "ABCD-EFGH-IJKL-MNOP",
+                                "serial_number": "VOUCHER123456",
+                                "expiration_date": "2027-01-15"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                "failed": {
+                  "summary": "Order failed",
+                  "value": {
+                    "event": "order.status_changed",
+                    "timestamp": "2026-01-15T12:58:23+00:00",
+                    "idempotency_key": "660e8400-e29b-41d4-a716-446655440001",
+                    "data": {
+                      "order": {
+                        "id": "22161770-8560-4377-9795-e8a70aaceb08",
+                        "external_id": "ORD-12346",
+                        "status": "failed",
+                        "total_amount": 0,
+                        "currency": "USD",
+                        "completed_at": "2026-01-15T12:58:30+00:00",
+                        "items": [
+                          {
+                            "sku_id": "019bc0dd-8562-7173-afd9-a5cc534fafb7",
+                            "quantity": 1,
+                            "price": 29.09,
+                            "status": "failed",
+                            "error_message": "Insufficient stock"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                "esim_completed": {
+                  "summary": "eSIM order completed",
+                  "value": {
+                    "event": "order.status_changed",
+                    "timestamp": "2026-01-15T12:58:23+00:00",
+                    "idempotency_key": "770e8400-e29b-41d4-a716-446655440002",
+                    "data": {
+                      "order": {
+                        "id": "32161770-8560-4377-9795-e8a70aaceb09",
+                        "external_id": "ORD-12347",
+                        "status": "completed",
+                        "total_amount": 15,
+                        "currency": "USD",
+                        "completed_at": "2026-01-15T12:58:23+00:00",
+                        "items": [
+                          {
+                            "sku_id": "029bc0dd-8562-7173-afd9-a5cc534fafb8",
+                            "quantity": 1,
+                            "price": 15,
+                            "status": "completed",
+                            "delivery_data": [
+                              {
+                                "iccid": "8944422711108338982",
+                                "qr_code_text": "LPA:1$rsp-3104.idemia.io$ABC-123-DEF",
+                                "smdp_address": "rsp-3104.idemia.io",
+                                "matching_id": "ABC-123-DEF",
+                                "status": "released",
+                                "total_bundles": 1,
+                                "can_renew": true
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook processed successfully. Return any 2xx to acknowledge."
+          },
+          "4XX": {
+            "description": "Any non-2xx response (or timeout) is treated as a failure.\nThe webhook will be retried up to 5 times with exponential backoff.\n"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "S2S token from administrator"
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Authentication failed",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "error": {
+                  "type": "string",
+                  "example": "Unauthenticated"
+                }
+              }
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "success": false,
+              "error": "Order not found"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true,
+            "description": "Detailed error message (optional)"
+          },
+          "hint": {
+            "type": "string",
+            "nullable": true,
+            "description": "Hint for fixing the error (optional)"
+          }
+        }
+      },
+      "ValidationError": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "PartnerUser": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Partner": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "RUB"
+            ]
+          },
+          "is_active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PartnerWithBalance": {
+        "type": "object",
+        "description": "Partner information with embedded balance",
+        "properties": {
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "RUB"
+            ]
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "balance": {
+            "$ref": "#/components/schemas/Balance"
+          }
+        }
+      },
+      "Balance": {
+        "type": "object",
+        "description": "Partner balance information",
+        "properties": {
+          "balance": {
+            "type": "number",
+            "format": "float",
+            "description": "Current balance (negative means debt)"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "RUB"
+            ],
+            "example": "USD"
+          },
+          "reserved_amount": {
+            "type": "number",
+            "format": "float",
+            "description": "Amount reserved for processing orders"
+          },
+          "available_balance": {
+            "type": "number",
+            "format": "float",
+            "description": "Balance + overdraft limit - reserved"
+          },
+          "allow_overdraft": {
+            "type": "boolean"
+          },
+          "overdraft_limit": {
+            "type": "number",
+            "format": "float"
+          },
+          "is_overdrafted": {
+            "type": "boolean",
+            "description": "True if balance is negative"
+          }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "voucher",
+              "recharge_fixed",
+              "recharge",
+              "voucher_open_range",
+              "esim",
+              "other"
+            ]
+          },
+          "denomination_type": {
+            "type": "string",
+            "enum": [
+              "fixed",
+              "custom"
+            ],
+            "description": "Product denomination model (determines pricing structure):\n- `fixed`: Product has predefined denomination and fixed price\n- `custom`: Customer specifies denomination/amount at order time\n",
+            "example": "fixed"
+          },
+          "category": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "image": {
+            "type": "string",
+            "description": "Image URL or empty string if no image",
+            "example": "https://example.com/images/product.jpg"
+          },
+          "attributes": {
+            "type": "object",
+            "nullable": true,
+            "description": "Product-level attributes as dynamic key-value pairs.\nCommon keys: brand, country, instruction, digital_acceptance.\nOnly non-null values are included.\n",
+            "additionalProperties": true,
+            "example": {
+              "digital_acceptance": "online",
+              "brand": "Apple"
+            }
+          },
+          "fields": {
+            "type": "array",
+            "description": "All fields required when creating an order for this product.\nIncludes both system fields (quantity, amount) and custom fields (phone, email, etc.).\nEach field contains validation rules, types, and descriptions.\n",
+            "items": {
+              "$ref": "#/components/schemas/RequiredField"
+            }
+          },
+          "skus": {
+            "type": "array",
+            "description": "Basic SKU info (only when include_skus=true, WITHOUT pricing)",
+            "items": {
+              "$ref": "#/components/schemas/SkuBasic"
+            }
+          }
+        }
+      },
+      "ProductDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "voucher",
+              "recharge_fixed",
+              "recharge",
+              "voucher_open_range",
+              "esim",
+              "other"
+            ]
+          },
+          "denomination_type": {
+            "type": "string",
+            "enum": [
+              "fixed",
+              "custom"
+            ],
+            "description": "Product denomination model (determines pricing structure):\n- `fixed`: Product has predefined denomination and fixed price\n- `custom`: Customer specifies denomination/amount at order time\n",
+            "example": "fixed"
+          },
+          "category": {
+            "type": "object"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "image": {
+            "type": "string",
+            "description": "Image URL or empty string if no image",
+            "example": "https://example.com/images/product.jpg"
+          },
+          "attributes": {
+            "type": "object",
+            "nullable": true,
+            "description": "Product-level attributes as dynamic key-value pairs.\nCommon keys: brand, country, instruction, digital_acceptance.\nOnly non-null values are included.\n",
+            "additionalProperties": true,
+            "example": {
+              "digital_acceptance": "online"
+            }
+          },
+          "skus": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkuDetail"
+            }
+          }
+        }
+      },
+      "SkuBasic": {
+        "type": "object",
+        "description": "SKU without pricing (used in product list with include_skus=true)",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "image": {
+            "type": "string",
+            "description": "Image URL or empty string if no image",
+            "example": "https://example.com/images/sku.jpg"
+          },
+          "attributes": {
+            "type": "object",
+            "nullable": true,
+            "description": "SKU-level attributes as dynamic key-value pairs.\nCommon keys: denomination, denomination_currency, validity_period.\nOnly non-null values are included.\n",
+            "additionalProperties": true,
+            "example": {
+              "denomination": "2",
+              "denomination_currency": "USD"
+            }
+          }
+        }
+      },
+      "SkuDetail": {
+        "type": "object",
+        "description": "SKU with pricing and stock (used in product detail)",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Fixed price (null for custom denomination products)"
+          },
+          "markup_percent": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "**Custom denomination only**: Total markup percentage applied to customer-specified amount.\n",
+            "example": 35
+          },
+          "markup_fixed": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "**Custom denomination only**: Fixed markup amount in USD.\n",
+            "example": 50
+          },
+          "currency": {
+            "type": "string"
+          },
+          "stock": {
+            "type": "integer",
+            "description": "Available quantity"
+          },
+          "max_per_order": {
+            "type": "integer",
+            "default": 99,
+            "description": "Maximum quantity allowed per order (1 = single only, 999+ = unlimited)",
+            "example": 1
+          },
+          "image": {
+            "type": "string",
+            "description": "Image URL or empty string if no image",
+            "example": "https://example.com/images/sku.jpg"
+          },
+          "attributes": {
+            "type": "object",
+            "nullable": true,
+            "description": "SKU-level attributes as dynamic key-value pairs.\nCommon keys: denomination, denomination_currency, validity_period.\nOnly non-null values are included.\n",
+            "additionalProperties": true,
+            "example": {
+              "denomination": "2",
+              "denomination_currency": "USD"
+            }
+          }
+        }
+      },
+      "PricelistItem": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PricelistItemFixed"
+          },
+          {
+            "$ref": "#/components/schemas/PricelistItemCustom"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "denomination_type",
+          "mapping": {
+            "fixed": "#/components/schemas/PricelistItemFixed",
+            "custom": "#/components/schemas/PricelistItemCustom"
+          }
+        }
+      },
+      "PricelistItemFixed": {
+        "type": "object",
+        "description": "Fixed denomination product with predefined price",
+        "required": [
+          "sku_id",
+          "denomination_type",
+          "price",
+          "currency",
+          "stock"
+        ],
+        "properties": {
+          "sku_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "denomination_type": {
+            "type": "string",
+            "enum": [
+              "fixed"
+            ],
+            "example": "fixed"
+          },
+          "price": {
+            "type": "number",
+            "format": "float",
+            "description": "Fixed price for this SKU",
+            "example": 6.67
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "RUB"
+            ]
+          },
+          "stock": {
+            "type": "integer",
+            "example": 99
+          },
+          "max_per_order": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Maximum quantity allowed per order (null = no limit)",
+            "example": null
+          }
+        }
+      },
+      "PricelistItemCustom": {
+        "type": "object",
+        "description": "Custom denomination product where customer specifies amount",
+        "required": [
+          "sku_id",
+          "denomination_type",
+          "currency",
+          "stock"
+        ],
+        "properties": {
+          "sku_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "denomination_type": {
+            "type": "string",
+            "enum": [
+              "custom"
+            ],
+            "example": "custom"
+          },
+          "markup_percent": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Percentage markup applied to customer-specified amount",
+            "example": 35
+          },
+          "markup_fixed": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Fixed markup amount in partner currency",
+            "example": 50
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "RUB"
+            ]
+          },
+          "stock": {
+            "type": "integer",
+            "example": 99
+          },
+          "max_per_order": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Maximum quantity allowed per order (null = no limit)",
+            "example": null
+          }
+        }
+      },
+      "Category": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "attributes": {
+            "type": "array",
+            "description": "Category attributes (including inherited)",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "number",
+                    "boolean",
+                    "date",
+                    "select",
+                    "multiselect"
+                  ]
+                },
+                "target": {
+                  "type": "string",
+                  "enum": [
+                    "product",
+                    "sku"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "description": "Order with items and delivery data",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Order UUID"
+          },
+          "external_id": {
+            "type": "string",
+            "description": "Your order identifier"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "created",
+              "processing",
+              "completed",
+              "cancelled",
+              "failed",
+              "partially_completed"
+            ],
+            "description": "- `created`: Order accepted, processing started\n- `processing`: Order is being fulfilled\n- `completed`: All items delivered successfully\n- `failed`: Order failed completely\n- `cancelled`: Order was cancelled\n- `partially_completed`: Some items delivered, some failed\n"
+          },
+          "total_amount": {
+            "type": "number",
+            "format": "float",
+            "description": "Total charged amount"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "RUB"
+            ]
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItem"
+            }
+          }
+        }
+      },
+      "OrderItem": {
+        "type": "object",
+        "description": "Order item with delivery codes",
+        "properties": {
+          "sku_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sku_name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "price": {
+            "type": "number",
+            "format": "float",
+            "description": "Unit price charged (includes markup)"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "RUB"
+            ]
+          },
+          "amount": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "**Custom denomination only**: Customer-specified amount.\nFor fixed-price products, this field is null.\n",
+            "example": 1000
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "completed",
+              "failed"
+            ]
+          },
+          "delivery_data": {
+            "type": "array",
+            "nullable": true,
+            "description": "Delivery codes/credentials (available when status=completed).\nArray of objects with product-specific structure.\n",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "example": [
+              {
+                "pin": "1234-5678-90AB-CDEF",
+                "serialNumber": "VOUCHER123456",
+                "expiration": "2026-12-31T23:59:59Z"
+              }
+            ]
+          },
+          "customer_data": {
+            "type": "object",
+            "nullable": true,
+            "description": "Customer data provided in request"
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true,
+            "description": "Error details (when status=failed)"
+          }
+        }
+      },
+      "RequiredField": {
+        "type": "object",
+        "description": "Required field definition with validation rules.\nUsed for all fields needed when creating an order (system fields like quantity/amount and custom fields like phone/email).\n",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Unique field identifier",
+            "example": "account_number"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "string",
+              "integer",
+              "email",
+              "list",
+              "decimal",
+              "boolean"
+            ],
+            "description": "Field data type",
+            "example": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name for the field",
+            "example": "User ID"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "description": "Help text for the field",
+            "example": "Your game account number"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Whether the field is required",
+            "example": true
+          },
+          "validation": {
+            "type": "object",
+            "nullable": true,
+            "description": "Validation rules for the field",
+            "properties": {
+              "min": {
+                "type": "integer",
+                "description": "Minimum value/length"
+              },
+              "max": {
+                "type": "integer",
+                "description": "Maximum value/length"
+              },
+              "regex": {
+                "type": "string",
+                "description": "Regular expression pattern"
+              },
+              "list": {
+                "type": "array",
+                "description": "Available options for list type",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "example": {
+              "min": 5,
+              "max": 20,
+              "regex": "^[0-9]+$"
+            }
+          }
+        }
+      },
+      "CustomerField": {
+        "$ref": "#/components/schemas/RequiredField"
+      },
+      "BalanceTransaction": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "topup",
+              "charge",
+              "refund",
+              "adjustment"
+            ],
+            "example": "topup",
+            "description": "Transaction type:\n- topup: Balance top-up (credit)\n- charge: Order payment (debit)\n- refund: Order refund (credit)\n- adjustment: Manual balance adjustment\n"
+          },
+          "amount": {
+            "type": "number",
+            "format": "float",
+            "example": 500,
+            "description": "Transaction amount (positive for credits, negative for debits)"
+          },
+          "balance_after": {
+            "type": "number",
+            "format": "float",
+            "example": 441.82,
+            "description": "Balance after this transaction"
+          },
+          "currency": {
+            "type": "string",
+            "example": "USD"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-02-23T11:37:58+00:00"
+          },
+          "order_id": {
+            "type": "string",
+            "nullable": true,
+            "example": "12161770-8560-4377-9795-e8a70aaceb07",
+            "description": "Related order UUID (for charge/refund operations)"
+          },
+          "payment_method": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "manual",
+              "bank_transfer",
+              "payment_gateway",
+              "crypto",
+              "internal_transfer"
+            ],
+            "example": "bank_transfer",
+            "description": "Payment method (only for topup/refund, null for charges)"
+          },
+          "fee_amount": {
+            "type": "number",
+            "format": "float",
+            "example": 0
+          },
+          "original_amount": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Original amount before currency conversion"
+          },
+          "original_currency": {
+            "type": "string",
+            "nullable": true,
+            "description": "Original currency (if conversion occurred)"
+          },
+          "exchange_rate": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Exchange rate used for conversion"
+          }
+        }
+      },
+      "CursorMeta": {
+        "type": "object",
+        "description": "Cursor-based pagination metadata",
+        "properties": {
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Cursor for next page"
+          },
+          "prev_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Cursor for previous page"
+          },
+          "per_page": {
+            "type": "integer"
+          }
+        }
+      },
+      "EsimStatus": {
+        "type": "object",
+        "description": "eSIM status and data balance information",
+        "properties": {
+          "esim_id": {
+            "type": "string",
+            "description": "Provider's internal eSIM identifier",
+            "example": "6c4045e5-e041-400e-ada1-b5320e20f01d"
+          },
+          "iccid": {
+            "type": "string",
+            "description": "eSIM ICCID (unique identifier)",
+            "example": "8944422711108338982"
+          },
+          "status": {
+            "type": "string",
+            "description": "Current eSIM status",
+            "enum": [
+              "Available",
+              "Installed",
+              "Downloaded",
+              "Enabled",
+              "Deleted"
+            ],
+            "example": "Installed"
+          },
+          "qr_code": {
+            "type": "string",
+            "nullable": true,
+            "description": "QR code for eSIM installation (LPA format)",
+            "example": "LPA:1$rsp-3104.idemia.io$ABC-123-DEF"
+          },
+          "universal_link": {
+            "type": "string",
+            "nullable": true,
+            "description": "Universal link for eSIM installation (alternative to QR)",
+            "example": "https://esim.me/activate/abc123"
+          },
+          "can_renew": {
+            "type": "boolean",
+            "description": "Whether eSIM can be recharged with new packages",
+            "example": true
+          },
+          "last_bundle": {
+            "type": "string",
+            "nullable": true,
+            "description": "Name of the last activated bundle",
+            "example": "10GB Global Data"
+          },
+          "data_balance": {
+            "type": "object",
+            "description": "Data usage summary",
+            "properties": {
+              "total_gb": {
+                "type": "number",
+                "format": "float",
+                "nullable": true,
+                "description": "Total data allocated (GB)",
+                "example": 10
+              },
+              "remaining_gb": {
+                "type": "number",
+                "format": "float",
+                "nullable": true,
+                "description": "Remaining data (GB)",
+                "example": 8.5
+              },
+              "unit": {
+                "type": "string",
+                "description": "Data unit",
+                "example": "GB"
+              }
+            }
+          },
+          "active_packages": {
+            "type": "array",
+            "description": "Currently active data packages",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "Package identifier"
+                },
+                "name": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "Package name"
+                },
+                "data_total": {
+                  "type": "number",
+                  "format": "float",
+                  "nullable": true,
+                  "description": "Total data in package"
+                },
+                "data_remaining": {
+                  "type": "number",
+                  "format": "float",
+                  "nullable": true,
+                  "description": "Remaining data"
+                },
+                "data_unit": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "Data unit"
+                },
+                "activated_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "nullable": true,
+                  "description": "Package activation timestamp"
+                },
+                "expires_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "nullable": true,
+                  "description": "Package expiration timestamp"
+                },
+                "status": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "Package status"
+                }
+              }
+            }
+          },
+          "coverage": {
+            "type": "array",
+            "description": "Countries and networks covered by this eSIM",
+            "items": {
+              "type": "object",
+              "properties": {
+                "country_name": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "Country name"
+                },
+                "country_code": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "ISO country code"
+                },
+                "network_name": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "Mobile network operator name"
+                }
+              }
+            }
+          }
+        }
+      },
+      "OrderStatusWebhookPayload": {
+        "type": "object",
+        "description": "Webhook payload for order.status_changed event",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "order.status_changed"
+            ],
+            "example": "order.status_changed"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-01-15T12:58:23+00:00",
+            "description": "ISO 8601 timestamp of when the event occurred"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000",
+            "description": "Unique key for this delivery — use to safely deduplicate retries"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "order": {
+                "$ref": "#/components/schemas/WebhookOrder"
+              }
+            }
+          }
+        }
+      },
+      "WebhookOrder": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "12161770-8560-4377-9795-e8a70aaceb07",
+            "description": "Order UUID"
+          },
+          "external_id": {
+            "type": "string",
+            "example": "ORD-12345",
+            "description": "Your order identifier provided at creation"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "failed",
+              "partially_completed"
+            ],
+            "example": "completed",
+            "description": "Terminal order status:\n- `completed` — all items delivered successfully\n- `failed` — all items failed\n- `partially_completed` — some items delivered, some failed\n"
+          },
+          "total_amount": {
+            "type": "number",
+            "format": "float",
+            "example": 29.09,
+            "description": "Total charged amount (0 for fully failed orders)"
+          },
+          "currency": {
+            "type": "string",
+            "example": "USD"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-01-15T12:58:23+00:00",
+            "description": "Timestamp when processing finished (present for terminal statuses)"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookOrderItem"
+            }
+          }
+        }
+      },
+      "WebhookOrderItem": {
+        "type": "object",
+        "properties": {
+          "sku_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "019bc0dd-8562-7173-afd9-a5cc534fafb7"
+          },
+          "quantity": {
+            "type": "integer",
+            "example": 1
+          },
+          "price": {
+            "type": "number",
+            "format": "float",
+            "example": 29.09,
+            "description": "Unit price charged (includes markup)"
+          },
+          "amount": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "**Custom denomination only**: Customer-specified amount.\n",
+            "example": 1000
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "failed",
+              "processing",
+              "pending"
+            ],
+            "example": "completed"
+          },
+          "delivery_data": {
+            "type": "array",
+            "nullable": true,
+            "description": "Delivery codes — present only for completed items.\nStructure depends on product type:\n\n**Voucher / Gift Card:**\n```json\n{ \"pin\": \"ABCD-EFGH\", \"serial_number\": \"...\", \"expiration_date\": \"2027-01-15\" }\n```\n\n**eSIM:**\n```json\n{ \"iccid\": \"...\", \"qr_code_text\": \"LPA:1$...\", \"smdp_address\": \"...\", \"matching_id\": \"...\", \"status\": \"released\", \"total_bundles\": 1, \"can_renew\": true }\n```\n",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true,
+            "example": "Insufficient stock",
+            "description": "Failure reason — present only for failed items"
+          }
+        }
+      }
+    }
+  }
+}

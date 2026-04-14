@@ -1,0 +1,471 @@
+{
+  "name": "nicepayapi",
+  "generated_at": "2026-04-13",
+  "description": "Structured Nicepay Merchant API reference compiled from the public documentation for AI Copilot usage in this repository.",
+  "source_urls": [
+    "https://nicepay.io/ru/docs",
+    "https://nicepay.io/ru/docs/merchant/payment",
+    "https://nicepay.io/ru/docs/merchant/handler",
+    "https://nicepay.io/ru/docs/merchant/limits",
+    "https://nicepay.io/ru/docs/merchant/methods",
+    "https://nicepay.io/ru/docs/merchant/rules",
+    "https://nicepay.io/ru/docs/merchant/payout",
+    "https://nicepay.io/ru/docs/merchant/payout_methods",
+    "https://nicepay.io/ru/docs/merchant/payout_handler",
+    "https://nicepay.io/ru/docs/merchant/h2h_summary",
+    "https://nicepay.io/ru/docs/merchant/h2h_oneRequestPayment",
+    "https://nicepay.io/ru/docs/merchant/h2h_paymentInfo",
+    "https://nicepay.io/ru/docs/merchant/h2h_selectMethod",
+    "https://nicepay.io/ru/docs/merchant/h2h_confirmPaid",
+    "https://nicepay.io/ru/docs/merchant/h2h_uploadProof"
+  ],
+  "doc_warnings": [
+    "Classic payment docs list customer in the table, but the example body uses account. Client code should tolerate both variants.",
+    "Payout response docs are inconsistent: the response table mentions payout_id, while the example success payload shows payment_id.",
+    "H2H docs mix paymentId and payment_id across responses. Parsers should support both names.",
+    "Merchant handler docs describe GET callback parameters. Production code can still be tolerant to POST form or JSON bodies, but GET remains the documented contract."
+  ],
+  "project_references": {
+    "config": "src/cerber_bot/config.py",
+    "nicepay_client": "src/cerber_bot/integrations/nicepay.py",
+    "payment_service": "src/cerber_bot/services/payments.py",
+    "webhook_server": "src/cerber_bot/nicepay_webhook.py",
+    "signature_tests": "tests/test_nicepay_client.py"
+  },
+  "reference": {
+    "base_url": "https://nicepay.io",
+    "authentication": {
+      "type": "merchant_credentials_in_body",
+      "fields": [
+        "merchant_id",
+        "secret"
+      ],
+      "notes": [
+        "Nicepay Merchant API does not use Bearer authentication for the flows covered here.",
+        "Credentials are passed in the request body for payment, payout, and H2H endpoints."
+      ]
+    },
+    "money_format": {
+      "minor_units": true,
+      "examples": [
+        "35.40 USD => 3540",
+        "125.28 RUB => 12528"
+      ],
+      "implementation_rule": "Inside domain logic use Decimal; convert to integer minor units only when building Nicepay requests."
+    },
+    "classic_payment": {
+      "endpoint": "POST /public/api/payment",
+      "absolute_url": "https://nicepay.io/public/api/payment",
+      "required_fields": {
+        "merchant_id": "string",
+        "secret": "string",
+        "order_id": "string, max 50",
+        "customer_or_account": "string, max 50",
+        "amount": "integer minor units",
+        "currency": "USD | EUR | RUB | UAH | KZT"
+      },
+      "optional_fields": {
+        "description": "string, max 150",
+        "method": "payment method code",
+        "success_url": "redirect URL after success",
+        "fail_url": "redirect URL after failure"
+      },
+      "notes": [
+        "If method is provided but not enabled for the merchant, payment creation fails.",
+        "If success_url or fail_url is omitted, Nicepay uses the merchant site URL.",
+        "Use order_id as your stable local payment identifier or payload reference."
+      ],
+      "success_response": {
+        "status": "success",
+        "data_fields": [
+          "payment_id",
+          "amount",
+          "currency",
+          "link",
+          "expired"
+        ]
+      },
+      "error_response": {
+        "status": "error",
+        "data_fields": [
+          "message"
+        ]
+      }
+    },
+    "payment_callback": {
+      "delivery": "GET request to merchant callback URL from merchant settings",
+      "retry_policy": "If the merchant server does not answer, Nicepay retries after 1 minute.",
+      "fields": {
+        "result": "success | error",
+        "payment_id": "Nicepay payment identifier",
+        "merchant_id": "merchant identifier",
+        "order_id": "merchant-side payment identifier",
+        "amount": "integer minor units",
+        "amount_currency": "payment currency",
+        "profit": "merchant profit in minor units",
+        "profit_currency": "profit currency",
+        "method": "payment method code",
+        "hash": "sha256 signature"
+      },
+      "required_validations": [
+        "Verify hash before any business action.",
+        "Compare merchant_id with configured merchant id.",
+        "Load local payment by order_id and verify provider, amount, currency, and payment_id consistency.",
+        "Make callback processing idempotent because retries are expected."
+      ],
+      "signature": {
+        "algorithm": "sha256",
+        "formula": "sha256(join(sorted(parameter_values_without_hash) + [secret], '{np}'))",
+        "steps": [
+          "Remove hash from the parameters.",
+          "Sort remaining parameters by key in alphabetical order.",
+          "Take only the values in that sorted key order.",
+          "Append merchant secret to the end of the values array.",
+          "Join all values with the literal separator {np}.",
+          "Compute sha256 hex digest and compare with the provided hash using constant-time comparison."
+        ]
+      }
+    },
+    "payment_limits": {
+      "USD": {
+        "min": 10,
+        "max": 990
+      },
+      "EUR": {
+        "min": 10,
+        "max": 850
+      },
+      "RUB": {
+        "min": 200,
+        "max": 85000
+      },
+      "UAH": {
+        "min": 100,
+        "max": 35000
+      },
+      "KZT": {
+        "min": 1000,
+        "max": 410000
+      }
+    },
+    "payment_methods": {
+      "USD": [
+        "advcash_usd",
+        "payeer_usd",
+        "paypal_usd"
+      ],
+      "EUR": [
+        "advcash_eur",
+        "payeer_eur",
+        "paypal_eur"
+      ],
+      "RUB": [
+        "sbp_rub",
+        "sberbank_rub",
+        "sberbank_account_rub",
+        "tinkoff_rub",
+        "alfabank_rub",
+        "raiffeisen_rub",
+        "vtb_rub",
+        "rnkbbank_rub",
+        "postbank_rub",
+        "yoomoney_rub",
+        "advcash_rub",
+        "payeer_rub"
+      ],
+      "UAH": [
+        "monobank_uah",
+        "privatbank_uah",
+        "raiffeisen_uah"
+      ],
+      "KZT": [
+        "advcash_kzt",
+        "kaspibank_kzt",
+        "halykbank_kzt",
+        "jysanbank_kzt",
+        "centercreditbank_kzt",
+        "fortebank_kzt"
+      ],
+      "extra_documented_method": [
+        "nicewallet_usdt"
+      ],
+      "method_note": "The payment methods page mentions nicewallet_usdt, but the classic payment creation page lists supported currencies as USD, EUR, RUB, UAH, KZT. Do not assume USDT classic payment support without validation against the merchant account."
+    },
+    "h2h": {
+      "purpose": "Direct host-to-host flow where the merchant fetches methods, details, and statuses instead of redirecting the customer to Nicepay payment page.",
+      "flow_options": [
+        "OneRequest flow using h2hOneRequestPayment",
+        "Step-by-step flow using payment, h2hPaymentInfo, h2hSelectMethod, h2hConfirmPaid, and h2hUploadProof"
+      ],
+      "one_request": {
+        "endpoint": "POST /public/api/h2hOneRequestPayment",
+        "absolute_url": "https://nicepay.io/public/api/h2hOneRequestPayment",
+        "required_fields": {
+          "merchant_id": "string",
+          "secret": "string",
+          "order_id": "string, max 50",
+          "customer": "string, max 50",
+          "amount": "integer minor units",
+          "currency": "USD | EUR | RUB | UAH | KZT",
+          "method": "documented payment method or any_bank_card"
+        },
+        "success_statuses": [
+          "details_found",
+          "details_not_found"
+        ],
+        "response_notes": [
+          "details_found returns payment details, status, expire, methods, details, amount, amountNum, additionalFee, and proof state.",
+          "details_not_found can return payment_id, amount, currency, link, and expired.",
+          "H2H payloads can use both paymentId and payment_id."
+        ]
+      },
+      "payment_info": {
+        "endpoint": "POST /public/api/h2hPaymentInfo",
+        "absolute_url": "https://nicepay.io/public/api/h2hPaymentInfo",
+        "required_fields": {
+          "merchant_id": "string",
+          "secret": "string",
+          "payment": "Nicepay payment id"
+        },
+        "returns": [
+          "paymentId",
+          "currency",
+          "method",
+          "status",
+          "expire",
+          "subMethod",
+          "amount",
+          "amountNum",
+          "additionalFee",
+          "methods",
+          "details",
+          "reason",
+          "proof"
+        ]
+      },
+      "select_method": {
+        "endpoint": "POST /public/api/h2hSelectMethod",
+        "absolute_url": "https://nicepay.io/public/api/h2hSelectMethod",
+        "required_fields": {
+          "merchant_id": "string",
+          "secret": "string",
+          "payment": "Nicepay payment id",
+          "method": "one of methods returned by h2hPaymentInfo"
+        },
+        "success_response": {
+          "status": "success"
+        }
+      },
+      "confirm_paid": {
+        "endpoint": "POST /public/api/h2hConfirmPaid",
+        "absolute_url": "https://nicepay.io/public/api/h2hConfirmPaid",
+        "required_fields": {
+          "merchant_id": "string",
+          "secret": "string",
+          "payment": "Nicepay payment id"
+        },
+        "mandatory": true,
+        "note": "This call is explicitly described as mandatory after the customer reports payment. It advances the payment lifecycle and starts processing time."
+      },
+      "upload_proof": {
+        "endpoint": "POST /public/api/h2hUploadProof",
+        "absolute_url": "https://nicepay.io/public/api/h2hUploadProof",
+        "required_fields": {
+          "merchant_id": "string",
+          "secret": "string",
+          "payment": "Nicepay payment id",
+          "proof": "file object"
+        },
+        "allowed_statuses": [
+          4,
+          93
+        ],
+        "allowed_formats": [
+          "JPG",
+          "PNG",
+          "PDF"
+        ],
+        "max_file_size_mb": 1
+      },
+      "statuses": {
+        "0": "Payment created, waiting for payment method selection.",
+        "1": "Searching transfer details after method selection.",
+        "2": "Searching transfer details after method selection.",
+        "3": "Waiting for transfer by displayed details.",
+        "4": "Waiting for payment confirmation after customer action.",
+        "5": "Final success status.",
+        "81": "Under moderator review after proof upload.",
+        "82": "Final status. Closed by moderators without payment completion.",
+        "92": "Final status. Payment time expired.",
+        "93": "Customer did not confirm payment; proof upload is expected.",
+        "95": "Final status. Cancelled by system timeout.",
+        "96": "Final status. Cancelled by customer."
+      },
+      "recommended_flow": [
+        "Create payment and optionally receive details immediately through h2hOneRequestPayment.",
+        "If using step-by-step flow, create payment first and then fetch h2hPaymentInfo.",
+        "If status is 0, choose a method through h2hSelectMethod.",
+        "Poll h2hPaymentInfo to obtain updated payment details and transfer requisites.",
+        "After customer says they paid, call h2hConfirmPaid.",
+        "Continue polling h2hPaymentInfo until a final status is reached.",
+        "If needed, upload receipt or proof file on status 4 or 93."
+      ]
+    },
+    "payouts": {
+      "endpoint": "POST /public/api/payout",
+      "absolute_url": "https://nicepay.io/public/api/payout",
+      "required_fields": {
+        "merchant_id": "string",
+        "secret": "string",
+        "order_id": "string, max 50",
+        "balance": "USDT",
+        "method": "payout method code",
+        "wallet": "destination wallet or card, max 50",
+        "amount": "integer minor units",
+        "comment": "string, max 30; can be empty",
+        "fee_merchant": "boolean"
+      },
+      "limits": {
+        "min_usdt": 15,
+        "max_usdt": 1500
+      },
+      "processing_logic": [
+        "After payout creation, Nicepay creates a processing request.",
+        "If payout succeeds, merchant receives a handler callback.",
+        "If payout is not processed within 24 hours, it is cancelled and funds are returned to merchant balance, followed by callback notification."
+      ],
+      "success_response": {
+        "status": "success",
+        "documented_fields": [
+          "payout_id",
+          "order_id",
+          "balance"
+        ],
+        "example_payload_fields": [
+          "payment_id",
+          "order_id",
+          "balance"
+        ]
+      },
+      "error_response": {
+        "status": "error",
+        "data_fields": [
+          "message"
+        ]
+      },
+      "methods": {
+        "bankcard_rub": "2200100020004455",
+        "sbp_rub": "79814005040",
+        "bankcard_uah": "2200100020004455",
+        "bankcard_kzt": "2200100020004455",
+        "yoomoney_rub": "4100374800004444",
+        "advcash_rub": "648200001233",
+        "advcash_usd": "648200001233",
+        "advcash_eur": "648200001233",
+        "advcash_kzt": "648200001233",
+        "payeer_rub": "1111555000",
+        "payeer_usd": "1111555000",
+        "payeer_eur": "1111555000"
+      },
+      "fee_merchant_semantics": {
+        "true": "Commission is charged to the merchant.",
+        "false": "Commission is deducted from the payout amount."
+      }
+    },
+    "payout_callback": {
+      "delivery": "GET request to merchant payout handler URL",
+      "fields": {
+        "result": "success_payout | error_payout",
+        "payout_id": "Nicepay payout identifier",
+        "merchant_id": "merchant identifier",
+        "order_id": "merchant-side payout identifier",
+        "amount": "integer minor units",
+        "amount_currency": "payout currency",
+        "method": "payout method code",
+        "hash": "sha256 signature"
+      },
+      "signature": "Same sorting and sha256({np}) formula as payment callback."
+    },
+    "merchant_rules": {
+      "required": [
+        "Merchant site should be hosted on a second-level domain and use paid hosting.",
+        "All site links should be active and lead to relevant pages.",
+        "Goods or services being paid for must be clearly described.",
+        "Contacts page should expose valid contact information such as email, Telegram, or feedback form.",
+        "Terms, user agreement, and refund policy should be publicly available.",
+        "If business activity requires licensing, the site should display license information or permissions.",
+        "For Telegram channels, the channel must remain public during operation."
+      ],
+      "prohibited_examples": [
+        "Unlicensed donations or sponsorship processing where licensing is required.",
+        "Illegal drugs, supplements, alcohol, tobacco.",
+        "Counterfeit goods, copyright-infringing goods, or unlicensed software sales.",
+        "Pornographic materials, escort services, erotic massage, rare or exotic animals.",
+        "Magic or psychic services, financial pyramids, investment scams, loan brokerage abuse.",
+        "Sale of card credentials, personal data, or unlawful data access."
+      ]
+    },
+    "current_project_state": {
+      "implemented": [
+        "Classic payment link creation flow.",
+        "Payment callback parsing and sha256 hash verification.",
+        "Pending local payment creation before sending payment URL to the user.",
+        "Wallet credit only after verified final Nicepay callback.",
+        "Webhook server for Nicepay callback handling.",
+        "Tests covering signature verification and invalid hash rejection."
+      ],
+      "not_implemented_yet": [
+        "H2H direct payment flow.",
+        "Payout creation flow.",
+        "Payout callback handling."
+      ],
+      "existing_env_vars": [
+        "NICEPAY_BASE_URL",
+        "NICEPAY_MERCHANT_ID",
+        "NICEPAY_SECRET",
+        "NICEPAY_METHOD",
+        "NICEPAY_SUCCESS_URL",
+        "NICEPAY_FAIL_URL",
+        "NICEPAY_WEBHOOK_HOST",
+        "NICEPAY_WEBHOOK_PORT",
+        "NICEPAY_WEBHOOK_PATH"
+      ]
+    },
+    "implementation_rules": [
+      "Preserve the existing classic payment flow as the main working integration path.",
+      "Do not switch Nicepay integration to Bearer auth.",
+      "Do not send money in major units; always use integer minor units.",
+      "Do not change the documented callback hash formula.",
+      "When documentation conflicts with examples, write tolerant parsers and tests instead of trusting only one variant.",
+      "For new Nicepay features, add tests for signature verification, repeated callbacks, amount mismatch, and inconsistent field names."
+    ]
+  },
+  "copilot_prompt_lines": [
+    "Ты работаешь с интеграцией Nicepay Merchant API в Python-проекте CERBER. Используй этот JSON как рабочий reference и не придумывай поведение, которого здесь нет.",
+    "Nicepay Merchant API использует merchant_id и secret в теле запроса, а не Bearer token.",
+    "Базовый URL по умолчанию: https://nicepay.io.",
+    "Все суммы передаются в minor units: центы или копейки. 35.40 USD передаётся как 3540.",
+    "В проекте уже реализован рабочий классический flow создания платежа, callback-валидация и зачисление средств после подтверждённого callback.",
+    "При изменениях переиспользуй существующие модули src/cerber_bot/integrations/nicepay.py, src/cerber_bot/services/payments.py, src/cerber_bot/nicepay_webhook.py и настройки из src/cerber_bot/config.py.",
+    "Для денег внутри доменной логики используй Decimal, а в Nicepay отправляй целые minor units.",
+    "Для callback и payout handler делай обработку идемпотентной, потому что Nicepay повторяет запрос через 1 минуту, если не получил ответ.",
+    "Классический платёж создаётся через POST /public/api/payment с merchant_id, secret, order_id, customer или account, amount, currency и опциональными description, method, success_url, fail_url.",
+    "В документации create payment есть расхождение: таблица требует customer, а пример показывает account. Поддерживай оба варианта.",
+    "Callback по платежу приходит с result, payment_id, merchant_id, order_id, amount, amount_currency, profit, profit_currency, method, hash.",
+    "Перед любым зачислением средств обязательно проверяй hash, merchant_id, order_id, payment_id, amount и currency против локальной записи.",
+    "Hash считается так: убрать hash, отсортировать параметры по имени ключа, взять только значения, добавить secret в конец, склеить через {np}, посчитать sha256 hex и сравнить с переданным значением constant-time сравнением.",
+    "Лимиты платежей: USD 10-990, EUR 10-850, RUB 200-85000, UAH 100-35000, KZT 1000-410000.",
+    "Методы оплаты по валютам смотри в объекте reference.payment_methods этого файла и не подставляй неподключённые методы.",
+    "H2H режим нужен, если мерчант не хочет редиректить клиента на страницу Nicepay и сам показывает методы, реквизиты и статусы.",
+    "Для H2H есть OneRequest endpoint /public/api/h2hOneRequestPayment и пошаговый flow через h2hPaymentInfo, h2hSelectMethod, h2hConfirmPaid и h2hUploadProof.",
+    "В H2H после сообщения клиента об оплате вызов h2hConfirmPaid обязателен.",
+    "H2H upload proof принимает JPG, PNG или PDF до 1 МБ и допускается на статусах 4 или 93.",
+    "Если реализуешь H2H, поддерживай расхождения paymentId и payment_id в ответах документации.",
+    "Выплаты создаются через POST /public/api/payout и используют merchant_id, secret, order_id, balance, method, wallet, amount, comment, fee_merchant.",
+    "Для payout docs тоже есть расхождение: где-то указан payout_id, а где-то payment_id. Пиши устойчивый парсер.",
+    "Payout callback использует result success_payout или error_payout и ту же формулу hash, что обычный payment callback.",
+    "Не предлагай интеграции для запрещённых категорий проектов и учитывай merchant rules из этого файла.",
+    "Если документация и пример расходятся, делай код и тесты так, чтобы поддерживать оба документированных варианта, а не слепо доверять одному примеру.",
+    "Если добавляешь новые возможности Nicepay в CERBER, сначала проверь текущую бизнес-логику пополнения кошелька и не ломай существующий классический payment flow."
+  ]
+}

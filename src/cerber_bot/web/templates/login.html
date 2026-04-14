@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Вход — CERBER{% endblock %}
+{% block content %}
+<div class="flex flex-col items-center justify-center min-h-[70vh]" id="login-root">
+    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-10 max-w-md w-full text-center">
+        <h1 class="text-4xl font-bold text-cerber-400 mb-2">CERBER</h1>
+        <p class="text-gray-400 mb-8">Цифровой магазин с гарант-сделками</p>
+
+        {% if error %}
+        <div class="bg-red-900/30 border border-red-800 text-red-300 rounded-lg p-3 mb-6 text-sm">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <!-- Telegram Mini App: автоматический вход -->
+        <div id="tg-auto-login" style="display:none">
+            <div class="flex flex-col items-center gap-3">
+                <svg class="animate-spin h-8 w-8 text-cerber-400" viewBox="0 0 24 24" fill="none">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <p class="text-gray-400 text-sm">Авторизация через Telegram...</p>
+            </div>
+        </div>
+
+        <!-- Обычный вход через Telegram Widget -->
+        <div id="widget-login">
+            {% if bot_username %}
+            <div class="mb-6">
+                <script async src="https://telegram.org/js/telegram-widget.js?22"
+                    data-telegram-login="{{ bot_username }}"
+                    data-size="large"
+                    data-radius="12"
+                    data-auth-url="/login/callback"
+                    data-request-access="write">
+                </script>
+            </div>
+            <p class="text-gray-500 text-xs">Авторизация через Telegram</p>
+            {% else %}
+            <p class="text-gray-500 text-sm">Откройте магазин через кнопку в боте для автоматического входа.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var tg = window.Telegram && window.Telegram.WebApp;
+    if (tg && tg.initData) {
+        // Скрыть виджет, показать спиннер
+        var widget = document.getElementById('widget-login');
+        var auto = document.getElementById('tg-auto-login');
+        if (widget) widget.style.display = 'none';
+        if (auto) auto.style.display = 'block';
+
+        fetch('/auth/telegram-webapp', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'init_data=' + encodeURIComponent(tg.initData),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                window.location.href = '/store';
+            } else {
+                if (auto) auto.innerHTML = '<p class="text-red-400 text-sm">Ошибка авторизации. Попробуйте снова.</p>';
+            }
+        })
+        .catch(function() {
+            if (auto) auto.innerHTML = '<p class="text-red-400 text-sm">Ошибка соединения.</p>';
+        });
+    }
+})();
+</script>
+{% endblock %}

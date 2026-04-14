@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Профиль — CERBER{% endblock %}
+{% block content %}
+
+<h1 class="text-2xl font-bold mb-6">👤 Профиль</h1>
+
+<div class="grid grid-cols-1 gap-4">
+    <!-- User info -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <h2 class="font-semibold mb-4">Информация</h2>
+        <div class="space-y-3 text-sm">
+            <div class="flex justify-between py-2 border-b border-gray-800">
+                <span class="text-gray-500">Имя</span>
+                <span>{{ session.get('first_name', '—') }}</span>
+            </div>
+            {% if session.get('username') %}
+            <div class="flex justify-between py-2 border-b border-gray-800">
+                <span class="text-gray-500">Username</span>
+                <span>@{{ session.get('username') }}</span>
+            </div>
+            {% endif %}
+            <div class="flex justify-between py-2 border-b border-gray-800">
+                <span class="text-gray-500">Telegram ID</span>
+                <span class="font-mono text-xs">{{ session.get('telegram_id', '—') }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Balance -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <h2 class="font-semibold mb-4">Баланс</h2>
+        <div class="space-y-3 text-sm">
+            <div class="flex justify-between py-2 border-b border-gray-800">
+                <span class="text-gray-500">Доступно</span>
+                <span class="text-cerber-400 font-semibold">{{ "%.2f"|format(wallet.balance) }} {{ wallet.currency }}</span>
+            </div>
+            <div class="flex justify-between py-2 border-b border-gray-800">
+                <span class="text-gray-500">Заблокировано</span>
+                <span class="text-yellow-400">{{ "%.2f"|format(wallet.held_balance) }} {{ wallet.currency }}</span>
+            </div>
+            <div class="flex justify-between py-2 border-b border-gray-800">
+                <span class="text-gray-500">Всего</span>
+                <span class="font-semibold">{{ "%.2f"|format(wallet.total_balance) }} {{ wallet.currency }}</span>
+            </div>
+            <div class="flex justify-between py-2">
+                <span class="text-gray-500">≈ USDT</span>
+                <span>{{ "%.2f"|format(wallet.total_quote.usdt_amount) }} USDT</span>
+            </div>
+        </div>
+        <a href="/wallet" class="block text-center bg-gray-800 hover:bg-gray-700 mt-4 py-2 rounded-lg text-sm transition-colors">
+            Перейти в кошелёк →
+        </a>
+    </div>
+
+    <!-- Deal statistics -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <h2 class="font-semibold mb-4">Статистика сделок</h2>
+        <div class="grid grid-cols-2 gap-3">
+            <div>
+                <div class="text-gray-500 text-xs uppercase mb-1">Всего</div>
+                <div class="text-xl font-bold">{{ deal_stats.total_deals }}</div>
+            </div>
+            <div>
+                <div class="text-gray-500 text-xs uppercase mb-1">Открытых</div>
+                <div class="text-xl font-bold text-blue-400">{{ deal_stats.open_deals }}</div>
+            </div>
+            <div>
+                <div class="text-gray-500 text-xs uppercase mb-1">Завершённых</div>
+                <div class="text-xl font-bold text-cerber-400">{{ deal_stats.completed_deals }}</div>
+            </div>
+            <div>
+                <div class="text-gray-500 text-xs uppercase mb-1">Оборот</div>
+                <div class="text-xl font-bold">{{ "%.2f"|format(deal_stats.total_volume) }} {{ deal_stats.currency }}</div>
+            </div>
+        </div>
+        <a href="/deals" class="block text-center bg-gray-800 hover:bg-gray-700 mt-4 py-2 rounded-lg text-sm transition-colors">
+            Перейти к сделкам →
+        </a>
+    </div>
+</div>
+
+<div class="mt-8 text-center">
+    <a href="/logout" class="text-red-400 hover:text-red-300 text-sm transition-colors">Выйти из аккаунта</a>
+</div>
+
+{% endblock %}

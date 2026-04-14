@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Заказы — CERBER{% endblock %}
+{% block content %}
+
+<h1 class="text-2xl font-bold mb-6">📋 Мои заказы</h1>
+
+{% if orders %}
+<div class="space-y-3">
+    {% for order in orders %}
+    <a href="/orders/{{ order.order_id }}"
+       class="block bg-gray-900 border border-gray-800 hover:border-cerber-600 rounded-xl p-4 transition-colors group">
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="font-medium group-hover:text-cerber-400 transition-colors">{{ order.product_name }}</div>
+                <div class="text-gray-500 text-sm">{{ order.sku_name }}</div>
+                <div class="text-gray-600 text-xs mt-1">{{ order.created_at.strftime('%d.%m.%Y %H:%M') if order.created_at else '' }}</div>
+            </div>
+            <div class="text-right">
+                <div class="text-cerber-400 font-semibold">{{ "%.2f"|format(order.total_amount) }} {{ order.currency }}</div>
+                <span class="inline-block mt-1 text-xs px-2 py-0.5 rounded
+                    {% if order.status == 'completed' %}bg-cerber-900/30 text-cerber-400
+                    {% elif order.status == 'error' %}bg-red-900/30 text-red-400
+                    {% else %}bg-yellow-900/30 text-yellow-400{% endif %}">
+                    {{ order.status }}
+                </span>
+            </div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-gray-500 py-12">
+    <p class="text-lg mb-2">Заказов пока нет</p>
+    <a href="/store" class="text-cerber-400 hover:text-cerber-300 text-sm">Перейти в магазин →</a>
+</div>
+{% endif %}
+
+{% if page_info and page_info.total_pages > 1 %}
+<div class="flex justify-center gap-2 mt-8">
+    {% if page_info.has_previous %}
+    <a href="/orders?page={{ page_info.page - 1 }}" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm transition-colors">← Назад</a>
+    {% endif %}
+    <span class="bg-gray-900 px-4 py-2 rounded-lg text-sm text-gray-400">{{ page_info.page }} / {{ page_info.total_pages }}</span>
+    {% if page_info.has_next %}
+    <a href="/orders?page={{ page_info.page + 1 }}" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm transition-colors">Далее →</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Заказ #{{ order.order_id if order else '?' }} — CERBER{% endblock %}
+{% block content %}
+
+<div class="flex items-center gap-2 mb-6">
+    <a href="/orders" class="text-gray-500 hover:text-cerber-400 transition-colors">← Заказы</a>
+</div>
+
+{% if order %}
+<div class="max-w-2xl mx-auto bg-gray-900 border border-gray-800 rounded-xl p-6">
+    <h1 class="text-xl font-bold mb-4">Заказ #{{ order.order_id }}</h1>
+    <div class="space-y-3 text-sm">
+        <div class="flex justify-between py-2 border-b border-gray-800">
+            <span class="text-gray-500">Товар</span>
+            <span>{{ order.product_name }}</span>
+        </div>
+        <div class="flex justify-between py-2 border-b border-gray-800">
+            <span class="text-gray-500">SKU</span>
+            <span>{{ order.sku_name }}</span>
+        </div>
+        <div class="flex justify-between py-2 border-b border-gray-800">
+            <span class="text-gray-500">Сумма</span>
+            <span class="font-semibold">{{ "%.2f"|format(order.total_amount) }} {{ order.currency }}</span>
+        </div>
+        <div class="flex justify-between py-2 border-b border-gray-800">
+            <span class="text-gray-500">Статус</span>
+            <span class="{% if order.status == 'completed' %}text-cerber-400{% elif order.status == 'error' %}text-red-400{% else %}text-yellow-400{% endif %}">{{ order.status }}</span>
+        </div>
+        <div class="flex justify-between py-2 border-b border-gray-800">
+            <span class="text-gray-500">Провайдер</span>
+            <span>{{ order.provider }}</span>
+        </div>
+        <div class="flex justify-between py-2 border-b border-gray-800">
+            <span class="text-gray-500">External ID</span>
+            <span class="font-mono text-xs">{{ order.external_id }}</span>
+        </div>
+        {% if order.provider_order_id %}
+        <div class="flex justify-between py-2 border-b border-gray-800">
+            <span class="text-gray-500">Provider Order ID</span>
+            <span class="font-mono text-xs">{{ order.provider_order_id }}</span>
+        </div>
+        {% endif %}
+        <div class="flex justify-between py-2 border-b border-gray-800">
+            <span class="text-gray-500">Дата</span>
+            <span>{{ order.created_at.strftime('%d.%m.%Y %H:%M') if order.created_at else '-' }}</span>
+        </div>
+        {% if order.delivery_payload %}
+        <div class="mt-4">
+            <div class="text-gray-500 text-xs uppercase mb-2">Данные доставки</div>
+            <pre class="bg-gray-800 rounded-lg p-3 text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap">{{ order.delivery_payload }}</pre>
+        </div>
+        {% endif %}
+        {% if order.error_message %}
+        <div class="mt-4 bg-red-900/20 border border-red-800 rounded-lg p-3">
+            <div class="text-red-400 text-xs uppercase mb-1">Ошибка</div>
+            <div class="text-red-300 text-sm">{{ order.error_message }}</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+<div class="text-center text-gray-500 py-12">Заказ не найден</div>
+{% endif %}
+
+{% endblock %}

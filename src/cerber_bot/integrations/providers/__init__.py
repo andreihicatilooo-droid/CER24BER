@@ -1,0 +1,1 @@
+"""Catalog providers for CERBER bot."""

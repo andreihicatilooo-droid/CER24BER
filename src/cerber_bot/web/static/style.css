@@ -1,0 +1,100 @@
+/* CERBER Web — Mini App dark theme */
+
+/* ─── Base ─── */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: contain;
+}
+
+.fade-in { animation: fadeIn .18s ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ─── Navigation ─── */
+/* Desktop top nav: hidden in Mini App */
+.tg-mini-app .nav-desktop { display: none !important; }
+
+/* Bottom tab bar: visible only in Mini App */
+.nav-bottom { display: none; }
+.tg-mini-app .nav-bottom {
+    display: block;
+    background: var(--tg-theme-secondary-bg-color, #111827);
+    border-color: var(--tg-theme-hint-color, #374151);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Tab items */
+.tab-item {
+    color: var(--tg-theme-hint-color, #6b7280);
+    text-decoration: none;
+    transition: color .15s;
+}
+.tab-item.tab-active {
+    color: var(--tg-theme-link-color, #4ade80);
+}
+
+/* ─── Telegram Mini App theme mapping ─── */
+.tg-mini-app {
+    background-color: var(--tg-theme-bg-color, #030712);
+    color: var(--tg-theme-text-color, #f3f4f6);
+}
+
+/* Cards and secondary surfaces */
+.tg-mini-app .bg-gray-900 {
+    background-color: var(--tg-theme-secondary-bg-color, #111827) !important;
+}
+.tg-mini-app .bg-gray-950 {
+    background-color: var(--tg-theme-bg-color, #030712) !important;
+}
+
+/* Input fields */
+.tg-mini-app .bg-gray-800,
+.tg-mini-app input[type="text"],
+.tg-mini-app input[type="number"],
+.tg-mini-app textarea,
+.tg-mini-app select {
+    background-color: var(--tg-theme-secondary-bg-color, #1f2937) !important;
+    color: var(--tg-theme-text-color, #f3f4f6) !important;
+}
+
+/* Borders */
+.tg-mini-app .border-gray-800,
+.tg-mini-app .border-gray-700 {
+    border-color: color-mix(in srgb, var(--tg-theme-hint-color, #374151) 40%, transparent) !important;
+}
+
+/* Hint / secondary text */
+.tg-mini-app .text-gray-500,
+.tg-mini-app .text-gray-600,
+.tg-mini-app .text-gray-400 {
+    color: var(--tg-theme-hint-color, #9ca3af) !important;
+}
+
+/* Links / accent */
+.tg-mini-app .text-cerber-400 {
+    color: var(--tg-theme-link-color, #4ade80) !important;
+}
+
+/* Primary button */
+.tg-mini-app .bg-cerber-600 {
+    background-color: var(--tg-theme-button-color, #16a34a) !important;
+    color: var(--tg-theme-button-text-color, #fff) !important;
+}
+.tg-mini-app .bg-cerber-600:hover,
+.tg-mini-app .bg-cerber-600:active {
+    filter: brightness(1.1);
+}
+
+/* ─── Mobile‑first overrides ─── */
+@media (max-width: 639px) {
+    h1 { font-size: 1.25rem !important; }
+    h2 { font-size: 1rem !important; }
+
+    /* Make grid items fill width on small screens */
+    .grid.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ─── Scrollbar (WebKit) ─── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }

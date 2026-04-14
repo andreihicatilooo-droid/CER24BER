@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}Сделка #{{ deal.deal_id }} — CERBER{% endblock %}
+{% block content %}
+
+<div class="flex items-center gap-2 mb-6">
+    <a href="/deals" class="text-gray-500 hover:text-cerber-400 transition-colors">← Сделки</a>
+    <span class="text-gray-700">/</span>
+    <span class="text-gray-300 font-medium">Сделка #{{ deal.deal_id }}</span>
+</div>
+
+<div class="grid grid-cols-1 gap-4">
+    <div class="space-y-4">
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h1 class="text-xl font-bold">Сделка #{{ deal.deal_id }}</h1>
+                <span class="text-sm px-3 py-1 rounded-lg
+                    {% if deal.status == 'completed' %}bg-cerber-900/30 text-cerber-400 border border-cerber-800
+                    {% elif deal.status == 'disputed' %}bg-red-900/30 text-red-400 border border-red-800
+                    {% elif deal.status == 'active' %}bg-blue-900/30 text-blue-400 border border-blue-800
+                    {% elif deal.status == 'pending_acceptance' %}bg-yellow-900/30 text-yellow-400 border border-yellow-800
+                    {% else %}bg-gray-800 text-gray-500 border border-gray-700{% endif %}">
+                    {{ deal.status }}
+                </span>
+            </div>
+            <div class="space-y-3 text-sm">
+                <div class="flex justify-between py-2 border-b border-gray-800">
+                    <span class="text-gray-500">Сумма</span>
+                    <span class="text-cerber-400 font-semibold">{{ "%.2f"|format(deal.amount) }} {{ deal.currency }}</span>
+                </div>
+                <div class="flex justify-between py-2 border-b border-gray-800">
+                    <span class="text-gray-500">≈</span>
+                    <span class="text-gray-400">{{ "%.2f"|format(deal.amount_quote.usdt_amount) }} USDT · {{ "%.0f"|format(deal.amount_quote.rub_amount) }} ₽</span>
+                </div>
+                <div class="flex justify-between py-2 border-b border-gray-800">
+                    <span class="text-gray-500">Покупатель</span>
+                    <span>{{ deal.buyer.display_name }}</span>
+                </div>
+                <div class="flex justify-between py-2 border-b border-gray-800">
+                    <span class="text-gray-500">Продавец</span>
+                    <span>{{ deal.seller.display_name }}</span>
+                </div>
+                <div class="flex justify-between py-2 border-b border-gray-800">
+                    <span class="text-gray-500">Ваша роль</span>
+                    <span>{{ 'Покупатель' if deal.viewer_role == 'buyer' else 'Продавец' }}</span>
+                </div>
+                <div class="flex justify-between py-2 border-b border-gray-800">
+                    <span class="text-gray-500">Создана</span>
+                    <span>{{ deal.created_at.strftime('%d.%m.%Y %H:%M') if deal.created_at else '-' }}</span>
+                </div>
+                {% if deal.resolution %}
+                <div class="flex justify-between py-2 border-b border-gray-800">
+                    <span class="text-gray-500">Решение</span>
+                    <span>{{ deal.resolution }}</span>
+                </div>
+                {% endif %}
+            </div>
+            <div class="mt-4 bg-gray-800/50 rounded-lg p-4">
+                <div class="text-gray-500 text-xs uppercase mb-1">Условия</div>
+                <div class="text-sm text-gray-300">{{ deal.terms }}</div>
+            </div>
+        </div>
+
+        <!-- Chat messages -->
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+            <h3 class="font-semibold mb-4">Чат сделки</h3>
+            {% if deal.messages %}
+            <div class="space-y-3 max-h-96 overflow-y-auto mb-4">
+                {% for msg in deal.messages %}
+                <div class="{% if msg.sender_role == 'system' %}text-center{% endif %}">
+                    {% if msg.sender_role == 'system' %}
+                    <div class="text-gray-600 text-xs italic">{{ msg.body }}</div>
+                    {% else %}
+                    <div class="bg-gray-800 rounded-lg p-3">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-cerber-400 text-xs font-medium">{{ msg.sender_display }}</span>
+                            <span class="text-gray-600 text-xs">{{ msg.created_at.strftime('%d.%m %H:%M') if msg.created_at else '' }}</span>
+                        </div>
+                        <div class="text-sm">{{ msg.body }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-gray-500 text-sm text-center py-4 mb-4">Сообщений пока нет</div>
+            {% endif %}
+
+            {% if deal.can_send_message %}
+            <form method="post" action="/deals/{{ deal.deal_id }}/message" class="flex gap-2">
+                <input type="text" name="message" placeholder="Написать сообщение..." required
+                       class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-cerber-500 transition-colors">
+                <button type="submit" class="bg-cerber-600 hover:bg-cerber-500 text-white px-4 py-2 rounded-lg text-sm transition-colors">
+                    Отправить
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Actions sidebar -->
+    <div class="space-y-3">
+        {% if deal.can_accept %}
+        <form method="post" action="/deals/{{ deal.deal_id }}/accept">
+            <button type="submit" class="w-full bg-cerber-600 hover:bg-cerber-500 text-white py-3 rounded-xl font-medium transition-colors">
+                ✅ Принять сделку
+            </button>
+        </form>
+        {% endif %}
+
+        {% if deal.can_decline %}
+        <form method="post" action="/deals/{{ deal.deal_id }}/decline">
+            <button type="submit" class="w-full bg-red-700 hover:bg-red-600 text-white py-3 rounded-xl font-medium transition-colors"
+                    onclick="return confirm('Отклонить сделку?')">
+                ❌ Отклонить
+            </button>
+        </form>
+        {% endif %}
+
+        {% if deal.can_cancel %}
+        <form method="post" action="/deals/{{ deal.deal_id }}/decline">
+            <button type="submit" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-3 rounded-xl font-medium transition-colors"
+                    onclick="return confirm('Отменить сделку? Средства будут разблокированы.')">
+                🚫 Отменить сделку
+            </button>
+        </form>
+        {% endif %}
+
+        {% if deal.can_confirm_success %}
+        <form method="post" action="/deals/{{ deal.deal_id }}/confirm">
+            <button type="submit" class="w-full bg-cerber-600 hover:bg-cerber-500 text-white py-3 rounded-xl font-medium transition-colors"
+                    onclick="return confirm('Подтвердить выполнение? Средства будут переведены продавцу.')">
+                ✅ Подтвердить выполнение
+            </button>
+        </form>
+        {% endif %}
+
+        {% if deal.can_open_dispute %}
+        <form method="post" action="/deals/{{ deal.deal_id }}/dispute">
+            <button type="submit" class="w-full bg-red-800 hover:bg-red-700 text-white py-3 rounded-xl font-medium transition-colors"
+                    onclick="return confirm('Открыть диспут?')">
+                ⚠️ Открыть диспут
+            </button>
+        </form>
+        {% endif %}
+
+        {% if deal.can_call_moderator %}
+        <form method="post" action="/deals/{{ deal.deal_id }}/moderator">
+            <button type="submit" class="w-full bg-yellow-700 hover:bg-yellow-600 text-white py-3 rounded-xl font-medium transition-colors">
+                👮 Позвать модератора
+            </button>
+        </form>
+        {% endif %}
+
+        {% if not (deal.can_accept or deal.can_decline or deal.can_cancel or deal.can_confirm_success or deal.can_open_dispute or deal.can_call_moderator) %}
+        <div class="bg-gray-800/50 rounded-xl p-4 text-gray-500 text-sm text-center">
+            Нет доступных действий
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}
