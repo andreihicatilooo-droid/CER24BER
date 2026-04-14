@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     giftapi_secret: str | None = Field(default=None, alias="GIFTAPI_SECRET")
     giftapi_locale: str = Field(default="ru", alias="GIFTAPI_LOCALE")
     nicepay_base_url: str = Field(default="https://nicepay.io", alias="NICEPAY_BASE_URL")
+    nicepay_proxy: str = Field(default="", alias="NICEPAY_PROXY")
     nicepay_merchant_id: str | None = Field(default=None, alias="NICEPAY_MERCHANT_ID")
     nicepay_secret: str | None = Field(default=None, alias="NICEPAY_SECRET")
     nicepay_method: str | None = Field(default=None, alias="NICEPAY_METHOD")

@@ -29,6 +29,7 @@ class AppContainer:
     engine: AsyncEngine
     session_factory: async_sessionmaker[AsyncSession]
     http_client: httpx.AsyncClient
+    nicepay_http_client: httpx.AsyncClient
     catalog_service: CatalogService
     exchange_rate_service: ExchangeRateService
     gift_api_service: GiftApiService
@@ -45,7 +46,15 @@ class AppContainer:
         session_factory = create_session_factory(engine)
         await init_database(engine)
 
-        http_client = httpx.AsyncClient(timeout=resolved_settings.request_timeout_seconds)
+        http_client = httpx.AsyncClient(
+            timeout=resolved_settings.request_timeout_seconds,
+            trust_env=False,
+        )
+        nicepay_http_client = httpx.AsyncClient(
+            timeout=resolved_settings.request_timeout_seconds,
+            proxy=resolved_settings.nicepay_proxy or None,
+            trust_env=False,
+        )
         giftapi_client = GiftApiClient(
             base_url=resolved_settings.giftapi_base_url,
             http_client=http_client,
@@ -62,7 +71,7 @@ class AppContainer:
         )
         nicepay_client = NicePayClient(
             base_url=resolved_settings.nicepay_base_url,
-            http_client=http_client,
+            http_client=nicepay_http_client,
             merchant_id=resolved_settings.nicepay_merchant_id,
             secret=resolved_settings.nicepay_secret,
         )
@@ -107,6 +116,7 @@ class AppContainer:
             engine=engine,
             session_factory=session_factory,
             http_client=http_client,
+            nicepay_http_client=nicepay_http_client,
             catalog_service=catalog_service,
             exchange_rate_service=exchange_rate_service,
             gift_api_service=gift_api_service,
@@ -119,5 +129,6 @@ class AppContainer:
         return UserService(self.session_factory, default_balance_currency=self.settings.wallet_currency)
 
     async def close(self) -> None:
+        await self.nicepay_http_client.aclose()
         await self.http_client.aclose()
         await self.engine.dispose()
