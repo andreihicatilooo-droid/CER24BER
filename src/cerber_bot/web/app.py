@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from cerber_bot.container import AppContainer
-from cerber_bot.web.routes import auth, store, wallet, orders, deals, profile
+from cerber_bot.web.routes import auth, store, wallet, orders, deals, profile, nicepay
 
 WEB_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = WEB_DIR / "templates"
@@ -40,6 +40,7 @@ def create_web_app(container: AppContainer, bot: Bot | None = None) -> FastAPI:
         return RedirectResponse("/", status_code=302)
 
     app.include_router(auth.router)
+    app.include_router(nicepay.router)
     app.include_router(store.router)
     app.include_router(wallet.router)
     app.include_router(orders.router)

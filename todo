@@ -10,7 +10,7 @@ _Обновлено: 2026-04-15_
       ⚠️ Риск: `bot.download()` возвращает `BytesIO | None` — проверять; nbox stateless per call (`async with NboxClient()`); если parse_mode="HTML" не передаётся в `notify_user_safe` — добавить; MediaGroup → несколько сообщений → несколько ссылок (приемлемо); ошибка nbox не должна ломать пересылку
       ✅ Готово когда: отправка фото в сделку → контрагент получает фото + кликабельную ссылку nbox.me; при недоступности nbox — фото пересылается без ссылки, WARNING в лог
 
-- [ ] NicePay webhook через FastAPI web-маршрут
+- [x] NicePay webhook через FastAPI web-маршрут — _2026-04-15_
       📂 Файлы: `web/routes/nicepay.py` (новый), `web/app.py`, `config.py`, `.env.example`, `launcher.py`
       ⚠️ Риск: aiohttp-сервер (порт 8080) уже существует — два endpoint одновременно; в NicePay прописать только один URL; `bot is None` в web → логировать, не падать; `extract_callback_parameters` не импортировать из aiohttp-модуля
       ✅ Готово когда: POST /webhooks/nicepay с подписанным payload → 200, баланс зачтён, Telegram-уведомление получено

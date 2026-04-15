@@ -69,3 +69,15 @@ async def test_profile_requires_auth(client: AsyncClient):
 async def test_logout_redirects(client: AsyncClient):
     response = await client.get("/logout", follow_redirects=False)
     assert response.status_code == 302
+
+
+async def test_nicepay_webhook_get_returns_error_without_params(client: AsyncClient):
+    """GET /webhooks/nicepay без параметров → 503 (сервис не настроен в тестах)."""
+    response = await client.get("/webhooks/nicepay")
+    assert response.status_code in (400, 503)
+
+
+async def test_nicepay_webhook_post_json_returns_error_without_params(client: AsyncClient):
+    """POST /webhooks/nicepay с пустым JSON → 503 или 400."""
+    response = await client.post("/webhooks/nicepay", json={})
+    assert response.status_code in (400, 503)

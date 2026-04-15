@@ -833,7 +833,9 @@ def show_status(
                 print(f"    {C['green']}[{name}] RUNNING (PID {proc.pid}){RESET}")
         if tunnel_url:
             print()
-            print(f"    {C['dark_cyan']}Tunnel URL: {tunnel_url}{RESET}")
+            print(f"    {C['dark_cyan']}Tunnel:  {tunnel_url}{RESET}")
+            nicepay_url = f"{tunnel_url.rstrip('/')}/webhooks/nicepay"
+            print(f"    {C['yellow']}NicePay: {BOLD}{nicepay_url}{RESET}")
         print()
 
 
@@ -1132,6 +1134,19 @@ def _run(
         with _io_lock:
             print()
         log("All components running")
+
+        # ── NicePay webhook URL ───────────────────────────────
+        if tunnel_url and web_enabled == "true":
+            nicepay_url = f"{tunnel_url.rstrip('/')}/webhooks/nicepay"
+            sep = "─" * 56
+            with _io_lock:
+                print(f"  {C['yellow']}┌{sep}┐{RESET}")
+                print(f"  {C['yellow']}│  NicePay Webhook URL — скопируйте в настройки:{' ' * 7}│{RESET}")
+                print(f"  {C['yellow']}│{RESET}")
+                print(f"  {C['yellow']}│  {C['white']}{BOLD}{nicepay_url}{RESET}{C['yellow']}  │{RESET}")
+                print(f"  {C['yellow']}│{RESET}")
+                print(f"  {C['yellow']}└{sep}┘{RESET}")
+                print()
 
         # ── Интерактивное меню ────────────────────────────────
         show_menu()

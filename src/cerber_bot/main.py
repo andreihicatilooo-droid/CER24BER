@@ -140,6 +140,15 @@ async def run() -> None:
                 container.settings.web_host,
                 container.settings.web_port,
             )
+            # Логируем URL для NicePay webhook
+            base_url = (container.settings.web_base_url or "").rstrip("/")
+            if base_url:
+                logger.info("NicePay webhook URL: %s/webhooks/nicepay", base_url)
+            else:
+                logger.warning(
+                    "WEB_BASE_URL не задан — NicePay webhook URL неизвестен. "
+                    "Запустите лаунчер (Cloudflare Tunnel задаёт его автоматически)."
+                )
 
         # Запускаем оба polling-цикла параллельно
         polling_tasks: list[asyncio.Task] = []
