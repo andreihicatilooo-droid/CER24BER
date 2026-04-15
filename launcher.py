@@ -515,6 +515,14 @@ ENV_SECTIONS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
             "",
         ),
         (
+            "ADMIN_BOT_TOKEN",
+            "Токен второго бота для админки, диспутов и оповещений модераторам.\n"
+            "    Пусто — модерация остаётся в основном боте.\n"
+            "    Задайте токен — появится отдельный бот с панелью для модераторов.",
+            "Формат: 123456789:ABCdefGHIjklMNOpqrSTUvwxYZ (или пусто)",
+            "",
+        ),
+        (
             "BOT_USERNAME",
             "Username бота без @. Нужен для Telegram Login Widget в веб-панели.",
             "Например: cerber_shop_bot",
