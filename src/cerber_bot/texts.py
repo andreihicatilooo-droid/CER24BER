@@ -1020,3 +1020,18 @@ class ADMIN_TEXT:
     STATS_TOTAL = "Всего пользователей: <b>{count}</b>"
     STATS_ACTIVE_7D = "Активны за 7 дней: <b>{count}</b>"
     STATS_ACTIVE_24H = "Активны за 24 часа: <b>{count}</b>"
+
+    # Рассылка
+    BTN_BROADCAST = "📣 Рассылка"
+    BROADCAST_PROMPT = (
+        "Введите текст рассылки.\n"
+        "Поддерживается HTML-разметка: <b>жирный</b>, <i>курсив</i>, <a href='...'>ссылка</a>.\n\n"
+        "Отправьте «Отмена» чтобы вернуться в меню."
+    )
+    BROADCAST_PREVIEW_TITLE = "<b>Предпросмотр рассылки:</b>"
+    BROADCAST_CONFIRM_PROMPT = "Всего получателей: <b>{count}</b>. Отправить?"
+    BTN_BROADCAST_CONFIRM = "✅ Отправить"
+    BTN_BROADCAST_CANCEL = "❌ Отмена"
+    BROADCAST_STARTED = "Рассылка запущена в фоне ({count} получателей)."
+    BROADCAST_REPORT = "📣 <b>Рассылка завершена</b>\nОтправлено: <b>{sent}</b>, ошибок: <b>{errors}</b>."
+    BROADCAST_CANCELED = "Рассылка отменена."

@@ -25,6 +25,9 @@ from aiogram.types import CallbackQuery, ForceReply, InlineKeyboardButton, Inlin
 
 from cerber_bot.container import AppContainer
 from cerber_bot.keyboards.admin import (
+    ADMIN_BROADCAST_ACTION,
+    ADMIN_BROADCAST_CANCEL_ACTION,
+    ADMIN_BROADCAST_CONFIRM_ACTION,
     ADMIN_CHECK_SERVICES_ACTION,
     ADMIN_DEAL_CHAT_PREFIX,
     ADMIN_DEAL_PREFIX,
@@ -44,11 +47,13 @@ from cerber_bot.keyboards.admin import (
     build_admin_deal_keyboard,
     build_admin_deal_readonly_keyboard,
     build_admin_home_keyboard,
+    build_broadcast_confirm_keyboard,
     build_disputes_list_keyboard,
     build_status_keyboard,
     build_user_profile_keyboard,
     build_withdrawals_list_keyboard,
 )
+from cerber_bot.db.repositories.users import UserRepository
 from cerber_bot.services.deals import DealServiceError, DealStateError, DealView, WithdrawalRequestView
 from cerber_bot.services.store import format_money
 from cerber_bot.texts import ADMIN_TEXT, DEAL_HANDLER_TEXT
@@ -77,6 +82,8 @@ class AdminStates(StatesGroup):  # noqa: D101
     waiting_chat_message = State()       # data: {"deal_id": int}
     waiting_user_identifier = State()    # поиск пользователя
     waiting_balance_delta = State()      # data: {"telegram_id": int, "balance": str, "currency": str}
+    waiting_broadcast_text = State()     # ввод текста рассылки
+    waiting_broadcast_confirm = State()  # data: {"text": str, "count": int}
 
 
 logger = logging.getLogger(__name__)
@@ -209,6 +216,35 @@ async def _render_status_text() -> str:
     ])
     lines.extend(checks)
     return "\n".join(lines)
+
+
+async def _broadcast_task(
+    bot,
+    telegram_ids: list[int],
+    text: str,
+    reporter_chat_id: int,
+    reporter_bot=None,
+) -> None:
+    """Фоновая рассылка с ограничением скорости 20 msg/s и отчётом по завершении."""
+    sent = 0
+    errors = 0
+    for telegram_id in telegram_ids:
+        try:
+            await bot.send_message(telegram_id, text, parse_mode="HTML")
+            sent += 1
+        except Exception as exc:
+            errors += 1
+            logger.warning("Broadcast: не удалось отправить %d: %s", telegram_id, exc)
+        await asyncio.sleep(0.05)
+    # Отчёт отправляется через admin-бота (тот, через который запустили рассылку)
+    report_bot = reporter_bot or bot
+    try:
+        await report_bot.send_message(
+            reporter_chat_id,
+            ADMIN_TEXT.BROADCAST_REPORT.format(sent=sent, errors=errors),
+        )
+    except Exception as exc:
+        logger.warning("Broadcast: не удалось отправить отчёт: %s", exc)
 
 
 def build_admin_router(container: AppContainer) -> Router:
@@ -715,5 +751,87 @@ def build_admin_router(container: AppContainer) -> Router:
             await callback.answer(ADMIN_TEXT.ACCESS_DENIED, show_alert=True)
             return
         await _send_log(callback, "tunnel", "туннель")
+
+    # ── Рассылка сообщений ────────────────────────────────────────────────────
+
+    @router.callback_query(F.data == ADMIN_BROADCAST_ACTION)
+    async def handle_broadcast_start(callback: CallbackQuery, state: FSMContext) -> None:
+        if callback.from_user is None or not _is_moderator(callback.from_user.id, container):
+            await callback.answer(ADMIN_TEXT.ACCESS_DENIED, show_alert=True)
+            return
+        await state.clear()
+        await state.set_state(AdminStates.waiting_broadcast_text)
+        msg = callback.message
+        if msg is not None:
+            await msg.answer(ADMIN_TEXT.BROADCAST_PROMPT)
+        await callback.answer()
+
+    @router.message(AdminStates.waiting_broadcast_text)
+    async def handle_broadcast_text(message: Message, state: FSMContext) -> None:
+        if message.from_user is None or not _is_moderator(message.from_user.id, container):
+            await state.clear()
+            return
+        text = (message.text or "").strip()
+        if not text or text.lower() in {"отмена", "cancel", "/cancel"}:
+            await state.clear()
+            await message.answer(ADMIN_TEXT.BROADCAST_CANCELED, reply_markup=build_admin_home_keyboard())
+            return
+
+        async with container.session_factory() as session:
+            ids = await UserRepository(session).list_all_telegram_ids()
+
+        await state.update_data(broadcast_text=text, broadcast_count=len(ids))
+        await state.set_state(AdminStates.waiting_broadcast_confirm)
+        await message.answer(ADMIN_TEXT.BROADCAST_PREVIEW_TITLE)
+        await message.answer(text, parse_mode="HTML")
+        await message.answer(
+            ADMIN_TEXT.BROADCAST_CONFIRM_PROMPT.format(count=len(ids)),
+            reply_markup=build_broadcast_confirm_keyboard(),
+        )
+
+    @router.callback_query(F.data == ADMIN_BROADCAST_CONFIRM_ACTION)
+    async def handle_broadcast_confirm(callback: CallbackQuery, state: FSMContext) -> None:
+        if callback.from_user is None or not _is_moderator(callback.from_user.id, container):
+            await callback.answer(ADMIN_TEXT.ACCESS_DENIED, show_alert=True)
+            return
+
+        data = await state.get_data()
+        text = str(data.get("broadcast_text") or "")
+        count = int(data.get("broadcast_count") or 0)
+        await state.clear()
+
+        if not text:
+            await callback.answer()
+            return
+
+        async with container.session_factory() as session:
+            telegram_ids = await UserRepository(session).list_all_telegram_ids()
+
+        # Рассылка идёт через основного (пользовательского) бота, т.к.
+        # именно с ним у пользователей открыт чат. Admin-бот использовать нельзя.
+        bot = container.user_bot
+        if bot is None:
+            await callback.answer(ADMIN_TEXT.ACCESS_DENIED, show_alert=True)
+            return
+
+        reporter_chat_id = callback.from_user.id
+        asyncio.create_task(
+            _broadcast_task(bot, telegram_ids, text, reporter_chat_id, reporter_bot=container.admin_bot),
+            name=f"broadcast_{reporter_chat_id}",
+        )
+
+        await callback.answer(ADMIN_TEXT.BROADCAST_STARTED.format(count=count))
+        msg = callback.message
+        if msg is not None:
+            await msg.edit_reply_markup(reply_markup=None)
+
+    @router.callback_query(F.data == ADMIN_BROADCAST_CANCEL_ACTION)
+    async def handle_broadcast_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+        await state.clear()
+        await callback.answer(ADMIN_TEXT.BROADCAST_CANCELED)
+        msg = callback.message
+        if msg is not None:
+            await msg.edit_reply_markup(reply_markup=None)
+            await msg.answer(ADMIN_TEXT.BROADCAST_CANCELED, reply_markup=build_admin_home_keyboard())
 
     return router

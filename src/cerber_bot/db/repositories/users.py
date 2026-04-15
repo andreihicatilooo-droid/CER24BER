@@ -102,3 +102,8 @@ class UserRepository:
         query = select(func.count()).select_from(TelegramUser).where(TelegramUser.last_seen_at >= since)
         result = await self.session.execute(query)
         return result.scalar_one()
+
+    async def list_all_telegram_ids(self) -> list[int]:
+        query = select(TelegramUser.telegram_id).where(TelegramUser.is_bot == False)  # noqa: E712
+        result = await self.session.execute(query)
+        return list(result.scalars().all())

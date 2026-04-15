@@ -32,6 +32,11 @@ ADMIN_CHECK_SERVICES_ACTION = "adm:svccheck"
 # Статистика пользователей
 ADMIN_STATS_ACTION = "adm:stats"
 
+# Рассылка
+ADMIN_BROADCAST_ACTION = "adm:broadcast"
+ADMIN_BROADCAST_CONFIRM_ACTION = "adm:broadcast:confirm"
+ADMIN_BROADCAST_CANCEL_ACTION = "adm:broadcast:cancel"
+
 
 def build_admin_home_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -44,6 +49,7 @@ def build_admin_home_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=ADMIN_TEXT.BTN_STATS, callback_data=ADMIN_STATS_ACTION),
         ],
         [
+            InlineKeyboardButton(text=ADMIN_TEXT.BTN_BROADCAST, callback_data=ADMIN_BROADCAST_ACTION),
             InlineKeyboardButton(text=ADMIN_TEXT.BTN_STATUS, callback_data=ADMIN_STATUS_ACTION),
         ],
     ])
@@ -131,5 +137,15 @@ def build_status_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(text=ADMIN_TEXT.BTN_CHECK_SERVICES, callback_data=ADMIN_CHECK_SERVICES_ACTION),
             InlineKeyboardButton(text=ADMIN_TEXT.BTN_HOME, callback_data=ADMIN_HOME_ACTION),
+        ],
+    ])
+
+
+def build_broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура подтверждения рассылки."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text=ADMIN_TEXT.BTN_BROADCAST_CONFIRM, callback_data=ADMIN_BROADCAST_CONFIRM_ACTION),
+            InlineKeyboardButton(text=ADMIN_TEXT.BTN_BROADCAST_CANCEL, callback_data=ADMIN_BROADCAST_CANCEL_ACTION),
         ],
     ])
