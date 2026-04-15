@@ -29,6 +29,9 @@ ADMIN_LOGS_ERR_ACTION = "adm:logs:err"
 ADMIN_LOGS_TUNNEL_ACTION = "adm:logs:tunnel"
 ADMIN_CHECK_SERVICES_ACTION = "adm:svccheck"
 
+# Статистика пользователей
+ADMIN_STATS_ACTION = "adm:stats"
+
 
 def build_admin_home_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -38,6 +41,9 @@ def build_admin_home_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text=ADMIN_TEXT.BTN_USERS, callback_data=ADMIN_USERS_ACTION),
+            InlineKeyboardButton(text=ADMIN_TEXT.BTN_STATS, callback_data=ADMIN_STATS_ACTION),
+        ],
+        [
             InlineKeyboardButton(text=ADMIN_TEXT.BTN_STATUS, callback_data=ADMIN_STATUS_ACTION),
         ],
     ])

@@ -21,7 +21,7 @@ from aiogram.exceptions import AiogramError
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, ForceReply, Message
+from aiogram.types import CallbackQuery, ForceReply, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from cerber_bot.container import AppContainer
 from cerber_bot.keyboards.admin import (
@@ -35,6 +35,7 @@ from cerber_bot.keyboards.admin import (
     ADMIN_LOGS_ERR_ACTION,
     ADMIN_LOGS_TUNNEL_ACTION,
     ADMIN_MODERATE_PREFIX,
+    ADMIN_STATS_ACTION,
     ADMIN_STATUS_ACTION,
     ADMIN_USER_BAL_PREFIX,
     ADMIN_USERS_ACTION,
@@ -623,6 +624,32 @@ def build_admin_router(container: AppContainer) -> Router:
             ),
             reply_markup=build_user_profile_keyboard(telegram_id),
         )
+
+    # ── Статистика пользователей ──────────────────────────────────────────────
+
+    @router.callback_query(F.data == ADMIN_STATS_ACTION)
+    async def handle_stats(callback: CallbackQuery) -> None:
+        if callback.from_user is None or not _is_moderator(callback.from_user.id, container):
+            await callback.answer(ADMIN_TEXT.ACCESS_DENIED, show_alert=True)
+            return
+        await callback.answer(ADMIN_TEXT.CALLBACK_WAIT)
+
+        stats = await container.build_user_service().get_stats()
+        text = "\n".join([
+            ADMIN_TEXT.STATS_TITLE,
+            ADMIN_TEXT.STATS_TOTAL.format(count=stats.total),
+            ADMIN_TEXT.STATS_ACTIVE_7D.format(count=stats.active_7d),
+            ADMIN_TEXT.STATS_ACTIVE_24H.format(count=stats.active_24h),
+        ])
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=ADMIN_TEXT.BTN_HOME, callback_data=ADMIN_HOME_ACTION)],
+        ])
+        msg = callback.message
+        if msg is not None:
+            try:
+                await msg.edit_text(text, reply_markup=keyboard)
+            except Exception:
+                await msg.answer(text, reply_markup=keyboard)
 
     # ── Статус системы ────────────────────────────────────────────────────────
 

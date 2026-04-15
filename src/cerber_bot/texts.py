@@ -191,24 +191,6 @@ class MENU_TEXT:
     PROFILE_PENDING_WITHDRAWALS = "Выводов в работе: {count}"
     PROFILE_CREATED = "Создан: {created_at}"
     PROFILE_LAST_SEEN = "Последняя активность: {last_seen}"
-    DEV_BALANCE_BUTTON = "Dev: баланс"
-    DEV_BALANCE_TITLE = "<b>Dev: операции с балансом</b>"
-    DEV_BALANCE_AVAILABLE = "Доступно: {amount}"
-    DEV_BALANCE_HELD = "Заблокировано: {amount}"
-    DEV_BALANCE_TOTAL = "Всего: {amount}"
-    DEV_BALANCE_HINT = "Меняется только доступный баланс. Заблокированные средства сделок и выводов не затрагиваются."
-    DEV_BALANCE_TOP_UP = "Пополнить"
-    DEV_BALANCE_DEBIT = "Списать"
-    DEV_BALANCE_BACK = "Назад в профиль"
-    DEV_BALANCE_MENU_OPENED = "Dev-меню открыто"
-    DEV_BALANCE_ACCESS_DENIED = "Dev-меню недоступно."
-    DEV_BALANCE_TOP_UP_PROMPT = "Введите сумму для пополнения доступного баланса. Например: 25 или 25.50"
-    DEV_BALANCE_DEBIT_PROMPT = "Введите сумму для списания с доступного баланса. Например: 25 или 25.50"
-    DEV_BALANCE_INVALID_AMOUNT = "Не удалось распознать сумму. Используйте формат 25 или 25.50."
-    DEV_BALANCE_AMOUNT_POSITIVE = "Сумма должна быть больше нуля."
-    DEV_BALANCE_UPDATED = "Баланс обновлен: {operation} {amount}. Доступно сейчас: {balance}."
-    DEV_BALANCE_CREDIT_OPERATION = "пополнение"
-    DEV_BALANCE_DEBIT_OPERATION = "списание"
     REFRESH_REPORT_TITLE = "<b>Каталог обновлен</b>"
     REFRESH_REPORT_CATEGORIES = "Категорий доступно: {count}"
     REFRESH_REPORT_PRODUCTS = "Товаров в витрине: {count}"
@@ -221,10 +203,6 @@ class MENU_TEXT:
     @classmethod
     def catalog_not_refreshed(cls, error_text: str) -> str:
         return f"{cls.CATALOG_NOT_REFRESHED_TITLE}\n{error_text}"
-
-    @classmethod
-    def dev_balance_updated(cls, operation: str, amount: str, balance: str) -> str:
-        return cls.DEV_BALANCE_UPDATED.format(operation=operation, amount=amount, balance=balance)
 
 
 class GIFTAPI_TEXT:
@@ -1035,3 +1013,10 @@ class ADMIN_TEXT:
     BTN_LOG_ERR = "🔴 Ошибки"
     BTN_LOG_TUNNEL = "🌐 Туннель"
     BTN_CHECK_SERVICES = "🔌 Проверить сервисы"
+
+    # Статистика пользователей
+    BTN_STATS = "📊 Статистика"
+    STATS_TITLE = "<b>📊 Статистика пользователей</b>"
+    STATS_TOTAL = "Всего пользователей: <b>{count}</b>"
+    STATS_ACTIVE_7D = "Активны за 7 дней: <b>{count}</b>"
+    STATS_ACTIVE_24H = "Активны за 24 часа: <b>{count}</b>"

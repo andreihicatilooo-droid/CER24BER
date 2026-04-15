@@ -19,10 +19,7 @@ _Обновлено: 2026-04-15_
       ⚠️ Риск: `bot.download()` возвращает `BytesIO | None` — проверять; nbox stateless per call (`async with NboxClient()`); если parse_mode="HTML" не передаётся в `notify_user_safe` — добавить; MediaGroup → несколько сообщений → несколько ссылок (приемлемо); ошибка nbox не должна ломать пересылку
       ✅ Готово когда: отправка фото в сделку → контрагент получает фото + кликабельную ссылку nbox.me; при недоступности nbox — фото пересылается без ссылки, WARNING в лог
 
-- [ ] Статистика пользователей в admin-боте
-      📂 Файлы: `db/repositories/users.py`, `services/users.py`, `handlers/admin.py`, `keyboards/admin.py`, `texts.py`
-      ⚠️ Риск: `count_active_since` требует timezone-aware datetime — использовать `utcnow()` из `db/models.py`; `build_user_service()` создаёт новый экземпляр на каждый вызов — OK; кнопка статистики расширяет `build_admin_home_keyboard` — проверить что умещается
-      ✅ Готово когда: кнопка "📊 Статистика" в главном меню → экран с тремя счётчиками (всего / за 7д / за 24ч); данные совпадают с COUNT(*) в БД
+- [x] Статистика пользователей в admin-боте — _2026-04-15_
 
 - [ ] Рассылка сообщений пользователям через admin-бот
       📂 Файлы: `db/repositories/users.py`, `handlers/admin.py`, `keyboards/admin.py`, `texts.py`
@@ -34,7 +31,7 @@ _Обновлено: 2026-04-15_
       ⚠️ Риск: aiohttp-сервер (порт 8080) уже существует — два endpoint одновременно; в NicePay прописать только один URL; `bot is None` в web → логировать, не падать; `extract_callback_parameters` не импортировать из aiohttp-модуля
       ✅ Готово когда: POST /webhooks/nicepay с подписанным payload → 200, баланс зачтён, Telegram-уведомление получено
 
-- [ ] Убрать dev:balance из профиля основного бота
+- [x] Убрать dev:balance из профиля основного бота — _2026-04-15_
       📂 Файлы: `handlers/menu.py`, `texts.py`
       ⚠️ Риск: `parse_profile_balance_amount` удалить вместе; `REFRESH_ACTION` не трогать
       ✅ Готово когда: кнопка "Dev: баланс" не появляется ни у кого; `grep PROFILE_DEV_BALANCE` — пустой результат
@@ -154,3 +151,5 @@ _Обновлено: 2026-04-15_
 - [x] Вынести FakeUser в web/deps.py, обновить 4 роута — _2026-04-15_
 - [x] Очистить handlers/deals.py (заглушка-реэкспорт) — _2026-04-15_
 - [x] Обернуть httpx.ConnectError и таймаут в GiftApiError — _2026-04-15_
+- [x] Убрать dev:balance из профиля основного бота — _2026-04-15_
+- [x] Статистика пользователей в admin-боте — _2026-04-15_

@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -82,3 +85,12 @@ class UserRepository:
         self.session.add(user)
         await self.session.flush()
         return user, True
+
+    async def count_users(self) -> int:
+        result = await self.session.execute(select(func.count()).select_from(TelegramUser))
+        return result.scalar_one()
+
+    async def count_active_since(self, since: datetime) -> int:
+        query = select(func.count()).select_from(TelegramUser).where(TelegramUser.last_seen_at >= since)
+        result = await self.session.execute(query)
+        return result.scalar_one()

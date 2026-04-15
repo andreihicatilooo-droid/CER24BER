@@ -1,8 +1,7 @@
-"""Сервис пользователей.
+from __future__ import annotations
 
-Регистрация нового пользователя и чтение профиля из БД.
-"""
-
+from dataclasses import dataclass
+from datetime import timedelta
 from decimal import Decimal
 
 from aiogram.types import User as TelegramUserObject
@@ -11,6 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from cerber_bot.db.models import TelegramUser, utcnow
 from cerber_bot.db.repositories.users import UserRepository
 from cerber_bot.db.repositories.wallet import WalletTransactionRepository
+
+
+@dataclass(slots=True, frozen=True)
+class UserStats:
+    total: int
+    active_7d: int
+    active_24h: int
 
 
 class UserService:
@@ -43,6 +49,15 @@ class UserService:
         async with self.session_factory() as session:
             repository = UserRepository(session)
             return await repository.find_by_identifier(identifier)
+
+    async def get_stats(self) -> UserStats:
+        now = utcnow()
+        async with self.session_factory() as session:
+            repository = UserRepository(session)
+            total = await repository.count_users()
+            active_7d = await repository.count_active_since(now - timedelta(days=7))
+            active_24h = await repository.count_active_since(now - timedelta(hours=24))
+        return UserStats(total=total, active_7d=active_7d, active_24h=active_24h)
 
     async def adjust_balance(
         self,

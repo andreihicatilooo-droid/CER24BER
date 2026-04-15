@@ -13,7 +13,7 @@ from aiogram import F, Router
 from aiogram.exceptions import AiogramError, TelegramBadRequest, TelegramNetworkError
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from cerber_bot.container import AppContainer
 from cerber_bot.db.models import TelegramUser
@@ -53,10 +53,6 @@ from cerber_bot.texts import DEAL_HANDLER_TEXT, MENU_TEXT
 
 logger = logging.getLogger(__name__)
 
-DEVELOPER_PROFILE_USERNAMES = frozenset({"xrayog"})
-PROFILE_DEV_BALANCE_ACTION = "profile:dev:balance"
-PROFILE_DEV_BALANCE_TOP_UP_ACTION = "profile:dev:balance:topup"
-PROFILE_DEV_BALANCE_DEBIT_ACTION = "profile:dev:balance:debit"
 
 
 def build_menu_router(container: AppContainer) -> Router:
@@ -80,131 +76,8 @@ def build_menu_router(container: AppContainer) -> Router:
         deals_dashboard = await container.deal_service.get_dashboard(callback.from_user.id)
         await message.answer(
             render_profile(profile, wallet, deals_dashboard),
-            reply_markup=build_profile_keyboard(profile),
         )
         await callback.answer(MENU_TEXT.PROFILE_OPENED)
-
-    @router.callback_query(F.data == PROFILE_DEV_BALANCE_ACTION)
-    async def handle_developer_balance_menu(callback: CallbackQuery, state: FSMContext) -> None:
-        message = extract_message(callback)
-        if message is None or callback.from_user is None:
-            await callback.answer()
-            return
-
-        await state.clear()
-        profile = await container.build_user_service().get_profile(callback.from_user.id)
-        if profile is None or not is_developer_profile(profile):
-            await callback.answer(MENU_TEXT.DEV_BALANCE_ACCESS_DENIED, show_alert=True)
-            return
-
-        wallet = await container.store_service.get_wallet_snapshot(callback.from_user.id)
-        await send_screen(
-            message,
-            render_developer_balance_menu(wallet),
-            build_developer_balance_keyboard(),
-            callback=callback,
-        )
-        await callback.answer(MENU_TEXT.DEV_BALANCE_MENU_OPENED)
-
-    @router.callback_query(F.data == PROFILE_DEV_BALANCE_TOP_UP_ACTION)
-    async def handle_developer_balance_top_up(callback: CallbackQuery, state: FSMContext) -> None:
-        message = extract_message(callback)
-        if message is None or callback.from_user is None:
-            await callback.answer()
-            return
-
-        profile = await container.build_user_service().get_profile(callback.from_user.id)
-        if profile is None or not is_developer_profile(profile):
-            await callback.answer(MENU_TEXT.DEV_BALANCE_ACCESS_DENIED, show_alert=True)
-            return
-
-        await state.clear()
-        await state.update_data(developer_balance_operation="credit")
-        await state.set_state(DeveloperBalanceStates.waiting_for_amount)
-        await message.answer(MENU_TEXT.DEV_BALANCE_TOP_UP_PROMPT)
-        await callback.answer(MENU_TEXT.DEV_BALANCE_MENU_OPENED)
-
-    @router.callback_query(F.data == PROFILE_DEV_BALANCE_DEBIT_ACTION)
-    async def handle_developer_balance_debit(callback: CallbackQuery, state: FSMContext) -> None:
-        message = extract_message(callback)
-        if message is None or callback.from_user is None:
-            await callback.answer()
-            return
-
-        profile = await container.build_user_service().get_profile(callback.from_user.id)
-        if profile is None or not is_developer_profile(profile):
-            await callback.answer(MENU_TEXT.DEV_BALANCE_ACCESS_DENIED, show_alert=True)
-            return
-
-        await state.clear()
-        await state.update_data(developer_balance_operation="debit")
-        await state.set_state(DeveloperBalanceStates.waiting_for_amount)
-        await message.answer(MENU_TEXT.DEV_BALANCE_DEBIT_PROMPT)
-        await callback.answer(MENU_TEXT.DEV_BALANCE_MENU_OPENED)
-
-    @router.message(DeveloperBalanceStates.waiting_for_amount)
-    async def handle_developer_balance_amount(message: Message, state: FSMContext) -> None:
-        if message.from_user is None:
-            return
-        if should_cancel(message.text):
-            await state.clear()
-            profile = await container.build_user_service().get_profile(message.from_user.id)
-            if profile is None or not is_developer_profile(profile):
-                await message.answer(MENU_TEXT.DEV_BALANCE_ACCESS_DENIED)
-                return
-            wallet = await container.store_service.get_wallet_snapshot(message.from_user.id)
-            await message.answer(
-                render_developer_balance_menu(wallet),
-                reply_markup=build_developer_balance_keyboard(),
-            )
-            return
-
-        profile = await container.build_user_service().get_profile(message.from_user.id)
-        if profile is None or not is_developer_profile(profile):
-            await state.clear()
-            await message.answer(MENU_TEXT.DEV_BALANCE_ACCESS_DENIED)
-            return
-
-        try:
-            amount = parse_profile_balance_amount(message.text or "")
-        except ValueError as error:
-            await message.answer(str(error))
-            return
-
-        state_data = await state.get_data()
-        operation = state_data.get("developer_balance_operation")
-        signed_amount = amount if operation == "credit" else -amount
-
-        try:
-            wallet = await container.store_service.adjust_balance(
-                message.from_user,
-                signed_amount,
-                transaction_type="manual_credit" if signed_amount > 0 else "manual_debit",
-            )
-        except StoreServiceError as error:
-            await message.answer(str(error))
-            return
-
-        await state.clear()
-        operation_label = (
-            MENU_TEXT.DEV_BALANCE_CREDIT_OPERATION if signed_amount > 0 else MENU_TEXT.DEV_BALANCE_DEBIT_OPERATION
-        )
-        await message.answer(
-            MENU_TEXT.dev_balance_updated(
-                operation_label,
-                format_profile_money(amount, wallet.currency),
-                format_profile_money(wallet.balance, wallet.currency),
-            )
-        )
-        deals_dashboard = await container.deal_service.get_dashboard(message.from_user.id)
-        updated_profile = await container.build_user_service().get_profile(message.from_user.id)
-        if updated_profile is None:
-            await message.answer(MENU_TEXT.PROFILE_NOT_FOUND)
-            return
-        await message.answer(
-            render_profile(updated_profile, wallet, deals_dashboard),
-            reply_markup=build_profile_keyboard(updated_profile),
-        )
 
     @router.callback_query(F.data == REFRESH_ACTION)
     async def handle_refresh(callback: CallbackQuery, state: FSMContext) -> None:
@@ -288,18 +161,6 @@ def render_profile(profile: TelegramUser, wallet, deals_dashboard) -> str:
     )
 
 
-def render_developer_balance_menu(wallet) -> str:
-    return "\n".join(
-        [
-            MENU_TEXT.DEV_BALANCE_TITLE,
-            MENU_TEXT.DEV_BALANCE_AVAILABLE.format(amount=escape(format_profile_money(wallet.balance, wallet.currency))),
-            MENU_TEXT.DEV_BALANCE_HELD.format(amount=escape(format_profile_money(wallet.held_balance, wallet.currency))),
-            MENU_TEXT.DEV_BALANCE_TOTAL.format(amount=escape(format_profile_money(wallet.total_balance, wallet.currency))),
-            MENU_TEXT.DEV_BALANCE_HINT,
-        ]
-    )
-
-
 def render_refresh_report(category_count: int, product_count: int) -> str:
     return "\n".join(
         [
@@ -318,35 +179,6 @@ def format_profile_money(amount, currency: str) -> str:
     return f"{value} {currency}"
 
 
-def build_profile_keyboard(profile: TelegramUser) -> InlineKeyboardMarkup | None:
-    if not is_developer_profile(profile):
-        return None
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=MENU_TEXT.DEV_BALANCE_BUTTON, callback_data=PROFILE_DEV_BALANCE_ACTION)]
-        ]
-    )
-
-
-def build_developer_balance_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text=MENU_TEXT.DEV_BALANCE_TOP_UP, callback_data=PROFILE_DEV_BALANCE_TOP_UP_ACTION),
-                InlineKeyboardButton(text=MENU_TEXT.DEV_BALANCE_DEBIT, callback_data=PROFILE_DEV_BALANCE_DEBIT_ACTION),
-            ],
-            [InlineKeyboardButton(text=MENU_TEXT.DEV_BALANCE_BACK, callback_data=PROFILE_ACTION)],
-        ]
-    )
-
-
-def is_developer_profile(profile: TelegramUser) -> bool:
-    return is_developer_username(profile.username)
-
-
-def is_developer_username(username: str | None) -> bool:
-    return (username or "").strip().lstrip("@").casefold() in DEVELOPER_PROFILE_USERNAMES
-
 
 def shorten_text(value: str, limit: int = 120) -> str:
     normalized = " ".join(value.split())
@@ -362,10 +194,6 @@ class DealStates(StatesGroup):
     waiting_for_chat_message = State()
     waiting_for_withdrawal_amount = State()
     waiting_for_withdrawal_address = State()
-
-
-class DeveloperBalanceStates(StatesGroup):
-    waiting_for_amount = State()
 
 
 DEALS_PER_PAGE = 6
@@ -1204,20 +1032,6 @@ def parse_action_suffix(value: str, prefix: str) -> tuple[int, str]:
     raw = value.removeprefix(prefix)
     numeric_part, action = raw.split(":", 1)
     return int(numeric_part), action
-
-
-def parse_profile_balance_amount(value: str) -> Decimal:
-    normalized = value.strip().replace(",", ".")
-    if not normalized:
-        raise ValueError(MENU_TEXT.DEV_BALANCE_INVALID_AMOUNT)
-    try:
-        amount = Decimal(normalized)
-    except InvalidOperation as error:
-        raise ValueError(MENU_TEXT.DEV_BALANCE_INVALID_AMOUNT) from error
-    amount = amount.quantize(Decimal("0.01"))
-    if amount <= Decimal("0.00"):
-        raise ValueError(MENU_TEXT.DEV_BALANCE_AMOUNT_POSITIVE)
-    return amount
 
 
 def format_role(value: str) -> str:
