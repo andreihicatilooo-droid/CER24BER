@@ -3,12 +3,14 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from cerber_bot.config import Settings
 from cerber_bot.keyboards.deals import DEAL_HOME_ACTION
 from cerber_bot.keyboards.storefront import STORE_HOME_ACTION, STORE_ORDERS_ACTION, STORE_REFRESH_ACTION, STORE_SEARCH_PROMPT_ACTION, STORE_WALLET_ACTION
-from cerber_bot.texts import MAIN_MENU_TEXT
+from cerber_bot.texts import FAQ_TEXT, MAIN_MENU_TEXT
 
 
 PROFILE_ACTION = "menu:profile"
 REFRESH_ACTION = STORE_REFRESH_ACTION  # реэкспорт для обратной совместимости хэндлеров
 SUPPORT_ACTION = "menu:support"
+FAQ_ACTION = "menu:faq"
+FAQ_SECTION_PREFIX = "menu:faq:"
 
 
 def build_main_menu(settings: Settings) -> InlineKeyboardMarkup:
@@ -26,6 +28,10 @@ def build_main_menu(settings: Settings) -> InlineKeyboardMarkup:
         ],
     ]
 
+    keyboard.append([
+        InlineKeyboardButton(text=MAIN_MENU_TEXT.FAQ, callback_data=FAQ_ACTION),
+    ])
+
     if settings.web_base_url:
         keyboard.append([
             InlineKeyboardButton(
@@ -40,3 +46,18 @@ def build_main_menu(settings: Settings) -> InlineKeyboardMarkup:
         keyboard.append([InlineKeyboardButton(text=MAIN_MENU_TEXT.SUPPORT, callback_data=SUPPORT_ACTION)])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def build_faq_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=FAQ_TEXT.BTN_STORE, callback_data=FAQ_SECTION_PREFIX + "store")],
+        [InlineKeyboardButton(text=FAQ_TEXT.BTN_WALLET, callback_data=FAQ_SECTION_PREFIX + "wallet")],
+        [InlineKeyboardButton(text=FAQ_TEXT.BTN_DEALS, callback_data=FAQ_SECTION_PREFIX + "deals")],
+        [InlineKeyboardButton(text=FAQ_TEXT.BTN_SECURITY, callback_data=FAQ_SECTION_PREFIX + "security")],
+    ])
+
+
+def build_faq_back_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=FAQ_TEXT.BTN_BACK, callback_data=FAQ_ACTION)],
+    ])

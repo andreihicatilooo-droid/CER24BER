@@ -44,6 +44,7 @@ class MAIN_MENU_TEXT:
     REFRESH = "Обновить каталог"
     SUPPORT = "Поддержка"
     WEB_APP = "🌐 Веб-магазин"
+    FAQ = "❓ FAQ"
 
 
 class GIFTAPI_MENU_TEXT:

@@ -45,10 +45,10 @@ from cerber_bot.keyboards.deals import (
     build_moderator_withdrawal_keyboard,
     build_withdrawal_network_keyboard,
 )
-from cerber_bot.keyboards.main_menu import PROFILE_ACTION, REFRESH_ACTION, SUPPORT_ACTION
+from cerber_bot.keyboards.main_menu import PROFILE_ACTION, REFRESH_ACTION, SUPPORT_ACTION, FAQ_ACTION, FAQ_SECTION_PREFIX, build_faq_keyboard, build_faq_back_keyboard
 from cerber_bot.services.deals import DealCard, DealDashboard, DealMessageRelayResult, DealModerationResult, DealServiceError, DealView, WithdrawalRequestView
 from cerber_bot.services.store import PageInfo, StoreServiceError, format_money
-from cerber_bot.texts import DEAL_HANDLER_TEXT, MENU_TEXT
+from cerber_bot.texts import DEAL_HANDLER_TEXT, FAQ_TEXT, MENU_TEXT
 
 
 logger = logging.getLogger(__name__)
@@ -106,6 +106,40 @@ def build_menu_router(container: AppContainer) -> Router:
         support_url = container.settings.support_url or MENU_TEXT.SUPPORT_CONTACT_MISSING
         await message.answer(MENU_TEXT.support_contact(escape(support_url)))
         await callback.answer(MENU_TEXT.CONTACTS_SENT)
+
+    @router.callback_query(F.data == FAQ_ACTION)
+    async def handle_faq(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+
+        await state.clear()
+        await message.answer(FAQ_TEXT.TITLE, reply_markup=build_faq_keyboard())
+        await callback.answer()
+
+    _FAQ_SECTIONS: dict[str, str] = {
+        "store": FAQ_TEXT.STORE,
+        "wallet": FAQ_TEXT.WALLET,
+        "deals": FAQ_TEXT.DEALS,
+        "security": FAQ_TEXT.SECURITY,
+    }
+
+    @router.callback_query(F.data.startswith(FAQ_SECTION_PREFIX))
+    async def handle_faq_section(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+
+        section = callback.data[len(FAQ_SECTION_PREFIX):]  # type: ignore[index]
+        text = _FAQ_SECTIONS.get(section)
+        if text is None:
+            await callback.answer()
+            return
+
+        await message.answer(text, reply_markup=build_faq_back_keyboard())
+        await callback.answer()
 
     return router
 

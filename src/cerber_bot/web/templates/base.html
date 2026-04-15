@@ -1,103 +1,139 @@
 <!DOCTYPE html>
-<html lang="ru" class="dark">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>{% block title %}CERBER{% endblock %}</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        cerber: {
-                            50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0',
-                            300: '#86efac', 400: '#4ade80', 500: '#22c55e',
-                            600: '#16a34a', 700: '#15803d', 800: '#166534',
-                            900: '#14532d', 950: '#052e16',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
     <link rel="stylesheet" href="/static/style.css">
 </head>
-<body class="bg-gray-950 text-gray-100 min-h-screen">
+<body>
+    <!-- Matrix rain -->
+    <div class="signal-rain" aria-hidden="true" data-signal-rain></div>
+
     <script>
     (function() {
         var tg = window.Telegram && window.Telegram.WebApp;
         if (tg && tg.initData) {
-            document.body.classList.add('tg-mini-app');
             tg.ready();
             tg.expand();
-            if (tg.setHeaderColor) tg.setHeaderColor('#030712');
-            if (tg.setBackgroundColor) tg.setBackgroundColor('#030712');
+            if (tg.setHeaderColor) tg.setHeaderColor('#000000');
+            if (tg.setBackgroundColor) tg.setBackgroundColor('#000000');
         }
     })();
     </script>
+
     {% if session and session.get('telegram_id') %}
-    <!-- Top nav for desktop / fallback browser -->
-    <nav class="bg-gray-900/95 border-b border-gray-800 sticky top-0 z-50 nav-desktop backdrop-blur-sm">
-        <div class="max-w-3xl mx-auto px-4 py-2.5 flex items-center justify-between">
-            <a href="/store" class="text-lg font-bold text-cerber-400 tracking-tight">CERBER</a>
-            <div class="flex items-center gap-3 text-sm">
-                <a href="/store" class="hover:text-cerber-400 transition-colors">Магазин</a>
-                <a href="/wallet" class="hover:text-cerber-400 transition-colors">Кошелёк</a>
-                <a href="/orders" class="hover:text-cerber-400 transition-colors">Заказы</a>
-                <a href="/deals" class="hover:text-cerber-400 transition-colors">Сделки</a>
-                <a href="/profile" class="hover:text-cerber-400 transition-colors">Профиль</a>
-                <a href="/logout" class="text-gray-500 hover:text-red-400 transition-colors ml-1">Выход</a>
+    <!-- Header (desktop) -->
+    <header class="site-header">
+        <div class="shell header-row">
+            <a class="brand" href="/store">
+                <span class="brand-mark">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <circle cx="12" cy="9" r="5" stroke="#cc0018" stroke-width="1.6"/>
+                        <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#cc0018" stroke-width="1.6" stroke-linecap="square"/>
+                        <line x1="4" y1="20" x2="20" y2="20" stroke="#cc0018" stroke-width="1.6"/>
+                    </svg>
+                </span>
+                <span class="brand-copy">
+                    <strong>CERBER</strong>
+                    <span>dark / encrypted / secure</span>
+                </span>
+            </a>
+
+            <nav class="header-nav">
+                <a href="/store" data-path="/store">Магазин</a>
+                <a href="/wallet" data-path="/wallet">Кошелёк</a>
+                <a href="/orders" data-path="/orders">Заказы</a>
+                <a href="/deals" data-path="/deals">Сделки</a>
+                <a href="/profile" data-path="/profile">Профиль</a>
+                <a href="/logout">Выход</a>
+            </nav>
+
+            <div class="header-tools">
+                {% if balance is defined %}
+                <div class="balance-chip">
+                    <i>₮</i>
+                    <div>
+                        <strong>{{ "%.2f"|format(balance) }}</strong>
+                        <span>Баланс</span>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
-    </nav>
+    </header>
 
-    <!-- Bottom tab bar for Mini App -->
-    <nav class="nav-bottom fixed bottom-0 left-0 right-0 z-50 border-t" id="bottomNav">
-        <div class="flex items-stretch justify-around">
-            <a href="/store" class="tab-item flex-1 flex flex-col items-center py-2 text-[10px]"
-               data-path="/store">
-                <span class="text-lg leading-none mb-0.5">🏪</span>Магазин
-            </a>
-            <a href="/wallet" class="tab-item flex-1 flex flex-col items-center py-2 text-[10px]"
-               data-path="/wallet">
-                <span class="text-lg leading-none mb-0.5">💰</span>Кошелёк
-            </a>
-            <a href="/orders" class="tab-item flex-1 flex flex-col items-center py-2 text-[10px]"
-               data-path="/orders">
-                <span class="text-lg leading-none mb-0.5">📋</span>Заказы
-            </a>
-            <a href="/deals" class="tab-item flex-1 flex flex-col items-center py-2 text-[10px]"
-               data-path="/deals">
-                <span class="text-lg leading-none mb-0.5">🤝</span>Сделки
-            </a>
-            <a href="/profile" class="tab-item flex-1 flex flex-col items-center py-2 text-[10px]"
-               data-path="/profile">
-                <span class="text-lg leading-none mb-0.5">👤</span>Профиль
-            </a>
-        </div>
+    <!-- Bottom dock (mobile) -->
+    <nav class="mobile-dock" id="mobileDock">
+        <a href="/store" class="dock-item" data-path="/store">
+            <span class="dock-icon">▣</span>Магазин
+        </a>
+        <a href="/wallet" class="dock-item" data-path="/wallet">
+            <span class="dock-icon">◈</span>Кошелёк
+        </a>
+        <a href="/orders" class="dock-item" data-path="/orders">
+            <span class="dock-icon">≡</span>Заказы
+        </a>
+        <a href="/deals" class="dock-item" data-path="/deals">
+            <span class="dock-icon">⟐</span>Сделки
+        </a>
+        <a href="/profile" class="dock-item" data-path="/profile">
+            <span class="dock-icon">◉</span>Профиль
+        </a>
     </nav>
     {% endif %}
 
-    <main class="max-w-3xl mx-auto px-3 py-4 pb-20 fade-in">
-        {% block content %}{% endblock %}
+    <main class="fade-in">
+        <div class="page-shell">
+            {% block content %}{% endblock %}
+        </div>
     </main>
 
-    {% if session and session.get('telegram_id') %}
     <script>
-    (function() {
-        // Highlight active tab
+    (function () {
+        /* ── Matrix rain ────────────────────────────────────── */
+        var CHARSET = '01アイウエカキクサシスタチツナニヌネハヒフヘマミムメラリルレ#$%*<>[]{}|_/\\!?NULLVOID';
+        function buildSignal(len) {
+            return Array.from({ length: len }, function () {
+                return CHARSET[Math.floor(Math.random() * CHARSET.length)];
+            }).join('\n');
+        }
+        function renderSignalRain(layer) {
+            if (!(layer instanceof HTMLElement)) return;
+            layer.innerHTML = '';
+            var cols = window.innerWidth < 760 ? 16 : 28;
+            for (var i = 0; i < cols; i++) {
+                var col = document.createElement('div');
+                var len = 18 + Math.floor(Math.random() * 22);
+                col.className = 'signal-column' + (i % 7 === 0 ? ' is-amber' : '');
+                col.textContent = buildSignal(len);
+                col.style.left = (2 + i * (96 / cols)) + '%';
+                col.style.animationDuration = (7 + Math.random() * 9) + 's';
+                col.style.animationDelay = (-1 * Math.random() * 14) + 's';
+                col.style.opacity = (0.18 + Math.random() * 0.24).toFixed(2);
+                layer.appendChild(col);
+            }
+        }
+        var rainTimer;
+        function scheduleRain() {
+            clearTimeout(rainTimer);
+            rainTimer = setTimeout(function () {
+                document.querySelectorAll('[data-signal-rain]').forEach(renderSignalRain);
+            }, 120);
+        }
+        document.querySelectorAll('[data-signal-rain]').forEach(renderSignalRain);
+        window.addEventListener('resize', scheduleRain);
+
+        /* ── Active nav highlight ───────────────────────────── */
         var path = location.pathname;
-        document.querySelectorAll('.tab-item').forEach(function(el) {
+        document.querySelectorAll('[data-path]').forEach(function (el) {
             var dp = el.getAttribute('data-path');
-            if (path === dp || path.startsWith(dp + '/')) {
-                el.classList.add('tab-active');
+            if (path === dp || (dp !== '/' && path.startsWith(dp + '/'))) {
+                el.classList.add('is-active');
             }
         });
     })();
     </script>
-    {% endif %}
 </body>
 </html>
