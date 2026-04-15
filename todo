@@ -24,10 +24,6 @@ _Обновлено: 2026-04-15_
       ⚠️ Риск: найти блок `action == "approve"` в `moderate_withdrawal_request`; не трогать блок `reject` — там транзакция уже есть; `amount` отрицательный (списание)
       ✅ Готово когда: после `status=approved` создаётся `WalletTransaction(type="withdrawal_approved", amount=-amount)`; история кошелька показывает факт списания
 
-- [ ] Killer предыдущих процессов при старте launcher
-      📂 Файлы: `launcher.py`
-      ⚠️ Риск: `wmic` deprecated в Windows 11 24H2 — обернуть в try/except и добавить PowerShell fallback через `Get-Process`; не убивать собственный PID; при первом запуске список пуст — не ошибка
-      ✅ Готово когда: второй запуск лаунчера завершает старые `cerber_bot` и `launcher.py` процессы; в launcher.log — PID убитых; первый запуск без ошибок
 
 - [ ] Статистика пользователей в admin-боте
       📂 Файлы: `db/repositories/users.py`, `services/users.py`, `handlers/admin.py`, `keyboards/admin.py`, `texts.py`
@@ -154,6 +150,7 @@ _Обновлено: 2026-04-15_
 
 ## ✅ Выполнено
 
+- [x] Killer предыдущих процессов при старте launcher — _2026-04-15_
 - [x] Заглушить 9 файлов провайдерного слоя — _2026-04-15_
 - [x] Удалить 6 мёртвых полей из config.py + .env.example + launcher.py — _2026-04-15_
 - [x] Удалить CATALOG_PROVIDER_TEXT и DEMO_CATALOG_TEXT из texts.py — _2026-04-15_

@@ -855,6 +855,87 @@ def read_key() -> str:
     return ""
 
 
+# ── Завершение старых процессов ──────────────────────────────
+
+def _find_pids_by_cmdline(pattern: str) -> list[int]:
+    """Ищет PID процессов, чья командная строка содержит pattern."""
+    pids: list[int] = []
+
+    # Попытка 1: PowerShell Get-CimInstance (надёжно в Windows 10/11)
+    try:
+        ps_cmd = (
+            "Get-CimInstance Win32_Process | "
+            f"Where-Object {{ $_.CommandLine -like '*{pattern}*' }} | "
+            "ForEach-Object { $_.ProcessId }"
+        )
+        res = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if res.returncode == 0:
+            for line in res.stdout.splitlines():
+                if line.strip().isdigit():
+                    pids.append(int(line.strip()))
+            return pids
+    except Exception:
+        pass
+
+    # Попытка 2: WMIC (устарел в Windows 11 24H2, используется как fallback)
+    try:
+        res = subprocess.run(
+            ["wmic", "process", "get", "commandline,processid", "/format:csv"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if res.returncode == 0:
+            for line in res.stdout.splitlines():
+                if pattern.lower() not in line.lower():
+                    continue
+                parts = line.rsplit(",", 1)
+                if len(parts) == 2 and parts[1].strip().isdigit():
+                    pids.append(int(parts[1].strip()))
+    except Exception:
+        pass
+
+    return pids
+
+
+def kill_old_launchers() -> None:
+    """Завершает предыдущие экземпляры launcher.py, cerber_bot и cloudflared."""
+    current_pid = os.getpid()
+    killed: list[int] = []
+
+    for pattern in ("launcher.py", "cerber_bot"):
+        for pid in _find_pids_by_cmdline(pattern):
+            if pid == current_pid:
+                continue
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/PID", str(pid)],
+                    capture_output=True,
+                    timeout=5,
+                )
+                killed.append(pid)
+            except Exception:
+                pass
+
+    # cloudflared завершить по имени исполняемого файла
+    try:
+        subprocess.run(
+            ["taskkill", "/F", "/IM", "cloudflared.exe"],
+            capture_output=True,
+            timeout=5,
+        )
+    except Exception:
+        pass
+
+    if killed:
+        log(f"Завершены старые процессы: PID {', '.join(map(str, killed))}")
+
+
 # ── Главная логика ────────────────────────────────────────────
 def main(no_tunnel: bool = False, tunnel_only: bool = False) -> int:
     LOG_DIR.mkdir(exist_ok=True)
@@ -862,6 +943,9 @@ def main(no_tunnel: bool = False, tunnel_only: bool = False) -> int:
     # Сброс логов
     for lf in LOGS.values():
         lf.write_text("", encoding="utf-8")
+
+    # Завершить старые экземпляры перед новым запуском
+    kill_old_launchers()
 
     # Вступительная анимация (проявление из шума)
     intro_animation()
