@@ -11,7 +11,7 @@ import json
 import logging
 import math
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from time import monotonic
 from typing import TypeVar
@@ -109,6 +109,7 @@ class StoreProductOffer:
     buyable: bool
     reason_unavailable: str | None
     attributes: dict[str, object]
+    required_fields: tuple[object, ...] = field(default_factory=tuple)
 
 
 @dataclass(slots=True, frozen=True)
@@ -304,13 +305,6 @@ class StoreService:
         detail = await self.gift_api_service.get_product_detail(product_id)
         required_fields = tuple(detail.required_fields or ())
 
-        required_codes = {
-            field.code
-            for field in required_fields
-            if getattr(field, "required", False)
-        }
-        unsupported_required_fields = {code for code in required_codes if code not in SUPPORTED_AUTO_FIELDS}
-
         offers: list[StoreProductOffer] = []
         for sku in detail.skus:
             reason: str | None = None
@@ -320,8 +314,12 @@ class StoreService:
                 reason = STORE_SERVICE_TEXT.REASON_OUT_OF_STOCK
             elif detail.denomination_type == "custom":
                 reason = STORE_SERVICE_TEXT.REASON_CUSTOM_AMOUNT
-            elif unsupported_required_fields:
-                reason = STORE_SERVICE_TEXT.REASON_CUSTOMER_DATA
+
+            # Поля, которые нужно запросить у покупателя (не auto-заполняемые)
+            offer_required_fields = tuple(
+                f for f in required_fields
+                if getattr(f, "code", None) not in SUPPORTED_AUTO_FIELDS
+            )
 
             offers.append(
                 StoreProductOffer(
@@ -334,6 +332,7 @@ class StoreService:
                     buyable=reason is None,
                     reason_unavailable=reason,
                     attributes=sku.attributes,
+                    required_fields=offer_required_fields,
                 )
             )
 
@@ -517,6 +516,7 @@ class StoreService:
         *,
         product_id: str,
         sku_id: str,
+        customer_fields: dict[str, object] | None = None,
     ) -> PurchaseResult:
         self.gift_api_service.ensure_configured(require_secret=True)
         product = await self.get_product_view(product_id)
@@ -536,11 +536,14 @@ class StoreService:
             raise InsufficientBalanceError(wallet.balance, required_wallet_amount, wallet.currency)
 
         external_id = build_external_order_id(telegram_user.id)
+        order_fields: dict[str, object] = {"quantity": 1}
+        if customer_fields:
+            order_fields.update(customer_fields)
         gift_order = await self.gift_api_service.create_order(
             GiftApiOrderDraft(
                 external_id=external_id,
                 sku_id=sku_id,
-                fields={"quantity": 1},
+                fields=order_fields,
                 metadata={
                     "telegram_id": telegram_user.id,
                     "source": "cerber_bot",
