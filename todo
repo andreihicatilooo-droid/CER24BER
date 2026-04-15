@@ -1,0 +1,143 @@
+# CERBER — TODO
+_Обновлено: 2026-04-15_
+
+---
+
+## � Критично
+
+- [ ] Race condition на балансе — SELECT FOR UPDATE
+      📂 Файлы: `db/repositories/users.py`, `services/payments.py`, `services/deals.py`, `services/store.py`
+      ⚠️ Риск: SQLite не поддерживает FOR UPDATE — тесты адаптировать (пропускать lock в sqlite-режиме); флаг `with_lock=True` добавить в `UserRepository.get_by_telegram_id`; NicePay иногда дублирует webhook — без lock два параллельных зачисления одного платежа возможны
+      ✅ Готово когда: `.with_for_update()` вызывается при `with_lock=True`; `payment.status == "paid"` + lock предотвращают двойное зачисление; `get_errors` чист
+
+---
+
+## 🟠 Высокий приоритет
+
+- [ ] Нет WalletTransaction при одобрении вывода (баг аудита)
+      📂 Файлы: `services/deals.py`
+      ⚠️ Риск: найти блок `action == "approve"` в `moderate_withdrawal_request`; не трогать блок `reject` — там транзакция уже есть; `amount` — отрицательный (списание)
+      ✅ Готово когда: после `status=approved` создаётся `WalletTransaction(type="withdrawal_approved", amount=-amount)`; история кошелька показывает факт списания
+
+- [ ] NicePay webhook через FastAPI web-маршрут
+      📂 Файлы: `web/routes/nicepay.py` (новый), `web/app.py`, `config.py`, `.env.example`, `launcher.py`
+      ⚠️ Риск: aiohttp-сервер (порт 8080) уже существует — два endpoint одновременно; в NicePay прописать только один URL; `bot is None` в web → логировать, не падать; `extract_callback_parameters` не импортировать из aiohttp-модуля
+      ✅ Готово когда: POST /webhooks/nicepay с подписанным payload → 200, баланс зачтён, Telegram-уведомление получено
+
+- [ ] Убрать dev:balance из профиля основного бота
+      📂 Файлы: `handlers/menu.py`, `texts.py`
+      ⚠️ Риск: `parse_profile_balance_amount` удалить вместе; `REFRESH_ACTION` не трогать
+      ✅ Готово когда: кнопка "Dev: баланс" не появляется ни у кого; `grep PROFILE_DEV_BALANCE` — пустой результат
+
+- [ ] Разблокировать покупку товаров с required_fields
+      📂 Файлы: `services/store.py`
+      ⚠️ Риск: StoreProductOffer frozen+slots — новое поле требует default_factory=tuple; разделить обязательные (required=True) и опциональные поля; `purchase_offer` получает новый параметр `customer_fields`
+      ✅ Готово когда: товары с required_fields показывают кнопку "Купить"; `REASON_CUSTOMER_DATA` больше не блокирует buyable
+
+- [ ] FSM-диалог ввода данных покупателя
+      📂 Файлы: `handlers/storefront.py`, `texts.py`
+      ⚠️ Риск: `callback.answer()` до начала FSM (тайм-аут callback); GiftRequiredField сериализовать через dataclasses.asdict() для FSM state; поле «-» пропускает опциональные
+      ✅ Готово когда: товар с required_fields → промпт → ввод всех полей → успешная покупка; отмена → возврат к карточке
+
+- [ ] Клавиатура отмены и маркер ✏️ на офферах с полями
+      📂 Файлы: `keyboards/storefront.py`, `handlers/storefront.py`, `texts.py`
+      ⚠️ Риск: `STORE_FIELD_CANCEL_ACTION` обработчик должен быть в storefront-роутере
+      ✅ Готово когда: кнопки покупки с required_fields имеют ✏️; в диалоге есть кнопка "Отменить"
+
+- [ ] Разделить магазин по провайдерам (главный экран → провайдеры)
+      📂 Файлы: `keyboards/storefront.py`, `handlers/storefront.py`, `texts.py`
+      ⚠️ Риск: `get_dashboard()` вызывает `get_catalog_snapshot()` → GiftAPI-запрос; `back_callback` категорий → `STORE_GIFTAPI_ACTION`, не `STORE_HOME_ACTION`
+      ✅ Готово когда: первый экран магазина — список провайдеров; "GiftAPI" открывает категории
+
+- [ ] Убрать Поиск и "Обновить каталог" из главного меню
+      📂 Файлы: `keyboards/main_menu.py`
+      ⚠️ Риск: `STORE_SEARCH_PROMPT_ACTION` и `REFRESH_ACTION` остаются как константы — убираются только кнопки
+      ✅ Готово когда: главное меню без этих кнопок; функции работают через GiftAPI-клавиатуру
+
+- [ ] Добавить Поиск и Обновить каталог в GiftAPI-витрину
+      📂 Файлы: `keyboards/storefront.py`, `keyboards/giftapi_menu.py`
+      ⚠️ Риск: импорт `STORE_GIFTAPI_ACTION` из storefront в giftapi_menu — проверить circular import
+      ✅ Готово когда: в GiftAPI-витрине есть кнопки Поиск и Обновить; в меню API-инструментов — кнопка "Витрина"
+
+---
+
+## 🟡 Средний приоритет
+
+- [ ] Абстракция PaymentGateway + реестр платёжных провайдеров
+      📂 Файлы: `integrations/nicepay.py`, `services/payments.py`, `nicepay_webhook.py`, `container.py`, `config.py`
+      ⚠️ Риск: `NICEPAY_LIMITS` и `PAYMENT_PROVIDER_NAME` хардкод в сервисе — перенести в класс провайдера; webhook-диспетчер маршрутизировать по полю `provider` из `WalletPayment`; рефакторить вместе с WalletService
+      ✅ Готово когда: добавление новой платёжки — только новый класс + регистрация в реестре; `NicePayClient` реализует `PaymentGateway` Protocol; `PaymentService` не импортирует `NicePayClient` напрямую
+
+- [ ] WalletService — единая точка мутаций баланса
+      📂 Файлы: `services/payments.py`, `services/deals.py`, `services/store.py`, `container.py`
+      ⚠️ Риск: все три сервиса мутируют `user.balance` напрямую — рефакторить только вместе с PaymentGateway; тесты трёх сервисов потребуют обновления; `held_balance` — тоже в WalletService
+      ✅ Готово когда: `user.balance +=` / `user.balance -=` отсутствуют в `deals.py`, `store.py`, `payments.py`; добавление комиссии — правка только в `WalletService`
+
+- [ ] Тексты FAQ в texts.py
+      📂 Файлы: `texts.py`
+      ⚠️ Риск: каждый раздел < 3000 символов (Telegram лимит 4096); только HTML-теги b/i/a
+      ✅ Готово когда: класс FAQ_TEXT с разделами (магазин, кошелёк, сделки, безопасность); get_errors чист
+
+- [ ] Хэндлер FAQ в главном меню
+      📂 Файлы: `handlers/menu.py`, `keyboards/main_menu.py`, `texts.py`
+      ⚠️ Риск: зависит от FAQ_TEXT; `state.clear()` перед показом; prefix-фильтр для подразделов
+      ✅ Готово когда: кнопка FAQ в главном меню → навигация по разделам работает
+
+- [ ] Редактирование текстов пользовательского интерфейса
+      📂 Файлы: `texts.py`, `.env.example`
+      ⚠️ Риск: payments_title/description — в config.py из .env, не в texts.py; не ломать format()-плейсхолдеры
+      ✅ Готово когда: все пользовательские строки актуальны; нет английских вкраплений в UI
+
+- [ ] Репозиторий: топ-продуктов по частоте покупок
+      📂 Файлы: `db/repositories/orders.py`
+      ⚠️ Риск: добавить фильтр `.where(provider == "giftapi")` чтобы не смешивать с будущими провайдерами
+      ✅ Готово когда: метод `top_product_ids(limit)` возвращает список UUID, отсортированных по count DESC
+
+- [ ] Сервис: метод get_featured_products
+      📂 Файлы: `services/store.py`
+      ⚠️ Риск: зависит от top_product_ids; смотрит только в кэш snapshot — не делает лишних запросов
+      ✅ Готово когда: метод возвращает топ-N продуктов из snapshot; удалённые из каталога не попадают
+
+- [ ] Раздел «⭐ Популярное» в экране категорий
+      📂 Файлы: `keyboards/storefront.py`, `handlers/storefront.py`, `texts.py`
+      ⚠️ Риск: `current_view_type="featured"` в FSM — чтобы "Назад" из карточки вернул в популярное; при пустой БД показывать экран с текстом
+      ✅ Готово когда: первая кнопка в категориях — "⭐ Популярное"; при наличии заказов показывает реальные топ-товары
+
+- [ ] Добавить кнопку "Витрина GiftAPI" в меню API-инструментов
+      📂 Файлы: `keyboards/giftapi_menu.py`, `texts.py`
+      ✅ Готово когда: в `build_giftapi_menu()` есть кнопка ведущая на `STORE_GIFTAPI_ACTION`
+
+- [ ] Актуализировать README.md после аудита
+      📂 Файлы: `README.md`
+      ⚠️ Риск: описывает удалённый провайдерный слой и "Агрегацию нескольких API-провайдеров"
+      ✅ Готово когда: структура и возможности соответствуют реальному коду
+
+- [ ] Актуализировать EXTENDING.md после аудита
+      📂 Файлы: `EXTENDING.md`
+      ⚠️ Риск: весь раздел "Новый провайдер каталога" описывает удалённый слой
+      ✅ Готово когда: раздел удалён или переписан под актуальную архитектуру
+
+---
+
+## 🟢 Низкий приоритет
+
+- [ ] Логировать webhook URL NicePay при старте бота
+      📂 Файлы: `main.py`
+      ✅ Готово когда: при запуске в логах виден URL если NICEPAY_WEBHOOK_PUBLIC_URL задан; WARNING если не задан
+
+- [ ] Удалить start.ps1 и убрать упоминания из документации
+      📂 Файлы: `start.ps1` (удалить), `README.md`, `EXTENDING.md`
+      ⚠️ Риск: `start_tunnel.ps1` — отдельный файл, не трогать
+      ✅ Готово когда: файл удалён; grep по "start.ps1" — пустой результат
+
+---
+
+## ✅ Выполнено
+
+- [x] Заглушить 9 файлов провайдерного слоя — _2026-04-15_
+- [x] Удалить 6 мёртвых полей из config.py + .env.example + launcher.py — _2026-04-15_
+- [x] Удалить CATALOG_PROVIDER_TEXT и DEMO_CATALOG_TEXT из texts.py — _2026-04-15_
+- [x] Удалить мёртвую строку с _get_user() из web/routes/profile.py — _2026-04-15_
+- [x] Вынести FakeUser в web/deps.py, обновить 4 роута — _2026-04-15_
+- [x] Очистить handlers/deals.py (заглушка-реэкспорт) — _2026-04-15_
+- [x] Обернуть httpx.ConnectError и таймаут в GiftApiError — _2026-04-15_
