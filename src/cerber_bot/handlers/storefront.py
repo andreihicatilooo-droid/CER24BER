@@ -30,6 +30,7 @@ from cerber_bot.keyboards.storefront import (
     STORE_DETAIL_OFFERS_PAGE_PREFIX,
     STORE_FIELD_CANCEL_ACTION,
     STORE_FIELD_FILL_PREFIX,
+    STORE_GIFTAPI_ACTION,
     STORE_HOME_ACTION,
     STORE_ORDER_ACTION_PREFIX,
     STORE_ORDERS_ACTION,
@@ -122,6 +123,22 @@ def build_storefront_router(container: AppContainer) -> Router:
             return
         await callback.answer(STOREFRONT_TEXT.CALLBACK_CATEGORIES_OPENED)
 
+    @router.callback_query(F.data == STORE_GIFTAPI_ACTION)
+    async def handle_giftapi_catalog(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+
+        await state.set_state(None)
+        try:
+            await render_categories(message, state, container, callback=callback, page=1, back_callback=STORE_GIFTAPI_ACTION)
+        except (StoreServiceError, GiftApiError) as error:
+            await send_screen(message, render_store_error(error), build_store_home_keyboard(), callback=callback)
+            await callback.answer(STOREFRONT_TEXT.CALLBACK_CATEGORIES_UNAVAILABLE)
+            return
+        await callback.answer(STOREFRONT_TEXT.CALLBACK_GIFTAPI_OPENED)
+
     @router.callback_query(F.data.startswith(STORE_CATEGORIES_PAGE_PREFIX))
     async def handle_categories_page(callback: CallbackQuery, state: FSMContext) -> None:
         message = extract_message(callback)
@@ -131,8 +148,10 @@ def build_storefront_router(container: AppContainer) -> Router:
 
         page = parse_int_suffix(callback.data, STORE_CATEGORIES_PAGE_PREFIX, 1)
         await state.set_state(None)
+        # Сохраняем back_callback из предыдущего состояния (навигация по страницам)
+        categories_back = str((await state.get_data()).get("categories_back") or STORE_HOME_ACTION)
         try:
-            await render_categories(message, state, container, callback=callback, page=page)
+            await render_categories(message, state, container, callback=callback, page=page, back_callback=categories_back)
         except (StoreServiceError, GiftApiError) as error:
             await send_screen(message, render_store_error(error), build_store_home_keyboard(), callback=callback)
             await callback.answer(STOREFRONT_TEXT.CALLBACK_CATEGORIES_UNAVAILABLE)
@@ -627,11 +646,12 @@ async def render_categories(
     container: AppContainer,
     *,
     page: int,
+    back_callback: str = STORE_HOME_ACTION,
     callback: CallbackQuery | None = None,
 ) -> None:
     categories, page_info = await container.store_service.get_categories_page(page, per_page=CATEGORIES_PER_PAGE)
-    await state.update_data(current_view_type="categories", categories_page=page_info.page)
-    await send_screen(message, render_categories_screen(categories, page_info), build_categories_keyboard(categories, page_info), callback=callback)
+    await state.update_data(current_view_type="categories", categories_page=page_info.page, categories_back=back_callback)
+    await send_screen(message, render_categories_screen(categories, page_info), build_categories_keyboard(categories, page_info, back_callback=back_callback), callback=callback)
 
 
 async def render_products(

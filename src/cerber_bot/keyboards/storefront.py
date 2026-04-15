@@ -24,14 +24,14 @@ STORE_ORDER_ACTION_PREFIX = "store:o:"
 STORE_BUY_SKU_PREFIX = "store:buy:"
 STORE_FIELD_FILL_PREFIX = "store:ff:"  # суффикс — sku_id
 STORE_FIELD_CANCEL_ACTION = "store:fc"
+STORE_GIFTAPI_ACTION = "store:ga"  # открыть каталог GiftAPI
 
 
 def build_store_home_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.CATEGORIES, callback_data=STORE_CATEGORIES_ACTION),
-                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.SEARCH, callback_data=STORE_SEARCH_PROMPT_ACTION),
+                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.GIFTAPI_PROVIDER, callback_data=STORE_GIFTAPI_ACTION),
             ],
             [
                 InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.WALLET, callback_data=STORE_WALLET_ACTION),
@@ -44,7 +44,7 @@ def build_store_home_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def build_categories_keyboard(categories: tuple[StoreCategoryCard, ...], page_info: PageInfo) -> InlineKeyboardMarkup:
+def build_categories_keyboard(categories: tuple[StoreCategoryCard, ...], page_info: PageInfo, *, back_callback: str = STORE_HOME_ACTION) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for category in categories:
         rows.append(
@@ -64,7 +64,10 @@ def build_categories_keyboard(categories: tuple[StoreCategoryCard, ...], page_in
     if nav_row:
         rows.append(nav_row)
 
-    rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=STORE_HOME_ACTION)])
+    rows.append([
+        InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.BACK, callback_data=back_callback),
+        InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=STORE_HOME_ACTION),
+    ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

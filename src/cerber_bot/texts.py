@@ -61,6 +61,7 @@ class GIFTAPI_MENU_TEXT:
 
 class STORE_KEYBOARD_TEXT:
     CATEGORIES = "Категории"
+    GIFTAPI_PROVIDER = "🎁 GiftAPI"
     SEARCH = "🔍 Поиск"
     REFRESH = "🔄 Обновить каталог"
     WALLET = "Кошелек"
@@ -346,6 +347,7 @@ class STOREFRONT_TEXT:
     CALLBACK_HOME_OPENED = "Главная витрина"
     CALLBACK_CATEGORIES_UNAVAILABLE = "Категории недоступны"
     CALLBACK_CATEGORIES_OPENED = "Категории открыты"
+    CALLBACK_GIFTAPI_OPENED = "Открываем GiftAPI..."
     CALLBACK_PRODUCTS_UNAVAILABLE = "Товары недоступны"
     CALLBACK_CATEGORY_PRODUCTS = "Товары категории"
     CALLBACK_SEARCH_READY = "Жду поисковый запрос"
