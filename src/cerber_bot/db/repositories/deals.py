@@ -92,6 +92,23 @@ class EscrowDealRepository:
         result = await self.session.execute(query)
         return int(result.scalar_one())
 
+    async def list_disputed(self, *, offset: int = 0, limit: int = 20) -> list[EscrowDeal]:
+        """Все сделки со статусом 'disputed', новые сверху."""
+        query = (
+            select(EscrowDeal)
+            .where(EscrowDeal.status == "disputed")
+            .order_by(EscrowDeal.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+
+    async def count_disputed(self) -> int:
+        query = select(func.count(EscrowDeal.id)).where(EscrowDeal.status == "disputed")
+        result = await self.session.execute(query)
+        return int(result.scalar_one())
+
     async def count_open_for_user(self, telegram_id: int) -> int:
         query = select(func.count(EscrowDeal.id)).where(
             EscrowDeal.status.in_(("pending_acceptance", "active", "disputed")),
@@ -196,6 +213,25 @@ class WithdrawalRequestRepository:
     async def count_open_for_user(self, telegram_id: int) -> int:
         query = select(func.count(WithdrawalRequest.id)).where(
             WithdrawalRequest.telegram_id == telegram_id,
+            WithdrawalRequest.status == "requested",
+        )
+        result = await self.session.execute(query)
+        return int(result.scalar_one())
+
+    async def list_pending(self, *, offset: int = 0, limit: int = 20) -> list[WithdrawalRequest]:
+        """Все заявки на вывод со статусом 'requested', новые сверху."""
+        query = (
+            select(WithdrawalRequest)
+            .where(WithdrawalRequest.status == "requested")
+            .order_by(WithdrawalRequest.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+
+    async def count_pending(self) -> int:
+        query = select(func.count(WithdrawalRequest.id)).where(
             WithdrawalRequest.status == "requested",
         )
         result = await self.session.execute(query)

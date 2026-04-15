@@ -4,9 +4,15 @@
 который передаётся в роутеры и обработчики.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import httpx
+
+if TYPE_CHECKING:
+    from aiogram import Bot
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from cerber_bot.config import Settings, load_settings
@@ -36,6 +42,8 @@ class AppContainer:
     deal_service: DealService
     payment_service: PaymentService
     store_service: StoreService
+    user_bot: Bot | None = None
+    admin_bot: Bot | None = None
 
     @classmethod
     async def build(cls, settings: Settings | None = None) -> "AppContainer":

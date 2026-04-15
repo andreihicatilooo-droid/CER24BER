@@ -959,3 +959,62 @@ class DEAL_HANDLER_TEXT:
     @classmethod
     def deal_error(cls, error_text: str) -> str:
         return f"{cls.OPERATION_FAILED_TITLE}\n{error_text}"
+
+
+class ADMIN_TEXT:
+    """Тексты для административного бота."""
+
+    ACCESS_DENIED = "Доступ запрещён. Вы не в списке модераторов."
+
+    WELCOME = (
+        "<b>CERBER Admin</b>\n"
+        "Административная панель для модерации сделок, выводов и оповещений.\n"
+        "Используйте меню ниже."
+    )
+
+    DASHBOARD_TITLE = "<b>Панель управления</b>"
+    DASHBOARD_DISPUTES = "Открытых диспутов: {count}"
+    DASHBOARD_WITHDRAWALS = "Заявок на вывод: {count}"
+
+    DISPUTES_TITLE = "<b>Диспуты</b>"
+    DISPUTES_EMPTY = "Нет открытых диспутов."
+    DISPUTE_CARD = (
+        "#{deal_id} • {amount}\n"
+        "Покупатель: {buyer} | Продавец: {seller}\n"
+        "Открыт: {disputed_at}"
+    )
+
+    WITHDRAWALS_TITLE = "<b>Заявки на вывод</b>"
+    WITHDRAWALS_EMPTY = "Нет ожидающих заявок."
+    WITHDRAWAL_CARD = (
+        "#{request_id} • {amount} • {network}\n"
+        "Пользователь: {telegram_id}\n"
+        "Адрес: {address}"
+    )
+
+    DEAL_VIEW_TITLE = "<b>Сделка #{deal_id}</b>"
+    DEAL_VIEW_BUYER = "Покупатель: {buyer}"
+    DEAL_VIEW_SELLER = "Продавец: {seller}"
+    DEAL_VIEW_AMOUNT = "Сумма: {amount}"
+    DEAL_VIEW_STATUS = "Статус: {status}"
+    DEAL_VIEW_TERMS = "Условия:\n{terms}"
+    DEAL_VIEW_CREATED = "Создана: {created_at}"
+    DEAL_VIEW_DISPUTED = "Спор открыт: {disputed_at}"
+    DEAL_VIEW_MESSAGES_TITLE = "<b>Последние сообщения:</b>"
+    DEAL_VIEW_NO_MESSAGES = "Сообщений нет."
+    DEAL_VIEW_MESSAGE_ROW = "{created_at} [{sender}]: {body}"
+
+    MODERATION_APPLIED = "Решение применено."
+    WITHDRAWAL_PROCESSED = "Заявка обработана."
+
+    CALLBACK_WAIT = "Загрузка..."
+
+    BTN_DISPUTES = "Диспуты"
+    BTN_WITHDRAWALS = "Заявки на вывод"
+    BTN_HOME = "Главная"
+    BTN_RELEASE = "В пользу продавца"
+    BTN_REFUND = "Возврат покупателю"
+    BTN_APPROVE_WITHDRAWAL = "Одобрить"
+    BTN_REJECT_WITHDRAWAL = "Отклонить"
+    BTN_OPEN_DEAL = "Подробнее"
+    BTN_BACK_TO_LIST = "Назад к списку"

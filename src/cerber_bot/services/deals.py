@@ -980,3 +980,41 @@ class DealService:
     def _counterparty_id(self, deal: EscrowDeal, viewer_id: int) -> int:
         role = self._viewer_role(deal, viewer_id)
         return deal.seller_telegram_id if role == "buyer" else deal.buyer_telegram_id
+
+    # ── Методы для админ-бота ──────────────────────────────────
+
+    async def get_admin_summary(self) -> tuple[int, int]:
+        """Возвращает (кол-во диспутов, кол-во ожидающих выводов)."""
+        async with self.session_factory() as session:
+            deal_repo = EscrowDealRepository(session)
+            withdrawal_repo = WithdrawalRequestRepository(session)
+            disputes = await deal_repo.count_disputed()
+            withdrawals = await withdrawal_repo.count_pending()
+            return disputes, withdrawals
+
+    async def list_disputed_deals(self) -> list[DealView]:
+        async with self.session_factory() as session:
+            deal_repo = EscrowDealRepository(session)
+            deals = await deal_repo.list_disputed()
+            views: list[DealView] = []
+            for deal in deals:
+                views.append(await self._build_deal_view(session, deal, viewer_id=None))
+            return views
+
+    async def get_deal_view_admin(self, deal_id: int) -> DealView | None:
+        """Просмотр сделки для модератора (без привязки к участнику)."""
+        async with self.session_factory() as session:
+            deal_repo = EscrowDealRepository(session)
+            deal = await deal_repo.get_by_id(deal_id)
+            if deal is None:
+                return None
+            return await self._build_deal_view(session, deal, viewer_id=None)
+
+    async def list_pending_withdrawals(self) -> list[WithdrawalRequestView]:
+        async with self.session_factory() as session:
+            withdrawal_repo = WithdrawalRequestRepository(session)
+            requests = await withdrawal_repo.list_pending()
+            views: list[WithdrawalRequestView] = []
+            for request in requests:
+                views.append(await self._to_withdrawal_view(request))
+            return views

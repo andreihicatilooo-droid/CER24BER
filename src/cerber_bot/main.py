@@ -1,7 +1,8 @@
 """Точка входа CERBER Telegram Bot.
 
-Создаёт бота, подключает все роутеры, запускает NicePay webhook-сервер
-и polling-цикл aiogram.  Запуск: ``python -m cerber_bot``.
+Создаёт основного бота и (опционально) административного бота,
+подключает все роутеры, запускает NicePay webhook-сервер
+и polling-циклы aiogram.  Запуск: ``python -m cerber_bot``.
 """
 
 import asyncio
@@ -21,6 +22,7 @@ from aiogram.exceptions import TelegramNetworkError
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from cerber_bot.container import AppContainer
+from cerber_bot.handlers.admin import build_admin_router
 from cerber_bot.handlers.giftapi import build_giftapi_router
 from cerber_bot.handlers.menu import build_deals_router, build_menu_router
 from cerber_bot.handlers.start import build_start_router
@@ -64,13 +66,10 @@ async def reset_webhook_with_retry(bot: Bot) -> None:
             await asyncio.sleep(delay)
 
 
-async def run() -> None:
-    setup_logging()
-    container = await AppContainer.build()
-
-    session = None
-    proxy = container.settings.telegram_proxy or None
-    custom_api = container.settings.telegram_api_url
+def _build_bot_session(settings) -> AiohttpSession | None:
+    """Создаёт общую aiohttp-сессию для bot-инстансов (proxy / custom API)."""
+    proxy = settings.telegram_proxy or None
+    custom_api = settings.telegram_api_url
     if proxy or (custom_api and custom_api != "https://api.telegram.org"):
         session = AiohttpSession(proxy=proxy)
         if custom_api and custom_api != "https://api.telegram.org":
@@ -78,12 +77,23 @@ async def run() -> None:
             logger.info("Using custom Telegram API URL: %s", custom_api)
         if proxy:
             logger.info("Using Telegram proxy: %s", proxy)
+        return session
+    return None
+
+
+async def run() -> None:
+    setup_logging()
+    container = await AppContainer.build()
+
+    session = _build_bot_session(container.settings)
 
     bot = Bot(
         token=container.settings.bot_token,
         session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
+    container.user_bot = bot
+
     webhook_server = NicePayWebhookServer(container=container, bot=bot)
     dispatcher = Dispatcher(storage=MemoryStorage())
     dispatcher.include_router(build_start_router(container))
@@ -92,8 +102,25 @@ async def run() -> None:
     dispatcher.include_router(build_deals_router(container))
     dispatcher.include_router(build_menu_router(container))
 
+    # ── Админ-бот (опциональный) ─────────────────────────────
+    admin_bot: Bot | None = None
+    admin_dispatcher: Dispatcher | None = None
+    if container.settings.admin_bot_token:
+        admin_session = _build_bot_session(container.settings) if session is not None else None
+        admin_bot = Bot(
+            token=container.settings.admin_bot_token,
+            session=admin_session,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        )
+        container.admin_bot = admin_bot
+        admin_dispatcher = Dispatcher(storage=MemoryStorage())
+        admin_dispatcher.include_router(build_admin_router(container))
+        logger.info("Admin bot configured and will start polling.")
+
     try:
         await reset_webhook_with_retry(bot)
+        if admin_bot is not None:
+            await reset_webhook_with_retry(admin_bot)
         await webhook_server.start()
 
         web_server = None
@@ -114,7 +141,26 @@ async def run() -> None:
                 container.settings.web_port,
             )
 
-        await dispatcher.start_polling(bot, allowed_updates=dispatcher.resolve_used_update_types())
+        # Запускаем оба polling-цикла параллельно
+        polling_tasks: list[asyncio.Task] = []
+        polling_tasks.append(
+            asyncio.create_task(
+                dispatcher.start_polling(bot, allowed_updates=dispatcher.resolve_used_update_types()),
+                name="user_bot_polling",
+            )
+        )
+        if admin_bot is not None and admin_dispatcher is not None:
+            polling_tasks.append(
+                asyncio.create_task(
+                    admin_dispatcher.start_polling(admin_bot, allowed_updates=admin_dispatcher.resolve_used_update_types()),
+                    name="admin_bot_polling",
+                )
+            )
+
+        done, pending = await asyncio.wait(polling_tasks, return_when=asyncio.FIRST_EXCEPTION)
+        for task in done:
+            if task.exception() is not None:
+                raise task.exception()  # type: ignore[misc]
     except TelegramNetworkError as error:
         logger.error(
             "Telegram API is unavailable. Check internet access, firewall, proxy or VPN settings. Details: %s",
@@ -123,6 +169,8 @@ async def run() -> None:
     finally:
         await webhook_server.stop()
         await bot.session.close()
+        if admin_bot is not None:
+            await admin_bot.session.close()
         await container.close()
 
 
