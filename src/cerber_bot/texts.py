@@ -55,12 +55,14 @@ class GIFTAPI_MENU_TEXT:
     ORDER_LOOKUP = "Заказ по UUID"
     CREATE_ORDER = "Создать заказ"
     ESIM_STATUS = "eSIM статус"
+    STOREFRONT = "🛍 Витрина"
     BACK = "Назад"
 
 
 class STORE_KEYBOARD_TEXT:
     CATEGORIES = "Категории"
-    SEARCH = "Поиск"
+    SEARCH = "🔍 Поиск"
+    REFRESH = "🔄 Обновить каталог"
     WALLET = "Кошелек"
     ORDERS = "Мои заказы"
     HOME = "Домой"

@@ -5,6 +5,7 @@ from cerber_bot.texts import STORE_KEYBOARD_TEXT
 
 
 STORE_HOME_ACTION = "store:home"
+STORE_REFRESH_ACTION = "menu:refresh"  # та же строка, что REFRESH_ACTION в main_menu
 STORE_CATEGORIES_ACTION = "store:cats"
 STORE_CATEGORIES_PAGE_PREFIX = "store:cp:"
 STORE_CATEGORY_OPEN_PREFIX = "store:c:"
@@ -33,6 +34,9 @@ def build_store_home_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.WALLET, callback_data=STORE_WALLET_ACTION),
                 InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.ORDERS, callback_data=STORE_ORDERS_ACTION),
+            ],
+            [
+                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.REFRESH, callback_data=STORE_REFRESH_ACTION),
             ],
         ]
     )

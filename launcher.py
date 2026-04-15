@@ -844,7 +844,7 @@ def show_menu():
         print(f"  {C['white']}  [1] Bot log          [4] Status{RESET}")
         print(f"  {C['white']}  [2] Bot errors       [5] Clear screen{RESET}")
         print(f"  {C['white']}  [3] Tunnel log       [Q] Quit{RESET}")
-        print(f"  {C['white']}  [6] Launcher log{RESET}")
+        print(f"  {C['white']}  [6] Launcher log     [R] Restart bot{RESET}")
         print(f"  {C['gray']}{sep}{RESET}")
 
 
@@ -934,6 +934,77 @@ def kill_old_launchers() -> None:
 
     if killed:
         log(f"Завершены старые процессы: PID {', '.join(map(str, killed))}")
+
+
+# ── Запуск / перезапуск бота ─────────────────────────────────
+
+def _start_bot(
+    components: list[tuple[str, subprocess.Popen[bytes]]],
+    open_files: list,
+    web_port: str,
+    web_enabled: str,
+    tunnel_url: str | None,
+) -> None:
+    """Запускает процесс бота и добавляет его в components/open_files."""
+    cprint("[*] Starting bot...", "cyan")
+    log("Starting bot")
+
+    if web_enabled == "true":
+        cprint(f"    Web: http://localhost:{web_port}", "dark_cyan")
+        if tunnel_url:
+            cprint(f"    Mini App: {tunnel_url}", "dark_cyan")
+
+    bf = open(LOGS["bot"], "w", encoding="utf-8")
+    ef = open(LOGS["bot_err"], "w", encoding="utf-8")
+    open_files.extend([bf, ef])
+
+    bot_proc = subprocess.Popen(
+        [str(VENV_PY), "-m", "cerber_bot"],
+        cwd=str(ROOT),
+        stdout=bf,
+        stderr=ef,
+    )
+    components.append(("Bot", bot_proc))
+    time.sleep(2)
+    log(f"Bot started (PID {bot_proc.pid})")
+
+
+def _restart_bot(
+    components: list[tuple[str, subprocess.Popen[bytes]]],
+    open_files: list,
+    web_port: str,
+    web_enabled: str,
+    tunnel_url: str | None,
+) -> None:
+    """Останавливает текущий процесс бота и запускает новый."""
+    bot_log_paths = {LOGS["bot"], LOGS["bot_err"]}
+
+    # Остановить старый процесс бота
+    bot_entries = [(name, proc) for name, proc in components if name == "Bot"]
+    for name, proc in bot_entries:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        components.remove((name, proc))
+        log(f"Bot PID {proc.pid} остановлен для перезапуска")
+
+    # Закрыть только лог-файлы бота (не трогать лог туннеля)
+    to_close = [
+        f for f in open_files
+        if Path(getattr(f, "name", "")) in bot_log_paths
+    ]
+    for f in to_close:
+        try:
+            f.close()
+        except Exception:
+            pass
+        open_files.remove(f)
+
+    # Запустить новый процесс бота
+    _start_bot(components, open_files, web_port, web_enabled, tunnel_url)
 
 
 # ── Главная логика ────────────────────────────────────────────
@@ -1052,27 +1123,7 @@ def _run(
 
         # ── 2. Bot + Web ──────────────────────────────────────
         if not tunnel_only:
-            cprint("[*] Starting bot...", "cyan")
-            log("Starting bot")
-
-            if web_enabled == "true":
-                cprint(f"    Web: http://localhost:{web_port}", "dark_cyan")
-                if tunnel_url:
-                    cprint(f"    Mini App: {tunnel_url}", "dark_cyan")
-
-            bf = open(LOGS["bot"], "w", encoding="utf-8")
-            ef = open(LOGS["bot_err"], "w", encoding="utf-8")
-            open_files.extend([bf, ef])
-
-            bot_proc = subprocess.Popen(
-                [str(VENV_PY), "-m", "cerber_bot"],
-                cwd=str(ROOT),
-                stdout=bf,
-                stderr=ef,
-            )
-            components.append(("Bot", bot_proc))
-            time.sleep(2)
-            log(f"Bot started (PID {bot_proc.pid})")
+            _start_bot(components, open_files, web_port, web_enabled, tunnel_url)
 
         with _io_lock:
             print()
@@ -1145,10 +1196,23 @@ def _run(
                     show_tail(LOGS["launcher"], 40, "Launcher")
                     show_menu()
                     animator.resume()
+                case "r":
+                    animator.pause()
+                    cprint("[*] Перезапускаю бота...", "yellow")
+                    log("Перезапуск бота по запросу пользователя")
+                    _restart_bot(components, open_files, web_port, web_enabled, tunnel_url)
+                    bot_pid = next(
+                        (proc.pid for name, proc in components if name == "Bot"), None
+                    )
+                    if bot_pid:
+                        cprint(f"    Бот перезапущен (PID {bot_pid})", "green")
+                        log(f"Бот перезапущен PID {bot_pid}")
+                    show_menu()
+                    animator.resume()
                 case "q":
                     raise KeyboardInterrupt
                 case _:
-                    cprint("Unknown key. Press 1-6 or Q.", "dark_gray")
+                    cprint("Unknown key. Press 1-6, R or Q.", "dark_gray")
 
     except KeyboardInterrupt:
         pass
