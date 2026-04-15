@@ -88,3 +88,20 @@ Tests use temporary SQLite DBs (`tmp_path`), stub clients (e.g., `StubNicePayCli
 - **Database migrations**: No Alembic — `init_database()` uses `create_all()` and `apply_lightweight_migrations()` for SQLite ALTER TABLE. Adding columns requires updating the lightweight migration function.
 - **.env credentials**: Never commit real tokens. Use `.env.example` with placeholders only.
 - **Webhook fallback**: Bot startup tries webhook reset 3× before falling back to polling — be aware when testing locally.
+
+## AI Assistant Behavior
+
+- **Language**: Always respond in Russian. Code, identifiers, and file paths remain in their original language.
+- **Commit summary**: After any file edits, append a commit message block at the very end of the response:
+
+```
+---
+📝 **Commit:**
+тип(scope): краткое описание на русском
+
+- деталь 1
+- деталь 2
+```
+
+Commit types: `feat`, `fix`, `refactor`, `chore`, `docs`, `style`, `test`.
+Example: `feat(handlers): добавить кнопку «Избранное» в главное меню`
