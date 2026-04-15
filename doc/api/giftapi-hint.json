@@ -1,0 +1,218 @@
+{
+  "name": "giftapi",
+  "generated_at": "2026-04-15",
+  "description": "Distilled GiftAPI Partner S2S API reference for AI Copilot usage in this repository. Compiled from openapi.json (Partner S2S API v1.1.0).",
+  "source_file": "doc/api/openapi.json",
+  "project_references": {
+    "config": "src/cerber_bot/config.py",
+    "giftapi_client": "src/cerber_bot/integrations/giftapi.py",
+    "giftapi_service": "src/cerber_bot/services/giftapi.py",
+    "catalog_provider": "src/cerber_bot/integrations/providers/giftapi_catalog.py",
+    "catalog_service": "src/cerber_bot/services/catalog.py",
+    "giftapi_handler": "src/cerber_bot/handlers/giftapi.py",
+    "giftapi_keyboard": "src/cerber_bot/keyboards/giftapi_menu.py",
+    "giftapi_tests": "tests/test_giftapi_client.py",
+    "provider_tests": "tests/test_giftapi_provider.py"
+  },
+  "reference": {
+    "base_urls": {
+      "sandbox": "https://sandbox.giftapi.io/api/v1/partner",
+      "production": "https://api.giftapi.io/v1/partner",
+      "note": "Configured via GIFTAPI_BASE_URL env var. Sandbox orders do not charge real money."
+    },
+    "authentication": {
+      "type": "bearer_token",
+      "header": "Authorization: Bearer {GIFTAPI_TOKEN}",
+      "note": "All endpoints require Bearer token. Order creation ALSO requires X-Timestamp + X-Signature headers.",
+      "env_vars": ["GIFTAPI_TOKEN", "GIFTAPI_SECRET"]
+    },
+    "money_format": {
+      "format": "float (USD)",
+      "example": "price: 2.20, total_amount: 29.09",
+      "note": "GiftAPI uses float USD — NOT minor units. Contrast with NicePay which uses integer minor units."
+    },
+    "pagination": {
+      "type": "cursor-based",
+      "next_cursor_field": "meta.next_cursor",
+      "prev_cursor_field": "meta.prev_cursor",
+      "per_page_field": "meta.per_page",
+      "usage": "Pass cursor value as ?cursor= query param to get next page. null cursor means no more pages."
+    },
+    "order_signature": {
+      "description": "Required for POST /orders only. Two extra headers must be sent.",
+      "headers": {
+        "X-Timestamp": "Unix timestamp integer (tolerance ±5 minutes)",
+        "X-Signature": "HMAC-SHA256 hex signature"
+      },
+      "formula": "HMAC-SHA256(timestamp + sku_id + external_id, GIFTAPI_SECRET)",
+      "example": {
+        "timestamp": "1768478058",
+        "sku_id": "019bc0dd-8562-7173-afd9-a5cc534fafb7",
+        "external_id": "ORD-12345",
+        "message": "1768478058019bc0dd-8562-7173-afd9-a5cc534fafb7ORD-12345",
+        "note": "Concatenate without separators. GIFTAPI_SECRET is the partner_secret from partner settings, NOT the Bearer token."
+      },
+      "important": "GIFTAPI_SECRET (partner_secret) and GIFTAPI_TOKEN (Bearer API token) are TWO DIFFERENT credentials."
+    },
+    "webhook_signature": {
+      "formula": "HMAC-SHA256(timestamp + event + idempotency_key, GIFTAPI_SECRET)",
+      "headers": {
+        "X-Timestamp": "Unix timestamp",
+        "X-Signature": "HMAC-SHA256 hex"
+      },
+      "timestamp_tolerance_minutes": 5,
+      "idempotency": "Each webhook has unique idempotency_key (UUID). Retried up to 3 times (10s, 100s backoff).",
+      "response_requirement": "Must return HTTP 2xx within 10 seconds."
+    },
+    "endpoints": {
+      "GET /me": {
+        "description": "Verify token, get partner info and balance",
+        "returns": ["partner.uuid", "partner.name", "partner.email", "partner.currency", "partner.is_active", "partner.balance"]
+      },
+      "GET /balance": {
+        "description": "Current balance with overdraft info",
+        "returns": ["balance", "currency", "reserved_amount", "available_balance", "allow_overdraft", "overdraft_limit", "is_overdrafted"]
+      },
+      "GET /balance/history": {
+        "description": "Paginated balance transaction history",
+        "query_params": {"cursor": "optional", "per_page": "max 100, default 50"},
+        "transaction_types": ["charge", "topup"]
+      },
+      "GET /catalog/products": {
+        "description": "Paginated product list with optional filters",
+        "query_params": {
+          "locale": "en | ru (defaults to partner locale)",
+          "cursor": "pagination cursor",
+          "per_page": "max 200, default 100",
+          "category_id": "integer filter",
+          "type": "voucher | recharge_fixed | recharge | voucher_open_range | esim | other",
+          "include_skus": "boolean, include SKU list without pricing"
+        },
+        "product_fields": ["id (uuid)", "name", "type", "denomination_type", "category{id,name}", "description (HTML)", "image", "attributes", "fields", "skus[]"]
+      },
+      "GET /catalog/products/{uuid}": {
+        "description": "Full product detail with SKUs, pricing and stock",
+        "sku_fields": ["id", "name", "price (float)", "currency", "stock", "max_per_order", "image", "attributes"]
+      },
+      "GET /catalog/pricelist": {
+        "description": "SKU prices and stock status (lightweight, no product metadata)",
+        "query_params": {"type": "voucher | recharge_fixed | esim"},
+        "item_fields": ["sku_id", "price", "currency", "stock", "max_per_order"]
+      },
+      "GET /catalog/categories": {
+        "description": "Available categories",
+        "query_params": {"locale": "en | ru", "target": "product | sku (filter attributes)"}
+      },
+      "GET /orders": {
+        "description": "Paginated order history",
+        "query_params": {
+          "cursor": "pagination",
+          "per_page": "max 100, default 50",
+          "status": "created | processing | completed | cancelled | failed | partially_completed",
+          "external_id": "search by your order ID",
+          "date_from": "ISO 8601",
+          "date_to": "ISO 8601"
+        }
+      },
+      "POST /orders": {
+        "description": "Create new order. Requires X-Timestamp + X-Signature in addition to Bearer token.",
+        "body_required": ["external_id", "item.sku_id", "item.fields"],
+        "body_optional": ["metadata"],
+        "external_id_note": "Must be unique across ALL your orders. Use as idempotency key.",
+        "fields_note": "item.fields content depends on product.fields from catalog. For fixed vouchers: {quantity: 1}. For recharge: {amount: int, phone: str}.",
+        "success_status": 201,
+        "error_codes": {
+          "400": "Business error (insufficient balance, out of stock)",
+          "401": "Invalid signature or expired timestamp",
+          "409": "Duplicate external_id",
+          "422": "Validation error"
+        }
+      },
+      "GET /orders/{uuid}": {
+        "description": "Order detail by UUID",
+        "order_fields": ["id", "external_id", "status", "total_amount", "currency", "metadata", "created_at", "items[]"],
+        "item_fields": ["sku_id", "sku_name", "quantity", "price", "currency", "status", "delivery_data[]", "customer_data", "error_message"],
+        "delivery_data_fields": ["pin", "expiration", "serialNumber"]
+      },
+      "GET /esim/{iccid}": {
+        "description": "eSIM status by ICCID",
+        "note": "Used for post-purchase eSIM management"
+      }
+    },
+    "order_statuses": {
+      "created": "Order created, not yet processed",
+      "processing": "Being processed",
+      "completed": "Successfully completed, delivery_data available",
+      "cancelled": "Cancelled",
+      "failed": "Failed",
+      "partially_completed": "Some items completed, some failed"
+    },
+    "product_types": {
+      "voucher": "Fixed denomination gift card",
+      "recharge_fixed": "Fixed mobile top-up",
+      "recharge": "Custom amount mobile top-up (requires amount + phone in fields)",
+      "voucher_open_range": "Variable denomination gift card",
+      "esim": "eSIM product, requires post-purchase status management",
+      "other": "Other digital goods"
+    }
+  },
+  "current_project_state": {
+    "implemented": [
+      "GiftAPI client with HMAC-SHA256 order signing (integrations/giftapi.py)",
+      "Catalog provider fetching products and categories (providers/giftapi_catalog.py)",
+      "GiftAPI service for overview, categories, products, orders, eSIM status (services/giftapi.py)",
+      "Telegram handlers for GiftAPI partner menu (handlers/giftapi.py)",
+      "Sandbox and production URL support via GIFTAPI_BASE_URL",
+      "Localization via GIFTAPI_LOCALE env var",
+      "Tests for client and provider"
+    ],
+    "not_implemented_yet": [
+      "Webhook receiver for order status updates",
+      "Automatic order status polling / push-to-buyer notification",
+      "eSIM lifecycle management beyond status check"
+    ],
+    "existing_env_vars": [
+      "GIFTAPI_BASE_URL",
+      "GIFTAPI_TOKEN",
+      "GIFTAPI_SECRET",
+      "GIFTAPI_LOCALE",
+      "ENABLE_GIFTAPI_PROVIDER"
+    ]
+  },
+  "implementation_rules": [
+    "Use GIFTAPI_TOKEN as Bearer token in Authorization header for all requests.",
+    "Use GIFTAPI_SECRET (partner_secret) ONLY for HMAC-SHA256 signing — it is NOT the Bearer token.",
+    "Order signature formula: HMAC-SHA256(str(timestamp) + sku_id + external_id, GIFTAPI_SECRET). Concatenate without separators.",
+    "external_id must be globally unique per partner. Use a stable local order/payment identifier.",
+    "Money is float USD in GiftAPI responses — do NOT convert to minor units for GiftAPI requests.",
+    "Pagination is cursor-based. Pass meta.next_cursor as ?cursor= for the next page. Null means end.",
+    "For webhook verification: HMAC-SHA256(timestamp + event + idempotency_key, GIFTAPI_SECRET). Tolerance ±5 min.",
+    "Before creating an order, check product.fields to know what item.fields to send.",
+    "For recharge products, item.fields must include amount (integer denomination) and phone.",
+    "Do not hardcode SKU UUIDs — always fetch from catalog.",
+    "Do not assume esim products are handled like vouchers — they need post-purchase ICCID tracking.",
+    "When ENABLE_GIFTAPI_PROVIDER=false, do not make any GiftAPI API calls.",
+    "Never commit GIFTAPI_TOKEN or GIFTAPI_SECRET — use .env and .env.example placeholder."
+  ],
+  "copilot_prompt_lines": [
+    "Ты работаешь с интеграцией GiftAPI Partner S2S API в Python-проекте CERBER. Используй этот файл как рабочий reference.",
+    "GiftAPI использует Bearer token в заголовке Authorization для всех запросов.",
+    "Для создания заказа (POST /orders) дополнительно нужны заголовки X-Timestamp и X-Signature.",
+    "Подпись заказа: HMAC-SHA256(str(timestamp) + sku_id + external_id, GIFTAPI_SECRET). Конкатенация без разделителей.",
+    "GIFTAPI_SECRET и GIFTAPI_TOKEN — это РАЗНЫЕ credentials. Secret только для HMAC, Token только для Bearer.",
+    "Деньги в GiftAPI — float USD, НЕ minor units. Не конвертируй в копейки.",
+    "Пагинация курсорная: берёшь meta.next_cursor из ответа и передаёшь как ?cursor= в следующий запрос.",
+    "external_id заказа должен быть уникальным глобально. Используй как idempotency key.",
+    "Поля item.fields зависят от конкретного продукта — смотри product.fields из каталога.",
+    "Для recharge-продуктов item.fields содержит amount (integer, номинал) и phone (строка с кодом страны).",
+    "Статусы заказа: created, processing, completed, cancelled, failed, partially_completed.",
+    "Delivery данные (pin, expiration, serialNumber) доступны только когда статус completed.",
+    "Вебхук подпись: HMAC-SHA256(timestamp + event + idempotency_key, GIFTAPI_SECRET), допуск ±5 минут.",
+    "Вебхук должен вернуть HTTP 2xx за 10 секунд, иначе GiftAPI повторяет попытки (10s, 100s backoff).",
+    "Проверь ENABLE_GIFTAPI_PROVIDER перед реализацией функций — провайдер может быть отключён.",
+    "При изменениях переиспользуй существующие модули: integrations/giftapi.py, services/giftapi.py, providers/giftapi_catalog.py.",
+    "Sandbox URL: https://sandbox.giftapi.io/api/v1/partner — для тестов (деньги не списываются).",
+    "Production URL: https://api.giftapi.io/v1/partner — реальные заказы.",
+    "URL задаётся через GIFTAPI_BASE_URL в .env."
+  ]
+}
