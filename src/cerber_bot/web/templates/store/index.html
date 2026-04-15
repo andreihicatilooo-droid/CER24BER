@@ -2,54 +2,50 @@
 {% block title %}Магазин — CERBER{% endblock %}
 {% block content %}
 
-<!-- Dashboard cards -->
-<div class="grid grid-cols-2 gap-3 mb-6">
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
-        <div class="text-gray-500 text-xs uppercase mb-1">Баланс</div>
-        <div class="text-xl font-bold text-cerber-400">{{ "%.2f"|format(dashboard.balance) }} {{ dashboard.currency }}</div>
-        <div class="text-gray-500 text-xs mt-1">≈ {{ "%.2f"|format(dashboard.balance_quote.usdt_amount) }} USDT</div>
+<div class="stat-grid fade-up">
+    <div class="stat-card">
+        <div class="label">Баланс</div>
+        <strong class="green">{{ "%.2f"|format(dashboard.balance) }} {{ dashboard.currency }}</strong>
+        <div class="sub">≈ {{ "%.2f"|format(dashboard.balance_quote.usdt_amount) }} USDT</div>
     </div>
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
-        <div class="text-gray-500 text-xs uppercase mb-1">Заблокировано</div>
-        <div class="text-xl font-bold text-yellow-400">{{ "%.2f"|format(dashboard.held_balance) }} {{ dashboard.currency }}</div>
+    <div class="stat-card">
+        <div class="label">Заблокировано</div>
+        <strong class="warn">{{ "%.2f"|format(dashboard.held_balance) }} {{ dashboard.currency }}</strong>
     </div>
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
-        <div class="text-gray-500 text-xs uppercase mb-1">Категорий</div>
-        <div class="text-xl font-bold">{{ dashboard.category_count }}</div>
+    <div class="stat-card">
+        <div class="label">Категорий</div>
+        <strong class="muted">{{ dashboard.category_count }}</strong>
     </div>
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
-        <div class="text-gray-500 text-xs uppercase mb-1">Товаров</div>
-        <div class="text-xl font-bold">{{ dashboard.product_count }}</div>
+    <div class="stat-card">
+        <div class="label">Товаров</div>
+        <strong class="muted">{{ dashboard.product_count }}</strong>
     </div>
 </div>
 
-<!-- Search -->
-<form action="/store/search" method="get" class="mb-6">
-    <div class="flex gap-2">
-        <input type="text" name="q" placeholder="Поиск товаров..."
-               class="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-cerber-500 transition-colors">
-        <button type="submit" class="bg-cerber-600 hover:bg-cerber-500 text-white px-6 py-3 rounded-xl font-medium transition-colors">
-            🔍 Найти
-        </button>
+<form action="/store/search" method="get" style="margin-bottom:18px">
+    <div class="form-row">
+        <input type="text" name="q" placeholder="ПОИСК ТОВАРОВ...">
+        <button type="submit" class="btn btn-sm">Найти</button>
     </div>
 </form>
 
-<!-- Categories -->
-<h2 class="text-lg font-semibold mb-4">Категории</h2>
-<div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+<div class="section-heading">
+    <h2>Категории</h2>
+</div>
+
+{% if categories %}
+<div class="item-grid fade-up">
     {% for cat in categories %}
-    <a href="/store/category/{{ cat.category_id }}"
-       class="bg-gray-900 border border-gray-800 hover:border-cerber-600 rounded-xl p-4 transition-colors group">
-        <div class="font-medium group-hover:text-cerber-400 transition-colors">{{ cat.name }}</div>
-        <div class="text-gray-500 text-sm mt-1">{{ cat.product_count }} товаров</div>
+    <a href="/store/category/{{ cat.category_id }}" class="product-card">
+        <div class="item-name">{{ cat.name }}</div>
+        <div class="price-muted">{{ cat.product_count }} товаров</div>
     </a>
     {% endfor %}
 </div>
-
-{% if not categories %}
-<div class="text-center text-gray-500 py-12">
-    <p class="text-lg mb-2">Каталог пуст</p>
-    <p class="text-sm">Настройте GiftAPI или включите демо-провайдер</p>
+{% else %}
+<div class="empty-state">
+    <p>Каталог пуст</p>
+    <div class="sub">Настройте GiftAPI или включите демо-провайдер</div>
 </div>
 {% endif %}
 

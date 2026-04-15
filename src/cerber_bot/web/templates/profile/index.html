@@ -2,82 +2,81 @@
 {% block title %}Профиль — CERBER{% endblock %}
 {% block content %}
 
-<h1 class="text-2xl font-bold mb-6">👤 Профиль</h1>
+<div class="page-title">
+    <h1>Профиль</h1>
+</div>
 
-<div class="grid grid-cols-1 gap-4">
-    <!-- User info -->
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <h2 class="font-semibold mb-4">Информация</h2>
-        <div class="space-y-3 text-sm">
-            <div class="flex justify-between py-2 border-b border-gray-800">
-                <span class="text-gray-500">Имя</span>
-                <span>{{ session.get('first_name', '—') }}</span>
-            </div>
-            {% if session.get('username') %}
-            <div class="flex justify-between py-2 border-b border-gray-800">
-                <span class="text-gray-500">Username</span>
-                <span>@{{ session.get('username') }}</span>
-            </div>
-            {% endif %}
-            <div class="flex justify-between py-2 border-b border-gray-800">
-                <span class="text-gray-500">Telegram ID</span>
-                <span class="font-mono text-xs">{{ session.get('telegram_id', '—') }}</span>
-            </div>
+<div class="surface fade-up" style="margin-bottom:12px">
+    <div class="section-heading"><h2>Идентификация</h2></div>
+    <div class="info-table">
+        <div class="info-row">
+            <span class="key">Имя</span>
+            <span class="val">{{ session.get('first_name', '—') }}</span>
         </div>
-    </div>
-
-    <!-- Balance -->
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <h2 class="font-semibold mb-4">Баланс</h2>
-        <div class="space-y-3 text-sm">
-            <div class="flex justify-between py-2 border-b border-gray-800">
-                <span class="text-gray-500">Доступно</span>
-                <span class="text-cerber-400 font-semibold">{{ "%.2f"|format(wallet.balance) }} {{ wallet.currency }}</span>
-            </div>
-            <div class="flex justify-between py-2 border-b border-gray-800">
-                <span class="text-gray-500">Заблокировано</span>
-                <span class="text-yellow-400">{{ "%.2f"|format(wallet.held_balance) }} {{ wallet.currency }}</span>
-            </div>
-            <div class="flex justify-between py-2 border-b border-gray-800">
-                <span class="text-gray-500">Всего</span>
-                <span class="font-semibold">{{ "%.2f"|format(wallet.total_balance) }} {{ wallet.currency }}</span>
-            </div>
-            <div class="flex justify-between py-2">
-                <span class="text-gray-500">≈ USDT</span>
-                <span>{{ "%.2f"|format(wallet.total_quote.usdt_amount) }} USDT</span>
-            </div>
+        {% if session.get('username') %}
+        <div class="info-row">
+            <span class="key">Username</span>
+            <span class="val">@{{ session.get('username') }}</span>
         </div>
-        <a href="/wallet" class="block text-center bg-gray-800 hover:bg-gray-700 mt-4 py-2 rounded-lg text-sm transition-colors">
-            Перейти в кошелёк →
-        </a>
-    </div>
-
-    <!-- Deal statistics -->
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <h2 class="font-semibold mb-4">Статистика сделок</h2>
-        <div class="grid grid-cols-2 gap-3">
-            <div>
-                <div class="text-gray-500 text-xs uppercase mb-1">Всего</div>
-                <div class="text-xl font-bold">{{ deal_stats.total_deals }}</div>
-            </div>
-            <div>
-                <div class="text-gray-500 text-xs uppercase mb-1">Открытых</div>
-                <div class="text-xl font-bold text-blue-400">{{ deal_stats.open_deals }}</div>
-            </div>
-            <div>
-                <div class="text-gray-500 text-xs uppercase mb-1">Завершённых</div>
-                <div class="text-xl font-bold text-cerber-400">{{ deal_stats.completed_deals }}</div>
-            </div>
-            <div>
-                <div class="text-gray-500 text-xs uppercase mb-1">Оборот</div>
-                <div class="text-xl font-bold">{{ "%.2f"|format(deal_stats.total_volume) }} {{ deal_stats.currency }}</div>
-            </div>
+        {% endif %}
+        <div class="info-row">
+            <span class="key">Telegram ID</span>
+            <span class="val">{{ session.get('telegram_id', '—') }}</span>
         </div>
-        <a href="/deals" class="block text-center bg-gray-800 hover:bg-gray-700 mt-4 py-2 rounded-lg text-sm transition-colors">
-            Перейти к сделкам →
-        </a>
     </div>
 </div>
+
+<div class="surface fade-up" style="margin-bottom:12px">
+    <div class="section-heading"><h2>Баланс</h2></div>
+    <div class="info-table">
+        <div class="info-row">
+            <span class="key">Доступно</span>
+            <span class="val green">{{ "%.2f"|format(wallet.balance) }} {{ wallet.currency }}</span>
+        </div>
+        <div class="info-row">
+            <span class="key">Заблокировано</span>
+            <span class="val warn">{{ "%.2f"|format(wallet.held_balance) }} {{ wallet.currency }}</span>
+        </div>
+        <div class="info-row">
+            <span class="key">Всего</span>
+            <span class="val">{{ "%.2f"|format(wallet.total_balance) }} {{ wallet.currency }}</span>
+        </div>
+        <div class="info-row">
+            <span class="key">≈ USDT</span>
+            <span class="val">{{ "%.2f"|format(wallet.total_quote.usdt_amount) }} USDT</span>
+        </div>
+    </div>
+    <div class="btn-row">
+        <a href="/wallet" class="ghost-btn btn-sm">Кошелёк →</a>
+    </div>
+</div>
+
+<div class="surface fade-up">
+    <div class="section-heading"><h2>Сделки</h2></div>
+    <div class="stat-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:14px">
+        <div class="stat-card">
+            <div class="label">Всего</div>
+            <strong class="muted">{{ deal_stats.total_deals }}</strong>
+        </div>
+        <div class="stat-card">
+            <div class="label">Открытых</div>
+            <strong style="color:#4a9eff;font-family:var(--display);font-size:1.3rem">{{ deal_stats.open_deals }}</strong>
+        </div>
+        <div class="stat-card">
+            <div class="label">Завершённых</div>
+            <strong class="green">{{ deal_stats.completed_deals }}</strong>
+        </div>
+        <div class="stat-card">
+            <div class="label">Оборот</div>
+            <strong class="muted">{{ "%.2f"|format(deal_stats.total_volume) }}</strong>
+        </div>
+    </div>
+    <div class="btn-row">
+        <a href="/deals" class="ghost-btn btn-sm">Сделки →</a>
+    </div>
+</div>
+
+{% endblock %}
 
 <div class="mt-8 text-center">
     <a href="/logout" class="text-red-400 hover:text-red-300 text-sm transition-colors">Выйти из аккаунта</a>

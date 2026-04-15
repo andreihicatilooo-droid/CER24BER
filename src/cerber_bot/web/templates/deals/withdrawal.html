@@ -2,60 +2,66 @@
 {% block title %}Вывод USDT — CERBER{% endblock %}
 {% block content %}
 
-<div class="flex items-center gap-2 mb-6">
-    <a href="/deals" class="text-gray-500 hover:text-cerber-400 transition-colors">← Сделки</a>
-    <span class="text-gray-700">/</span>
-    <span class="text-gray-300 font-medium">Вывод USDT</span>
-</div>
+<nav class="breadcrumb">
+    <a href="/deals">Сделки</a>
+    <span class="sep">/</span>
+    <span>Вывод USDT</span>
+</nav>
 
-<div class="max-w-lg mx-auto">
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <h1 class="text-xl font-bold mb-2">💸 Вывод в USDT</h1>
-        <p class="text-gray-500 text-sm mb-6">
-            Баланс: <span class="text-cerber-400 font-medium">{{ "%.2f"|format(wallet.balance) }} {{ wallet.currency }}</span>
-            · ≈ {{ "%.2f"|format(wallet.balance_quote.usdt_amount) }} USDT
-        </p>
-
-        {% if error is defined and error %}
-        <div class="bg-red-900/30 border border-red-800 text-red-300 rounded-lg p-3 mb-6 text-sm">{{ error }}</div>
-        {% endif %}
-
-        <form method="post" action="/deals/withdrawal/create" class="space-y-4">
-            <div>
-                <label class="block text-sm text-gray-400 mb-1">Сумма (USDT)</label>
-                <input type="number" name="amount" step="0.01" min="{{ min_amount }}" required placeholder="{{ min_amount }}"
-                       class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-cerber-500 transition-colors">
-                <div class="text-gray-600 text-xs mt-1">Минимум: {{ min_amount }} USDT</div>
-            </div>
-            <div>
-                <label class="block text-sm text-gray-400 mb-1">Сеть</label>
-                <div class="flex gap-2">
-                    {% for net in networks %}
-                    <label class="flex-1">
-                        <input type="radio" name="network" value="{{ net }}" {% if loop.first %}checked{% endif %} class="sr-only peer">
-                        <div class="text-center bg-gray-800 border border-gray-700 peer-checked:border-cerber-500 peer-checked:text-cerber-400 rounded-lg py-3 text-sm font-medium cursor-pointer transition-colors">
-                            {{ net }}
-                        </div>
-                    </label>
-                    {% endfor %}
-                </div>
-            </div>
-            <div>
-                <label class="block text-sm text-gray-400 mb-1">Адрес кошелька</label>
-                <input type="text" name="address" required placeholder="T..."
-                       class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm font-mono focus:outline-none focus:border-cerber-500 transition-colors">
-            </div>
-            <button type="submit"
-                    class="w-full bg-cerber-600 hover:bg-cerber-500 text-white py-3 rounded-lg font-medium transition-colors"
-                    onclick="return confirm('Подтвердить заявку на вывод?')">
-                Отправить заявку
-            </button>
-        </form>
-
-        <div class="mt-4 bg-gray-800/50 rounded-lg p-3 text-xs text-gray-500">
-            ⚠️ Средства будут заблокированы до обработки заявки модератором.
-        </div>
+<div class="surface fade-up">
+    <div class="page-title" style="padding:0 0 12px">
+        <h1 style="font-size:1.2rem">Вывод в USDT</h1>
+        <p>Баланс: <span style="color:var(--accent-green)">{{ "%.2f"|format(wallet.balance) }} {{ wallet.currency }}</span> · ≈ {{ "%.2f"|format(wallet.balance_quote.usdt_amount) }} USDT</p>
     </div>
+
+    {% if error is defined and error %}
+    <div class="alert danger" style="margin-bottom:16px">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/deals/withdrawal/create" style="display:grid;gap:14px">
+        <div class="field">
+            <label>Сумма (USDT)</label>
+            <input type="number" name="amount" step="0.01" min="{{ min_amount }}" required placeholder="{{ min_amount }}">
+            <div style="font-size:0.76rem;color:var(--text-soft)">Min: {{ min_amount }} USDT</div>
+        </div>
+        <div class="field">
+            <label>Сеть</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                {% for net in networks %}
+                <label style="flex:1;min-width:80px">
+                    <input type="radio" name="network" value="{{ net }}" {% if loop.first %}checked{% endif %} style="display:none" class="net-radio">
+                    <div class="filter-chip net-label" style="text-align:center;width:100%;cursor:pointer">{{ net }}</div>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="field">
+            <label>Адрес кошелька</label>
+            <input type="text" name="address" required placeholder="T...">
+        </div>
+        <button type="submit" class="btn" onclick="return confirm('Подтвердить заявку на вывод?')">Отправить заявку</button>
+    </form>
+
+    <div class="alert warn" style="margin-top:16px">Средства будут заблокированы до обработки заявки модератором.</div>
 </div>
+
+<script>
+(function() {
+    document.querySelectorAll('.net-radio').forEach(function(radio) {
+        var label = radio.nextElementSibling;
+        if (radio.checked) label.classList.add('is-active');
+        radio.addEventListener('change', function() {
+            document.querySelectorAll('.net-label').forEach(function(l) { l.classList.remove('is-active'); });
+            if (radio.checked) label.classList.add('is-active');
+        });
+        label.addEventListener('click', function() {
+            radio.checked = true;
+            radio.dispatchEvent(new Event('change', {bubbles: true}));
+        });
+    });
+})();
+</script>
+
+{% endblock %}
 
 {% endblock %}

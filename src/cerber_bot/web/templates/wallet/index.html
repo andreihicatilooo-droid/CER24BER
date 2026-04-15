@@ -2,70 +2,67 @@
 {% block title %}Кошелёк — CERBER{% endblock %}
 {% block content %}
 
-<h1 class="text-2xl font-bold mb-6">💰 Кошелёк</h1>
+<div class="page-title">
+    <h1>Кошелёк</h1>
+</div>
 
 {% if error is defined and error %}
-<div class="bg-red-900/30 border border-red-800 text-red-300 rounded-lg p-3 mb-6 text-sm">{{ error }}</div>
+<div class="alert danger" style="margin-bottom:14px">{{ error }}</div>
 {% endif %}
 
-<!-- Balance cards -->
-<div class="grid grid-cols-1 gap-3 mb-6">
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
-        <div class="text-gray-500 text-xs uppercase mb-1">Доступно</div>
-        <div class="text-2xl font-bold text-cerber-400">{{ "%.2f"|format(wallet.balance) }} {{ wallet.currency }}</div>
-        <div class="text-gray-500 text-xs mt-1">≈ {{ "%.2f"|format(wallet.balance_quote.usdt_amount) }} USDT · {{ "%.0f"|format(wallet.balance_quote.rub_amount) }} ₽</div>
+<div class="stat-grid fade-up">
+    <div class="stat-card">
+        <div class="label">Доступно</div>
+        <strong class="green">{{ "%.2f"|format(wallet.balance) }} {{ wallet.currency }}</strong>
+        <div class="sub">≈ {{ "%.2f"|format(wallet.balance_quote.usdt_amount) }} USDT · {{ "%.0f"|format(wallet.balance_quote.rub_amount) }} ₽</div>
     </div>
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
-        <div class="text-gray-500 text-xs uppercase mb-1">Заблокировано</div>
-        <div class="text-2xl font-bold text-yellow-400">{{ "%.2f"|format(wallet.held_balance) }} {{ wallet.currency }}</div>
-        <div class="text-gray-500 text-xs mt-1">≈ {{ "%.2f"|format(wallet.held_quote.usdt_amount) }} USDT</div>
+    <div class="stat-card">
+        <div class="label">Заблокировано</div>
+        <strong class="warn">{{ "%.2f"|format(wallet.held_balance) }} {{ wallet.currency }}</strong>
+        <div class="sub">≈ {{ "%.2f"|format(wallet.held_quote.usdt_amount) }} USDT</div>
     </div>
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
-        <div class="text-gray-500 text-xs uppercase mb-1">Всего</div>
-        <div class="text-2xl font-bold">{{ "%.2f"|format(wallet.total_balance) }} {{ wallet.currency }}</div>
-        <div class="text-gray-500 text-xs mt-1">{{ wallet.order_count }} заказов</div>
+    <div class="stat-card">
+        <div class="label">Всего</div>
+        <strong class="muted">{{ "%.2f"|format(wallet.total_balance) }} {{ wallet.currency }}</strong>
+        <div class="sub">{{ wallet.order_count }} заказов</div>
     </div>
 </div>
 
-<!-- Top‑up form -->
-<div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-8">
-    <h2 class="font-semibold mb-4">Пополнить баланс</h2>
-    <form method="post" action="/wallet/topup" class="flex flex-wrap gap-2">
-        {% for amt in [10, 25, 50, 100] %}
-        <button type="submit" name="amount" value="{{ amt }}"
-                class="bg-gray-800 hover:bg-cerber-700 border border-gray-700 hover:border-cerber-600 px-5 py-2 rounded-lg text-sm font-medium transition-colors">
-            +{{ amt }}
-        </button>
-        {% endfor %}
-        <div class="flex gap-2 w-full mt-2">
-            <input type="number" name="amount" step="0.01" min="1" placeholder="Своя сумма"
-                   class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-cerber-500">
-            <button type="submit" class="bg-cerber-600 hover:bg-cerber-500 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors">
-                Пополнить
-            </button>
+<div class="surface fade-up" style="margin-bottom:14px">
+    <div class="section-heading"><h2>Пополнить баланс</h2></div>
+    <form method="post" action="/wallet/topup">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+            {% for amt in [10, 25, 50, 100] %}
+            <button type="submit" name="amount" value="{{ amt }}" class="ghost-btn btn-sm">+{{ amt }}</button>
+            {% endfor %}
+        </div>
+        <div class="form-row">
+            <input type="number" name="amount" step="0.01" min="1" placeholder="Своя сумма...">
+            <button type="submit" class="btn btn-sm">Пополнить</button>
         </div>
     </form>
 </div>
 
-<!-- Transaction history -->
-<div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
-    <h2 class="font-semibold mb-4">История операций</h2>
+<div class="surface fade-up">
+    <div class="section-heading"><h2>История операций</h2></div>
     {% if wallet.recent_transactions %}
-    <div class="space-y-2">
+    <div class="data-list">
         {% for tx in wallet.recent_transactions %}
-        <div class="flex items-center justify-between py-2 border-b border-gray-800 last:border-0">
-            <div>
-                <div class="text-sm">{{ tx.description }}</div>
-                <div class="text-gray-600 text-xs">{{ tx.created_at.strftime('%d.%m.%Y %H:%M') if tx.created_at else '' }}</div>
+        <div class="data-row">
+            <div class="row-main">
+                <div class="row-title">{{ tx.description }}</div>
+                <div class="row-sub">{{ tx.created_at.strftime('%d.%m.%Y %H:%M') if tx.created_at else '' }}</div>
             </div>
-            <div class="text-sm font-mono {% if tx.amount > 0 %}text-cerber-400{% else %}text-red-400{% endif %}">
-                {{ '+' if tx.amount > 0 else '' }}{{ "%.2f"|format(tx.amount) }} {{ tx.currency }}
+            <div class="row-meta">
+                <div class="row-amount {% if tx.amount > 0 %}accent{% endif %}" style="{% if tx.amount < 0 %}color:var(--accent-2){% endif %}">
+                    {{ '+' if tx.amount > 0 else '' }}{{ "%.2f"|format(tx.amount) }} {{ tx.currency }}
+                </div>
             </div>
         </div>
         {% endfor %}
     </div>
     {% else %}
-    <div class="text-gray-500 text-sm text-center py-4">Операций пока нет</div>
+    <div class="empty-state" style="padding:24px 0">Операций пока нет</div>
     {% endif %}
 </div>
 

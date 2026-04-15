@@ -2,70 +2,66 @@
 {% block title %}{{ product.name }} — CERBER{% endblock %}
 {% block content %}
 
-<div class="flex items-center gap-2 mb-6">
-    <a href="/store" class="text-gray-500 hover:text-cerber-400 transition-colors">← Магазин</a>
+<nav class="breadcrumb">
+    <a href="/store">Магазин</a>
     {% if product.category_name %}
-    <span class="text-gray-700">/</span>
-    <span class="text-gray-400">{{ product.category_name }}</span>
+    <span class="sep">/</span>
+    <a href="/store">{{ product.category_name }}</a>
     {% endif %}
-    <span class="text-gray-700">/</span>
-    <span class="text-gray-300 font-medium">{{ product.name }}</span>
+    <span class="sep">/</span>
+    <span>{{ product.name }}</span>
+</nav>
+
+<div class="surface fade-up" style="margin-bottom:12px">
+    {% if product.image %}
+    <img src="{{ product.image }}" alt="{{ product.name }}" style="width:100%;max-height:220px;object-fit:contain;margin-bottom:16px">
+    {% endif %}
+    <div class="page-title" style="padding:0 0 12px">
+        <h1 style="font-size:1.3rem">{{ product.name }}</h1>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <span class="tag">{{ product.product_type }}</span>
+        {% if product.denomination_type %}
+        <span class="tag">{{ product.denomination_type }}</span>
+        {% endif %}
+    </div>
+    {% if product.description %}
+    <p style="color:var(--text-muted);font-size:0.88rem;line-height:1.7;margin:0">{{ product.description }}</p>
+    {% endif %}
 </div>
 
-<div class="grid grid-cols-1 gap-4">
-    <div>
-        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            {% if product.image %}
-            <img src="{{ product.image }}" alt="{{ product.name }}" class="w-full max-h-64 object-contain rounded-lg mb-4">
-            {% endif %}
-            <h1 class="text-2xl font-bold mb-2">{{ product.name }}</h1>
-            <div class="flex gap-2 mb-4">
-                <span class="bg-gray-800 text-gray-400 text-xs px-2 py-1 rounded">{{ product.product_type }}</span>
-                {% if product.denomination_type %}
-                <span class="bg-gray-800 text-gray-400 text-xs px-2 py-1 rounded">{{ product.denomination_type }}</span>
-                {% endif %}
-            </div>
-            {% if product.description %}
-            <div class="text-gray-400 text-sm leading-relaxed">{{ product.description }}</div>
+<div class="surface fade-up" style="margin-bottom:12px">
+    <div class="label" style="font-size:0.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text-soft);margin-bottom:6px">Ваш баланс</div>
+    <div style="font-size:1.2rem;color:var(--accent-green);font-family:var(--display);letter-spacing:.04em">{{ "%.2f"|format(wallet.balance) }} {{ wallet.currency }}</div>
+</div>
+
+<div class="surface fade-up">
+    <div class="section-heading"><h2>Предложения</h2></div>
+    <div class="offer-list">
+    {% for offer in product.offers %}
+    <div class="offer-row">
+        <div class="offer-head">
+            <span class="offer-name">{{ offer.name }}</span>
+            {% if offer.price is not none %}
+            <span class="offer-price">{{ "%.2f"|format(offer.price) }} {{ offer.currency }}</span>
             {% endif %}
         </div>
+        <div class="offer-meta">Остаток: {{ offer.stock }} шт.</div>
+        {% if offer.buyable %}
+        <form method="post" action="/store/purchase/{{ product.product_id }}/{{ offer.sku_id }}">
+            <button type="submit" class="btn btn-sm"
+                    onclick="return confirm('Купить {{ offer.name }} за {{ '%.2f'|format(offer.price) }} {{ offer.currency }}?')">
+                Купить
+            </button>
+        </form>
+        {% else %}
+        <div style="font-size:0.8rem;color:var(--accent-warn)">{{ offer.reason_unavailable }}</div>
+        {% endif %}
     </div>
-
-    <!-- Wallet + SKUs -->
-    <div class="space-y-4">
-        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <div class="text-gray-500 text-xs uppercase mb-1">Ваш баланс</div>
-            <div class="text-lg font-bold text-cerber-400">{{ "%.2f"|format(wallet.balance) }} {{ wallet.currency }}</div>
-        </div>
-
-        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <h3 class="font-medium mb-3">Предложения</h3>
-            {% for offer in product.offers %}
-            <div class="border-b border-gray-800 last:border-0 py-3">
-                <div class="flex items-center justify-between mb-1">
-                    <span class="text-sm font-medium">{{ offer.name }}</span>
-                    {% if offer.price is not none %}
-                    <span class="text-cerber-400 font-semibold text-sm">{{ "%.2f"|format(offer.price) }} {{ offer.currency }}</span>
-                    {% endif %}
-                </div>
-                <div class="text-gray-500 text-xs mb-2">Остаток: {{ offer.stock }} шт.</div>
-                {% if offer.buyable %}
-                <form method="post" action="/store/purchase/{{ product.product_id }}/{{ offer.sku_id }}">
-                    <button type="submit"
-                            class="w-full bg-cerber-600 hover:bg-cerber-500 text-white text-sm py-2 rounded-lg transition-colors font-medium"
-                            onclick="return confirm('Купить {{ offer.name }} за {{ '%.2f'|format(offer.price) }} {{ offer.currency }}?')">
-                        Купить
-                    </button>
-                </form>
-                {% else %}
-                <div class="text-yellow-600 text-xs">{{ offer.reason_unavailable }}</div>
-                {% endif %}
-            </div>
-            {% endfor %}
-            {% if not product.offers %}
-            <div class="text-gray-500 text-sm">Нет доступных предложений</div>
-            {% endif %}
-        </div>
+    {% endfor %}
+    {% if not product.offers %}
+    <div class="empty-state" style="padding:24px 0">Нет доступных предложений</div>
+    {% endif %}
     </div>
 </div>
 

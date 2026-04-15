@@ -47,6 +47,13 @@ RESET = "\033[0m"
 BOLD = "\033[1m"
 DIM = "\033[2m"
 
+# Альтернативный буфер: прокрутка в историю отсутствует
+_ALTSCREEN_ENTER = "\033[?1049h"
+_ALTSCREEN_EXIT  = "\033[?1049l"
+
+MENU_ROWS = 7          # строк меню + строка ввода внизу экрана
+_content_log: list[tuple[str, str]] = []  # буфер сообщений контентной области
+
 
 def rgb(r: int, g: int, b: int) -> str:
     return f"\033[38;2;{r};{g};{b}m"
@@ -332,15 +339,56 @@ def intro_animation() -> None:
 
 
 # ── Утилиты ──────────────────────────────────────────────────
+
+def _term_size() -> tuple[int, int]:
+    """Текущий размер терминала (cols, rows)."""
+    return shutil.get_terminal_size((120, 40))
+
+
+def _content_range() -> tuple[int, int]:
+    """(top_row, bottom_row) — диапазон строк контентной области."""
+    _, h = _term_size()
+    top = BANNER_HEIGHT + 2
+    bottom = max(top + 2, h - MENU_ROWS - 1)
+    return top, bottom
+
+
+def _render_content_log() -> None:
+    """Перерисовать буфер сообщений в контентной области (без _io_lock)."""
+    top, bottom = _content_range()
+    max_lines = bottom - top + 1
+    display = _content_log[-max_lines:] if len(_content_log) > max_lines else _content_log
+    w, _ = _term_size()
+    buf: list[str] = []
+    for i, (text, color) in enumerate(display):
+        r = top + i
+        if r > bottom:
+            break
+        clean = text[:w - 5] if len(text) > w - 5 else text
+        buf.append(f"{_move(r, 1)}  {C.get(color, '')}{clean}{RESET}\033[K")
+    for r in range(top + len(display), bottom + 1):
+        buf.append(f"{_move(r, 1)}\033[2K")
+    sys.stdout.write("".join(buf))
+    sys.stdout.flush()
+
+
+def _erase_content() -> None:
+    """Очистить всю контентную область."""
+    top, bottom = _content_range()
+    sys.stdout.write("".join(f"{_move(r, 1)}\033[2K" for r in range(top, bottom + 1)))
+    sys.stdout.flush()
+
+
 def log(msg: str):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(LOGS["launcher"], "a", encoding="utf-8") as f:
         f.write(f"{ts}  {msg}\n")
 
 
-def cprint(msg: str, color: str = "white"):
+def cprint(msg: str, color: str = "white") -> None:
+    _content_log.append((msg, color))
     with _io_lock:
-        print(f"  {C.get(color, '')}{msg}{RESET}")
+        _render_content_log()
 
 
 def read_env_lines() -> list[str]:
@@ -799,55 +847,105 @@ def env_wizard():
 
 
 # ── UI ────────────────────────────────────────────────────────
-def show_tail(filepath: Path, lines: int = 30, label: str = ""):
+def show_tail(filepath: Path, lines: int = 30, label: str = "") -> None:
+    top, bottom = _content_range()
+    w, _ = _term_size()
+    max_content = max(1, bottom - top - 2)
+
     with _io_lock:
-        print()
-        print(f"  {C['cyan']}=== {label} (last {lines} lines) ==={RESET}")
-        print(f"  {C['dark_gray']}File: {filepath}{RESET}")
-        print()
+        _erase_content()
+        row = top
+        sys.stdout.write(
+            f"{_move(row, 3)}{BOLD}{C['cyan']}{label}  —  {filepath.name}{RESET}\033[K"
+        )
+        row += 1
+        sys.stdout.write(
+            f"{_move(row, 3)}{rgb(60, 60, 70)}{'─' * min(60, w - 6)}{RESET}\033[K"
+        )
+        row += 1
+
         if filepath.exists():
             all_lines = filepath.read_text(encoding="utf-8", errors="replace").splitlines()
-            tail = all_lines[-lines:] if len(all_lines) > lines else all_lines
+            tail = all_lines[-max_content:] if len(all_lines) > max_content else all_lines
             if tail:
-                for ln in tail:
-                    print(f"    {ln}")
+                for i, ln in enumerate(tail):
+                    if row + i > bottom:
+                        break
+                    clean = ln[:w - 6]
+                    sys.stdout.write(f"{_move(row + i, 3)}{C['white']}{clean}{RESET}\033[K")
             else:
-                print(f"    {C['dark_gray']}(empty){RESET}")
+                sys.stdout.write(f"{_move(row, 3)}{C['dark_gray']}(empty){RESET}\033[K")
         else:
-            print(f"    {C['dark_gray']}(file not found){RESET}")
-        print()
+            sys.stdout.write(f"{_move(row, 3)}{C['dark_gray']}(file not found){RESET}\033[K")
+
+        sys.stdout.flush()
 
 
 def show_status(
     components: list[tuple[str, subprocess.Popen[bytes]]],
     tunnel_url: str | None,
-):
+) -> None:
+    top, bottom = _content_range()
+    w, _ = _term_size()
+
     with _io_lock:
-        print()
-        print(f"  {C['cyan']}=== Component Status ==={RESET}")
-        print()
+        _erase_content()
+        row = top
+        sys.stdout.write(
+            f"{_move(row, 3)}{BOLD}{C['cyan']}▌ Component Status{RESET}\033[K"
+        )
+        row += 1
+        sys.stdout.write(
+            f"{_move(row, 3)}{rgb(60, 60, 70)}{'─' * min(52, w - 6)}{RESET}\033[K"
+        )
+        row += 1
+
         for name, proc in components:
+            if row > bottom:
+                break
             if proc.poll() is not None:
-                print(f"    {C['red']}[{name}] STOPPED (exit code {proc.returncode}){RESET}")
+                sys.stdout.write(
+                    f"{_move(row, 3)}{C['red']}  ✗  {name:<10} STOPPED  exit={proc.returncode}{RESET}\033[K"
+                )
             else:
-                print(f"    {C['green']}[{name}] RUNNING (PID {proc.pid}){RESET}")
-        if tunnel_url:
-            print()
-            print(f"    {C['dark_cyan']}Tunnel:  {tunnel_url}{RESET}")
-            nicepay_url = f"{tunnel_url.rstrip('/')}/webhooks/nicepay"
-            print(f"    {C['yellow']}NicePay: {BOLD}{nicepay_url}{RESET}")
-        print()
+                sys.stdout.write(
+                    f"{_move(row, 3)}{C['green']}  ✓  {name:<10} RUNNING  PID {proc.pid}{RESET}\033[K"
+                )
+            row += 1
+
+        if tunnel_url and row + 2 <= bottom:
+            row += 1
+            sys.stdout.write(
+                f"{_move(row, 3)}{rgb(60, 60, 70)}{'─' * min(52, w - 6)}{RESET}\033[K"
+            )
+            row += 1
+            sys.stdout.write(
+                f"{_move(row, 3)}{C['dark_cyan']}  Tunnel : {tunnel_url}{RESET}\033[K"
+            )
+            row += 1
+            if row <= bottom:
+                nicepay_url = f"{tunnel_url.rstrip('/')}/webhooks/nicepay"
+                sys.stdout.write(
+                    f"{_move(row, 3)}{C['yellow']}  NicePay: {BOLD}{nicepay_url}{RESET}\033[K"
+                )
+
+        sys.stdout.flush()
 
 
-def show_menu():
+def show_menu() -> None:
+    _, h = _term_size()
+    base = h - MENU_ROWS + 1   # первая строка меню
+    sep = "─" * 52
     with _io_lock:
-        sep = "─" * 42
-        print(f"  {C['gray']}{sep}{RESET}")
-        print(f"  {C['white']}  [1] Bot log          [4] Status{RESET}")
-        print(f"  {C['white']}  [2] Bot errors       [5] Clear screen{RESET}")
-        print(f"  {C['white']}  [3] Tunnel log       [Q] Quit{RESET}")
-        print(f"  {C['white']}  [6] Launcher log     [R] Restart bot{RESET}")
-        print(f"  {C['gray']}{sep}{RESET}")
+        sys.stdout.write(
+            f"{_move(base,   3)}{C['gray']}{sep}{RESET}\033[K"
+            f"{_move(base+1, 3)}{C['white']}  [1] Bot log       [4] Status{RESET}\033[K"
+            f"{_move(base+2, 3)}{C['white']}  [2] Bot errors    [5] Clear{RESET}\033[K"
+            f"{_move(base+3, 3)}{C['white']}  [3] Tunnel log    [Q] Quit{RESET}\033[K"
+            f"{_move(base+4, 3)}{C['white']}  [6] Launcher log  [R] Restart{RESET}\033[K"
+            f"{_move(base+5, 3)}{C['gray']}{sep}{RESET}\033[K"
+        )
+        sys.stdout.flush()
 
 
 def read_key() -> str:
@@ -1011,47 +1109,65 @@ def _restart_bot(
 
 # ── Главная логика ────────────────────────────────────────────
 def main(no_tunnel: bool = False, tunnel_only: bool = False) -> int:
-    LOG_DIR.mkdir(exist_ok=True)
-
-    # Сброс логов
-    for lf in LOGS.values():
-        lf.write_text("", encoding="utf-8")
-
-    # Завершить старые экземпляры перед новым запуском
-    kill_old_launchers()
-
-    # Вступительная анимация (проявление из шума)
-    intro_animation()
-
-    # ── Выбор: настроить .env или запустить сразу ─────────────
-    sep = "─" * 54
-    print(f"\n  {C['cyan']}{sep}{RESET}")
-    print(f"  {BOLD}{C['white']}  [1] Запустить бота{RESET}")
-    print(f"  {BOLD}{C['white']}  [2] Настроить .env  →  затем запуск{RESET}")
-    print(f"  {C['cyan']}{sep}{RESET}")
-    print()
-
-    while True:
-        try:
-            choice = input(f"  {C['dark_yellow']}Выбор (1/2): {RESET}").strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return 0
-        if choice in ("1", "2", ""):
-            break
-        cprint("  Введите 1 или 2", "yellow")
-
-    if choice == "2":
-        env_wizard()
-
-    # Запускаем непрерывную анимацию баннера в фоне
-    animator = BannerAnimator()
-    animator.start()
+    # Входим в альтернативный буфер экрана — прокрутки нет
+    sys.stdout.write(_ALTSCREEN_ENTER)
+    sys.stdout.flush()
 
     try:
-        return _run(animator, no_tunnel, tunnel_only)
+        LOG_DIR.mkdir(exist_ok=True)
+
+        # Сброс логов
+        for lf in LOGS.values():
+            lf.write_text("", encoding="utf-8")
+
+        # Завершить старые экземпляры перед новым запуском
+        kill_old_launchers()
+
+        # Вступительная анимация (проявление из шума)
+        intro_animation()
+
+        # ── Выбор: настроить .env или запустить сразу ─────────────
+        ct, _ = _content_range()
+        sep = "─" * 52
+        sys.stdout.write(
+            f"{_move(ct,   3)}{C['cyan']}{sep}{RESET}\033[K"
+            f"{_move(ct+1, 3)}{BOLD}{C['white']}  [1] Запустить бота{RESET}\033[K"
+            f"{_move(ct+2, 3)}{BOLD}{C['white']}  [2] Настроить .env  →  затем запуск{RESET}\033[K"
+            f"{_move(ct+3, 3)}{C['cyan']}{sep}{RESET}\033[K"
+        )
+        sys.stdout.flush()
+
+        while True:
+            try:
+                sys.stdout.write(f"{_move(ct+5, 3)}{C['dark_yellow']}Выбор (1/2): {RESET}\033[K")
+                sys.stdout.flush()
+                choice = input("").strip()
+            except (EOFError, KeyboardInterrupt):
+                sys.stdout.write(_ALTSCREEN_EXIT)
+                _show_cursor()
+                sys.stdout.flush()
+                return 0
+            if choice in ("1", "2", ""):
+                break
+            sys.stdout.write(f"{_move(ct+6, 3)}{C['yellow']}  Введите 1 или 2{RESET}\033[K")
+            sys.stdout.flush()
+
+        if choice == "2":
+            env_wizard()
+
+        # Запускаем непрерывную анимацию баннера в фоне
+        animator = BannerAnimator()
+        animator.start()
+
+        try:
+            return _run(animator, no_tunnel, tunnel_only)
+        finally:
+            animator.stop()
+
     finally:
-        animator.stop()
+        sys.stdout.write(_ALTSCREEN_EXIT)
+        _show_cursor()
+        sys.stdout.flush()
 
 
 def _run(
@@ -1138,23 +1254,20 @@ def _run(
         # ── NicePay webhook URL ───────────────────────────────
         if tunnel_url and web_enabled == "true":
             nicepay_url = f"{tunnel_url.rstrip('/')}/webhooks/nicepay"
-            sep = "─" * 56
-            with _io_lock:
-                print(f"  {C['yellow']}┌{sep}┐{RESET}")
-                print(f"  {C['yellow']}│  NicePay Webhook URL — скопируйте в настройки:{' ' * 7}│{RESET}")
-                print(f"  {C['yellow']}│{RESET}")
-                print(f"  {C['yellow']}│  {C['white']}{BOLD}{nicepay_url}{RESET}{C['yellow']}  │{RESET}")
-                print(f"  {C['yellow']}│{RESET}")
-                print(f"  {C['yellow']}└{sep}┘{RESET}")
-                print()
+            sep56 = "─" * 56
+            cprint(f"┌{sep56}┐", "yellow")
+            cprint(f"│  NicePay Webhook URL — скопируйте в настройки:         │", "yellow")
+            cprint(f"│  {BOLD}{nicepay_url}{RESET}", "yellow")
+            cprint(f"└{sep56}┘", "yellow")
 
         # ── Интерактивное меню ────────────────────────────────
         show_menu()
         last_check = time.time()
 
         while True:
+            _, h = _term_size()
             with _io_lock:
-                sys.stdout.write(f"\r  {C['dark_yellow']}> {RESET}")
+                sys.stdout.write(f"{_move(h, 3)}{C['dark_yellow']}> {RESET}\033[K")
                 sys.stdout.flush()
 
             ch = ""
@@ -1164,8 +1277,6 @@ def _run(
                     if time.time() - last_check > 5:
                         for name, proc in components:
                             if proc.poll() is not None:
-                                with _io_lock:
-                                    print()
                                 cprint(
                                     f"[!] {name} exited (code {proc.returncode})",
                                     "red",
@@ -1175,7 +1286,9 @@ def _run(
                     time.sleep(0.1)
 
             with _io_lock:
-                print(ch)
+                _, h = _term_size()
+                sys.stdout.write(f"{_move(h, 5)}{C['white']}{ch}{RESET}\033[K")
+                sys.stdout.flush()
 
             match ch.lower():
                 case "1":
@@ -1199,13 +1312,10 @@ def _run(
                     show_menu()
                     animator.resume()
                 case "5":
-                    _clear()
-                    # Курсор ниже области баннера
                     with _io_lock:
-                        sys.stdout.write(f"{_move(BANNER_HEIGHT + 1, 1)}")
-                        sys.stdout.flush()
+                        _erase_content()
+                        _render_content_log()
                     show_menu()
-                    # Анимация продолжается — баннер перерисуется сам
                 case "6":
                     animator.pause()
                     show_tail(LOGS["launcher"], 40, "Launcher")
@@ -1227,7 +1337,12 @@ def _run(
                 case "q":
                     raise KeyboardInterrupt
                 case _:
-                    cprint("Unknown key. Press 1-6, R or Q.", "dark_gray")
+                    _, h = _term_size()
+                    with _io_lock:
+                        sys.stdout.write(
+                            f"{_move(h, 3)}{C['dark_gray']}? Нажмите 1-6, R или Q{RESET}\033[K"
+                        )
+                        sys.stdout.flush()
 
     except KeyboardInterrupt:
         pass

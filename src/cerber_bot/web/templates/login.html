@@ -1,43 +1,38 @@
 {% extends "base.html" %}
 {% block title %}Вход — CERBER{% endblock %}
 {% block content %}
-<div class="flex flex-col items-center justify-center min-h-[70vh]" id="login-root">
-    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-10 max-w-md w-full text-center">
-        <h1 class="text-4xl font-bold text-cerber-400 mb-2">CERBER</h1>
-        <p class="text-gray-400 mb-8">Цифровой магазин с гарант-сделками</p>
+
+<div class="auth-layout">
+    <div class="auth-card fade-up">
+        <div>
+            <div class="eyebrow" style="margin-bottom:14px;display:inline-flex">//\ CERBER \ SECURE ACCESS</div>
+            <div style="font-family:var(--display);font-size:1.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text);margin-bottom:6px">CERBER</div>
+            <div style="color:var(--text-muted);font-size:0.85rem;letter-spacing:.06em">Цифровой магазин с гарант-сделками</div>
+        </div>
 
         {% if error %}
-        <div class="bg-red-900/30 border border-red-800 text-red-300 rounded-lg p-3 mb-6 text-sm">
-            {{ error }}
-        </div>
+        <div class="alert danger">{{ error }}</div>
         {% endif %}
 
-        <!-- Telegram Mini App: автоматический вход -->
-        <div id="tg-auto-login" style="display:none">
-            <div class="flex flex-col items-center gap-3">
-                <svg class="animate-spin h-8 w-8 text-cerber-400" viewBox="0 0 24 24" fill="none">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                </svg>
-                <p class="text-gray-400 text-sm">Авторизация через Telegram...</p>
-            </div>
+        <div id="tg-auto-login" style="display:none;text-align:center;padding:16px 0">
+            <div class="spinner" style="margin:0 auto 10px"></div>
+            <div style="color:var(--text-muted);font-size:0.85rem;letter-spacing:.06em">Авторизация через Telegram...</div>
         </div>
 
-        <!-- Обычный вход через Telegram Widget -->
-        <div id="widget-login">
+        <div id="widget-login" style="text-align:center">
             {% if bot_username %}
-            <div class="mb-6">
+            <div style="margin-bottom:12px">
                 <script async src="https://telegram.org/js/telegram-widget.js?22"
                     data-telegram-login="{{ bot_username }}"
                     data-size="large"
-                    data-radius="12"
+                    data-radius="0"
                     data-auth-url="/login/callback"
                     data-request-access="write">
                 </script>
             </div>
-            <p class="text-gray-500 text-xs">Авторизация через Telegram</p>
+            <div style="color:var(--text-soft);font-size:0.76rem;letter-spacing:.1em;text-transform:uppercase">Авторизация через Telegram</div>
             {% else %}
-            <p class="text-gray-500 text-sm">Откройте магазин через кнопку в боте для автоматического входа.</p>
+            <div style="color:var(--text-muted);font-size:0.88rem">Откройте магазин через кнопку в боте для автоматического входа.</div>
             {% endif %}
         </div>
     </div>
@@ -47,7 +42,6 @@
 (function() {
     var tg = window.Telegram && window.Telegram.WebApp;
     if (tg && tg.initData) {
-        // Скрыть виджет, показать спиннер
         var widget = document.getElementById('widget-login');
         var auto = document.getElementById('tg-auto-login');
         if (widget) widget.style.display = 'none';
@@ -63,11 +57,11 @@
             if (data.ok) {
                 window.location.href = '/store';
             } else {
-                if (auto) auto.innerHTML = '<p class="text-red-400 text-sm">Ошибка авторизации. Попробуйте снова.</p>';
+                if (auto) auto.innerHTML = '<div class="alert danger">Ошибка авторизации. Попробуйте снова.</div>';
             }
         })
         .catch(function() {
-            if (auto) auto.innerHTML = '<p class="text-red-400 text-sm">Ошибка соединения.</p>';
+            if (auto) auto.innerHTML = '<div class="alert danger">Ошибка соединения.</div>';
         });
     }
 })();

@@ -2,53 +2,50 @@
 {% block title %}Покупка — CERBER{% endblock %}
 {% block content %}
 
-<div class="max-w-lg mx-auto">
-    {% if error %}
-    <div class="bg-red-900/30 border border-red-800 rounded-xl p-6 text-center">
-        <div class="text-red-400 text-lg font-semibold mb-2">Ошибка покупки</div>
-        <div class="text-red-300 text-sm">{{ error }}</div>
-        <a href="javascript:history.back()" class="inline-block mt-4 bg-gray-800 hover:bg-gray-700 px-6 py-2 rounded-lg text-sm transition-colors">← Назад</a>
+{% if error %}
+<div class="surface fade-up" style="text-align:center">
+    <div class="alert danger" style="margin-bottom:16px">{{ error }}</div>
+    <a href="javascript:history.back()" class="ghost-btn">← Назад</a>
+</div>
+{% elif result %}
+<div class="surface fade-up">
+    <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:2rem;margin-bottom:8px;color:var(--accent-green)">✓</div>
+        <div class="surface-title" style="font-family:var(--display);font-size:1.1rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text)">Покупка успешна</div>
     </div>
-    {% elif result %}
-    <div class="bg-gray-900 border border-cerber-800 rounded-xl p-6">
-        <div class="text-center mb-6">
-            <div class="text-cerber-400 text-3xl mb-2">✅</div>
-            <h2 class="text-xl font-bold">Покупка успешна!</h2>
+    <div class="info-table">
+        <div class="info-row">
+            <span class="key">Товар</span>
+            <span class="val">{{ result.order.product_name }}</span>
         </div>
-        <div class="space-y-3 text-sm">
-            <div class="flex justify-between py-2 border-b border-gray-800">
-                <span class="text-gray-500">Товар</span>
-                <span>{{ result.order.product_name }}</span>
-            </div>
-            <div class="flex justify-between py-2 border-b border-gray-800">
-                <span class="text-gray-500">SKU</span>
-                <span>{{ result.order.sku_name }}</span>
-            </div>
-            <div class="flex justify-between py-2 border-b border-gray-800">
-                <span class="text-gray-500">Списано</span>
-                <span class="text-red-400">-{{ "%.2f"|format(result.charged_amount) }} {{ result.charged_currency }}</span>
-            </div>
-            <div class="flex justify-between py-2 border-b border-gray-800">
-                <span class="text-gray-500">Остаток</span>
-                <span class="text-cerber-400">{{ "%.2f"|format(result.balance_after) }} {{ result.currency }}</span>
-            </div>
-            <div class="flex justify-between py-2 border-b border-gray-800">
-                <span class="text-gray-500">Статус</span>
-                <span>{{ result.order.status }}</span>
-            </div>
-            {% if result.order.delivery_payload %}
-            <div class="mt-4">
-                <div class="text-gray-500 text-xs uppercase mb-2">Данные доставки</div>
-                <pre class="bg-gray-800 rounded-lg p-3 text-xs text-gray-300 overflow-x-auto">{{ result.order.delivery_payload }}</pre>
-            </div>
-            {% endif %}
+        <div class="info-row">
+            <span class="key">SKU</span>
+            <span class="val">{{ result.order.sku_name }}</span>
         </div>
-        <div class="flex gap-3 mt-6">
-            <a href="/orders/{{ result.order.order_id }}" class="flex-1 text-center bg-cerber-600 hover:bg-cerber-500 text-white py-2 rounded-lg text-sm transition-colors">Перейти к заказу</a>
-            <a href="/store" class="flex-1 text-center bg-gray-800 hover:bg-gray-700 py-2 rounded-lg text-sm transition-colors">В магазин</a>
+        <div class="info-row">
+            <span class="key">Списано</span>
+            <span class="val red" style="color:var(--accent-2)">-{{ "%.2f"|format(result.charged_amount) }} {{ result.charged_currency }}</span>
         </div>
+        <div class="info-row">
+            <span class="key">Остаток</span>
+            <span class="val green">{{ "%.2f"|format(result.balance_after) }} {{ result.currency }}</span>
+        </div>
+        <div class="info-row">
+            <span class="key">Статус</span>
+            <span class="val">{{ result.order.status }}</span>
+        </div>
+    </div>
+    {% if result.order.delivery_payload %}
+    <div style="margin-top:16px">
+        <div class="eyebrow" style="margin-bottom:8px">Данные доставки</div>
+        <pre>{{ result.order.delivery_payload }}</pre>
     </div>
     {% endif %}
+    <div class="btn-row">
+        <a href="/orders/{{ result.order.order_id }}" class="btn">К заказу</a>
+        <a href="/store" class="ghost-btn">В магазин</a>
+    </div>
 </div>
+{% endif %}
 
 {% endblock %}

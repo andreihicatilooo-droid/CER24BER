@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Сделка не найдена — CERBER{% endblock %}
 {% block content %}
-<div class="text-center text-gray-500 py-16">
-    <div class="text-4xl mb-4">🔍</div>
-    <h1 class="text-xl font-bold text-gray-300 mb-2">Сделка не найдена</h1>
-    <p class="mb-4">Возможно, она была удалена или у вас нет доступа.</p>
-    <a href="/deals" class="text-cerber-400 hover:text-cerber-300">← Вернуться к сделкам</a>
+<div class="empty-state">
+    <p>Сделка не найдена</p>
+    <div class="sub">Возможно, она была удалена или у вас нет доступа.</div>
+    <div style="margin-top:16px">
+        <a href="/deals" class="ghost-btn btn-sm">← К сделкам</a>
+    </div>
 </div>
 {% endblock %}

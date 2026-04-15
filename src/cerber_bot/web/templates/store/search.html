@@ -2,57 +2,53 @@
 {% block title %}Поиск — CERBER{% endblock %}
 {% block content %}
 
-<div class="flex items-center gap-2 mb-6">
-    <a href="/store" class="text-gray-500 hover:text-cerber-400 transition-colors">← Магазин</a>
-    <span class="text-gray-700">/</span>
-    <span class="text-gray-300 font-medium">Поиск</span>
-</div>
+<nav class="breadcrumb">
+    <a href="/store">Магазин</a>
+    <span class="sep">/</span>
+    <span>Поиск</span>
+</nav>
 
-<form action="/store/search" method="get" class="mb-6">
-    <div class="flex gap-2">
-        <input type="text" name="q" value="{{ query }}" placeholder="Поиск товаров..."
-               class="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-cerber-500 transition-colors">
-        <button type="submit" class="bg-cerber-600 hover:bg-cerber-500 text-white px-6 py-3 rounded-xl font-medium transition-colors">
-            🔍
-        </button>
+<form action="/store/search" method="get" style="margin-bottom:16px">
+    <div class="form-row">
+        <input type="text" name="q" value="{{ query }}" placeholder="ПОИСК ТОВАРОВ...">
+        <button type="submit" class="btn btn-sm">Найти</button>
     </div>
 </form>
 
 {% if error %}
-<div class="bg-red-900/30 border border-red-800 text-red-300 rounded-lg p-3 mb-6 text-sm">{{ error }}</div>
+<div class="alert danger" style="margin-bottom:14px">{{ error }}</div>
 {% endif %}
 
 {% if query and products %}
-<p class="text-gray-500 text-sm mb-4">Найдено: {{ page_info.total_items if page_info else products|length }}</p>
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+<div style="font-size:0.8rem;color:var(--text-soft);margin-bottom:12px;letter-spacing:.08em;text-transform:uppercase">
+    Найдено: {{ page_info.total_items if page_info else products|length }}
+</div>
+<div class="item-grid fade-up">
     {% for p in products %}
-    <a href="/store/product/{{ p.product_id }}"
-       class="bg-gray-900 border border-gray-800 hover:border-cerber-600 rounded-xl p-5 transition-colors group">
-        <div class="font-medium group-hover:text-cerber-400 transition-colors mb-2">{{ p.name }}</div>
-        <div class="text-gray-500 text-sm mb-3 line-clamp-2">{{ p.summary }}</div>
-        <div class="flex items-center justify-between">
+    <a href="/store/product/{{ p.product_id }}" class="product-card">
+        <div class="item-name">{{ p.name }}</div>
+        <p class="item-desc">{{ p.summary }}</p>
+        <div class="price-row">
             {% if p.min_price is not none %}
-            <span class="text-cerber-400 font-semibold">{{ "%.2f"|format(p.min_price) }} {{ p.currency or '' }}</span>
+            <span class="price-val">{{ "%.2f"|format(p.min_price) }} {{ p.currency or '' }}</span>
             {% endif %}
-            <span class="text-gray-600 text-xs">{{ p.total_stock }} шт.</span>
+            <span class="price-muted">{{ p.total_stock }} шт.</span>
         </div>
     </a>
     {% endfor %}
 </div>
 {% elif query %}
-<div class="text-center text-gray-500 py-12">Ничего не найдено по запросу «{{ query }}»</div>
+<div class="empty-state">Ничего не найдено по запросу «{{ query }}»</div>
 {% endif %}
 
 {% if page_info and page_info.total_pages > 1 %}
-<div class="flex justify-center gap-2 mt-8">
+<div class="pagination">
     {% if page_info.has_previous %}
-    <a href="/store/search?q={{ query }}&page={{ page_info.page - 1 }}"
-       class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm transition-colors">← Назад</a>
+    <a href="/store/search?q={{ query }}&page={{ page_info.page - 1 }}" class="page-btn">← Назад</a>
     {% endif %}
-    <span class="bg-gray-900 px-4 py-2 rounded-lg text-sm text-gray-400">{{ page_info.page }} / {{ page_info.total_pages }}</span>
+    <span class="page-info">{{ page_info.page }} / {{ page_info.total_pages }}</span>
     {% if page_info.has_next %}
-    <a href="/store/search?q={{ query }}&page={{ page_info.page + 1 }}"
-       class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm transition-colors">Далее →</a>
+    <a href="/store/search?q={{ query }}&page={{ page_info.page + 1 }}" class="page-btn">Далее →</a>
     {% endif %}
 </div>
 {% endif %}
