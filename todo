@@ -5,10 +5,7 @@ _Обновлено: 2026-04-15_
 
 ## 🔴 Критично
 
-- [ ] Race condition на балансе — SELECT FOR UPDATE
-      📂 Файлы: `db/repositories/users.py`, `services/payments.py`, `services/deals.py`, `services/store.py`
-      ⚠️ Риск: SQLite не поддерживает FOR UPDATE — тесты адаптировать (пропускать lock в sqlite-режиме); флаг `with_lock=True` добавить в `UserRepository.get_by_telegram_id`; без lock двойное зачисление при дублирующих NicePay webhook
-      ✅ Готово когда: `.with_for_update()` при `with_lock=True`; `payment.status=="paid"` + lock предотвращают дубль; `get_errors` чист
+- [x] Race condition на балансе — SELECT FOR UPDATE — _2026-04-15_
 
 ---
 
@@ -153,3 +150,4 @@ _Обновлено: 2026-04-15_
 - [x] Обернуть httpx.ConnectError и таймаут в GiftApiError — _2026-04-15_
 - [x] Убрать dev:balance из профиля основного бота — _2026-04-15_
 - [x] Статистика пользователей в admin-боте — _2026-04-15_
+- [x] Race condition на балансе — SELECT FOR UPDATE — _2026-04-15_

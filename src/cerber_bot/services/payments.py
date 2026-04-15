@@ -19,6 +19,7 @@ from cerber_bot.db.repositories.users import UserRepository
 from cerber_bot.db.repositories.wallet import WalletTransactionRepository
 from cerber_bot.integrations.nicepay import NicePayClient, NicePayError
 from cerber_bot.services.exchange import ExchangeRateError, ExchangeRateService
+from cerber_bot.services.store import format_money
 from cerber_bot.texts import PAYMENT_SERVICE_TEXT
 
 
@@ -259,6 +260,11 @@ class PaymentService:
                 is_bot=False,
                 balance_currency=self.wallet_currency,
             )
+            # Блокируем строку пользователя, чтобы сериализовать конкурентные webhook-вызовы.
+            # После получения блокировки перечитываем платёж — если дублирующий вебхук
+            # уже успел зачислить средства и снять блокировку, статус будет "paid".
+            user = await user_repository.get_by_telegram_id(payment.telegram_id, with_lock=True)
+            await session.refresh(payment)
             wallet_currency = user.balance_currency or self.wallet_currency
 
             if payment.status == "paid":

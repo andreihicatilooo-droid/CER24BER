@@ -13,10 +13,18 @@ class UserRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get_by_telegram_id(self, telegram_id: int) -> TelegramUser | None:
+    async def get_by_telegram_id(self, telegram_id: int, *, with_lock: bool = False) -> TelegramUser | None:
         query = select(TelegramUser).where(TelegramUser.telegram_id == telegram_id)
+        if with_lock and not self._is_sqlite():
+            query = query.with_for_update()
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
+
+    def _is_sqlite(self) -> bool:
+        try:
+            return self.session.get_bind().dialect.name == "sqlite"
+        except Exception:
+            return False
 
     async def get_by_username(self, username: str) -> TelegramUser | None:
         normalized = username.strip().lstrip("@").lower()

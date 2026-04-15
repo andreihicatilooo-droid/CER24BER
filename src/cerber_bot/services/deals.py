@@ -279,6 +279,8 @@ class DealService:
                 is_bot=telegram_user.is_bot,
                 balance_currency=self.wallet_currency,
             )
+            # Блокируем строку покупателя перед изменением баланса
+            buyer = await user_repository.get_by_telegram_id(buyer.telegram_id, with_lock=True)
             seller = await user_repository.find_by_identifier(seller_identifier)
             if seller is None:
                 raise DealServiceError(DEAL_SERVICE_TEXT.PARTNER_NOT_FOUND)
@@ -375,7 +377,7 @@ class DealService:
             if telegram_id not in {deal.buyer_telegram_id, deal.seller_telegram_id}:
                 raise DealPermissionError(DEAL_SERVICE_TEXT.DEAL_PERMISSION_DENIED)
 
-            buyer = await user_repository.get_by_telegram_id(deal.buyer_telegram_id)
+            buyer = await user_repository.get_by_telegram_id(deal.buyer_telegram_id, with_lock=True)
             if buyer is None:
                 raise DealServiceError(DEAL_SERVICE_TEXT.BUYER_NOT_FOUND)
 
@@ -484,8 +486,8 @@ class DealService:
             if deal.status not in {"active", "disputed"}:
                 raise DealStateError(DEAL_SERVICE_TEXT.DEAL_CANNOT_CONFIRM)
 
-            buyer = await user_repository.get_by_telegram_id(deal.buyer_telegram_id)
-            seller = await user_repository.get_by_telegram_id(deal.seller_telegram_id)
+            buyer = await user_repository.get_by_telegram_id(deal.buyer_telegram_id, with_lock=True)
+            seller = await user_repository.get_by_telegram_id(deal.seller_telegram_id, with_lock=True)
             if buyer is None or seller is None:
                 raise DealServiceError(DEAL_SERVICE_TEXT.DEAL_PARTICIPANTS_NOT_FOUND)
 
@@ -547,8 +549,8 @@ class DealService:
             if deal.status != "disputed":
                 raise DealStateError(DEAL_SERVICE_TEXT.MODERATION_ONLY_DISPUTED)
 
-            buyer = await user_repository.get_by_telegram_id(deal.buyer_telegram_id)
-            seller = await user_repository.get_by_telegram_id(deal.seller_telegram_id)
+            buyer = await user_repository.get_by_telegram_id(deal.buyer_telegram_id, with_lock=True)
+            seller = await user_repository.get_by_telegram_id(deal.seller_telegram_id, with_lock=True)
             if buyer is None or seller is None:
                 raise DealServiceError(DEAL_SERVICE_TEXT.DEAL_PARTICIPANTS_NOT_FOUND)
 
@@ -696,6 +698,8 @@ class DealService:
                 is_bot=telegram_user.is_bot,
                 balance_currency=self.wallet_currency,
             )
+            # Блокируем строку пользователя перед изменением баланса
+            user = await user_repository.get_by_telegram_id(user.telegram_id, with_lock=True)
             open_request = await withdrawal_repository.get_open_for_user(user.telegram_id)
             if open_request is not None:
                 raise WithdrawalError(DEAL_SERVICE_TEXT.OPEN_WITHDRAWAL_EXISTS)
@@ -752,7 +756,7 @@ class DealService:
             if request.status != "requested":
                 raise WithdrawalError(DEAL_SERVICE_TEXT.WITHDRAWAL_CANNOT_CANCEL)
 
-            user = await user_repository.get_by_telegram_id(telegram_id)
+            user = await user_repository.get_by_telegram_id(telegram_id, with_lock=True)
             if user is None:
                 raise WithdrawalError(DEAL_SERVICE_TEXT.USER_NOT_FOUND)
 

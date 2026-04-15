@@ -561,7 +561,7 @@ class StoreService:
             wallet_repository = WalletTransactionRepository(session)
             order_repository = UserOrderRepository(session)
 
-            user = await user_repository.get_by_telegram_id(telegram_user.id)
+            user = await user_repository.get_by_telegram_id(telegram_user.id, with_lock=True)
             if user is None:
                 raise StoreServiceError(STORE_SERVICE_TEXT.USER_NOT_FOUND_AFTER_AUTH)
 
