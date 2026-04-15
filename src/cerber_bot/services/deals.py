@@ -818,6 +818,14 @@ class DealService:
             if normalized_action == "approve":
                 request.status = "approved"
                 request.resolution_note = DEAL_SERVICE_TEXT.withdrawal_approved_by_moderator(moderator_id)
+                await wallet_repository.add(
+                    telegram_id=user.telegram_id,
+                    transaction_type="withdrawal_approved",
+                    amount=-amount,
+                    currency=request.currency,
+                    description=DEAL_SERVICE_TEXT.withdrawal_approved_description(request.id),
+                    reference=f"withdrawal:{request.id}",
+                )
             else:
                 user.balance += amount
                 request.status = "rejected"

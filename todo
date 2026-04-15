@@ -19,12 +19,6 @@ _Обновлено: 2026-04-15_
       ⚠️ Риск: `bot.download()` возвращает `BytesIO | None` — проверять; nbox stateless per call (`async with NboxClient()`); если parse_mode="HTML" не передаётся в `notify_user_safe` — добавить; MediaGroup → несколько сообщений → несколько ссылок (приемлемо); ошибка nbox не должна ломать пересылку
       ✅ Готово когда: отправка фото в сделку → контрагент получает фото + кликабельную ссылку nbox.me; при недоступности nbox — фото пересылается без ссылки, WARNING в лог
 
-- [ ] Нет WalletTransaction при одобрении вывода (баг аудита)
-      📂 Файлы: `services/deals.py`
-      ⚠️ Риск: найти блок `action == "approve"` в `moderate_withdrawal_request`; не трогать блок `reject` — там транзакция уже есть; `amount` отрицательный (списание)
-      ✅ Готово когда: после `status=approved` создаётся `WalletTransaction(type="withdrawal_approved", amount=-amount)`; история кошелька показывает факт списания
-
-
 - [ ] Статистика пользователей в admin-боте
       📂 Файлы: `db/repositories/users.py`, `services/users.py`, `handlers/admin.py`, `keyboards/admin.py`, `texts.py`
       ⚠️ Риск: `count_active_since` требует timezone-aware datetime — использовать `utcnow()` из `db/models.py`; `build_user_service()` создаёт новый экземпляр на каждый вызов — OK; кнопка статистики расширяет `build_admin_home_keyboard` — проверить что умещается
@@ -150,6 +144,8 @@ _Обновлено: 2026-04-15_
 
 ## ✅ Выполнено
 
+- [x] Killer предыдущих процессов при старте launcher — _2026-04-15_
+- [x] Нет WalletTransaction при одобрении вывода (баг аудита) — _2026-04-15_
 - [x] Killer предыдущих процессов при старте launcher — _2026-04-15_
 - [x] Заглушить 9 файлов провайдерного слоя — _2026-04-15_
 - [x] Удалить 6 мёртвых полей из config.py + .env.example + launcher.py — _2026-04-15_

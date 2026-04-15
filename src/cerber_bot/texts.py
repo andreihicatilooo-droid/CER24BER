@@ -655,6 +655,7 @@ class DEAL_SERVICE_TEXT:
     WITHDRAWAL_HELD_UNAVAILABLE = "Заблокированные средства по заявке уже недоступны."
     WITHDRAWAL_APPROVED_BY_MODERATOR = "Одобрено модератором {moderator_id}"
     WITHDRAWAL_REJECTED_BY_MODERATOR = "Отклонено модератором {moderator_id}"
+    WITHDRAWAL_APPROVED_DESCRIPTION = "Вывод средств по заявке #{request_id}"
     WITHDRAWAL_REJECT_REFUND_DESCRIPTION = "Возврат средств по отклоненной заявке #{request_id}"
     SYSTEM_SENDER = "Система"
     UNKNOWN_USER = "неизвестный пользователь"
@@ -712,6 +713,10 @@ class DEAL_SERVICE_TEXT:
     @classmethod
     def withdrawal_rejected_by_moderator(cls, moderator_id: int) -> str:
         return cls.WITHDRAWAL_REJECTED_BY_MODERATOR.format(moderator_id=moderator_id)
+
+    @classmethod
+    def withdrawal_approved_description(cls, request_id: int) -> str:
+        return cls.WITHDRAWAL_APPROVED_DESCRIPTION.format(request_id=request_id)
 
     @classmethod
     def withdrawal_reject_refund_description(cls, request_id: int) -> str:
