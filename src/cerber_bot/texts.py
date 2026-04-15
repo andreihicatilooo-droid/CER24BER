@@ -560,42 +560,6 @@ class GIFTAPI_SERVICE_TEXT:
         return cls.REQUIRED_FIELD.format(field_name=field_name)
 
 
-class CATALOG_PROVIDER_TEXT:
-    UNTITLED_PRODUCT = "Без названия"
-    INVALID_PRICE = "Некорректная цена: {value!r}"
-    INVALID_STOCK = "Некорректный остаток: {value!r}"
-    GIFTAPI_DENOMINATION = "Номинал: {denomination} {currency}"
-    GIFTAPI_MAX_PER_ORDER = "Максимум в заказе: {count}"
-
-    @classmethod
-    def invalid_price(cls, value: object) -> str:
-        return cls.INVALID_PRICE.format(value=value)
-
-    @classmethod
-    def invalid_stock(cls, value: object) -> str:
-        return cls.INVALID_STOCK.format(value=value)
-
-    @classmethod
-    def giftapi_denomination(cls, denomination: object, currency: object) -> str:
-        return cls.GIFTAPI_DENOMINATION.format(denomination=denomination, currency=currency)
-
-    @classmethod
-    def giftapi_max_per_order(cls, count: int) -> str:
-        return cls.GIFTAPI_MAX_PER_ORDER.format(count=count)
-
-
-class DEMO_CATALOG_TEXT:
-    STARTER_TITLE = "CERBER Starter Pack"
-    STARTER_DESCRIPTION = "Базовый набор товаров для запуска демо-витрины магазина."
-    STARTER_CATEGORY = "Стартовые наборы"
-    PREMIUM_TITLE = "CERBER Premium Box"
-    PREMIUM_DESCRIPTION = "Премиальный товар для витрины с примером остатка и категории."
-    PREMIUM_CATEGORY = "Премиум"
-    DIGITAL_KEY_TITLE = "CERBER Digital Key"
-    DIGITAL_KEY_DESCRIPTION = "Цифровой товар, который можно объединять с внешними API-поставщиками."
-    DIGITAL_KEY_CATEGORY = "Цифровые товары"
-
-
 class STORE_SERVICE_TEXT:
     INSUFFICIENT_FUNDS = "Недостаточно средств. Доступно {available}, требуется {required}."
     REASON_DYNAMIC_PRICE = "цена рассчитывается динамически"
@@ -1018,3 +982,51 @@ class ADMIN_TEXT:
     BTN_REJECT_WITHDRAWAL = "Отклонить"
     BTN_OPEN_DEAL = "Подробнее"
     BTN_BACK_TO_LIST = "Назад к списку"
+
+    # Чат модератора в диспуте
+    BTN_WRITE_TO_CHAT = "✍ Написать в чат"
+    BTN_REFRESH_DEAL = "🔄 Обновить"
+    CHAT_INPUT_PROMPT = (
+        "Введите сообщение для участников сделки #{deal_id}:\n"
+        "Покупатель: {buyer} • Продавец: {seller}"
+    )
+    CHAT_SENT = "Сообщение отправлено участникам сделки #{deal_id}."
+    CHAT_RELAY_NOTIFICATION = "📨 <b>Сообщение от модератора</b> по сделке #{deal_id}:\n\n{body}"
+    DEAL_VIEW_MESSAGE_MOD_ROW = "{created_at} [⚖ Мод]: {body}"
+    CHAT_DEAL_NOT_ACTIVE = "Сообщение нельзя отправить — сделка уже не активна."
+
+    # Управление балансом пользователей
+    BTN_USERS = "👤 Пользователи"
+    BTN_BALANCE_ADD = "➕ Начислить"
+    BTN_BALANCE_SUB = "➖ Списать"
+    BTN_BACK_TO_USER = "↩ Назад к профилю"
+    USERS_FIND_PROMPT = "Введите Telegram ID или @username пользователя:"
+    USER_NOT_FOUND = "Пользователь не найден."
+    USER_PROFILE_TITLE = "<b>Пользователь #{telegram_id}</b>"
+    USER_PROFILE_NAME = "Имя: {name}"
+    USER_PROFILE_USERNAME = "Username: @{username}"
+    USER_PROFILE_BALANCE = "Доступно: {balance} {currency}"
+    USER_PROFILE_HELD = "Заблокировано: {held} {currency}"
+    BALANCE_DELTA_PROMPT = (
+        "Текущий баланс: <b>{balance} {currency}</b>\n\n"
+        "Введите сумму изменения:\n"
+        "<code>+100</code> — начислить 100\n"
+        "<code>-50</code> — списать 50"
+    )
+    BALANCE_ADJUSTED = "✓ Баланс изменён: {old} → <b>{new} {currency}</b>"
+    BALANCE_DELTA_INVALID = "Неверный формат. Введите число, например <code>+100</code> или <code>-50</code>."
+    BALANCE_NEGATIVE_ERROR = "Недостаточно средств — баланс не может стать отрицательным."
+
+    # Статус системы
+    BTN_STATUS = "⚙ Статус"
+    STATUS_TITLE = "<b>⚙ Статус системы</b>"
+    STATUS_SERVICES_HEADER = "\n<b>Сервисы:</b>"
+    STATUS_SERVICE_OK = "  ✅ {name}"
+    STATUS_SERVICE_FAIL = "  ❌ {name}: {reason}"
+    STATUS_LOGS_HEADER = "\n<b>Лог {name} (последние {n} строк):</b>"
+    STATUS_LOG_EMPTY = "<i>(лог пуст)</i>"
+    STATUS_LOG_NOT_FOUND = "<i>(файл не найден)</i>"
+    BTN_LOG_BOT = "📄 Лог бота"
+    BTN_LOG_ERR = "🔴 Ошибки"
+    BTN_LOG_TUNNEL = "🌐 Туннель"
+    BTN_CHECK_SERVICES = "🔌 Проверить сервисы"

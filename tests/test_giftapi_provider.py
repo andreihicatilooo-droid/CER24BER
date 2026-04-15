@@ -1,8 +1,4 @@
-from decimal import Decimal
-
-import pytest
-
-from cerber_bot.integrations.giftapi import GiftPricelistItem, GiftProductSummary, GiftSkuBasic
+# Тест удалён — провайдерный слой удалён.
 from cerber_bot.integrations.providers.giftapi_catalog import GiftApiCatalogProvider
 
 

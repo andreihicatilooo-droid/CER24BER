@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Request, Query
 from fastapi.responses import HTMLResponse
 
-from cerber_bot.web.deps import get_container, get_current_user_id, notify_user, templates
+from cerber_bot.web.deps import build_fake_user, get_container, get_current_user_id, notify_user, templates
 
 router = APIRouter(prefix="/store", tags=["store"])
 
@@ -81,18 +81,9 @@ async def purchase_sku(request: Request, product_id: str, sku_id: str):
     user_id = get_current_user_id(request)
     container = get_container(request)
 
-    class FakeUser:
-        def __init__(self, tid):
-            self.id = tid
-            self.username = request.session.get("username")
-            self.first_name = request.session.get("first_name", "")
-            self.last_name = None
-            self.language_code = "ru"
-            self.is_bot = False
-
     try:
         result = await container.store_service.purchase_offer(
-            FakeUser(user_id), product_id=product_id, sku_id=sku_id,
+            build_fake_user(user_id, request.session), product_id=product_id, sku_id=sku_id,
         )
         await notify_user(
             request, user_id,

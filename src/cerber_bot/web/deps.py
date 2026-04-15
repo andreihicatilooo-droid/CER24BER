@@ -92,3 +92,16 @@ async def notify_user(request: Request, user_id: int, text: str) -> None:
         await bot.send_message(user_id, text)
     except Exception as exc:
         logger.warning("Failed to send notification to %s: %s", user_id, exc)
+
+
+def build_fake_user(user_id: int, session: dict) -> object:
+    """Упрощённый объект пользователя для web-маршрутов."""
+    class _WebUser:
+        def __init__(self) -> None:
+            self.id = user_id
+            self.username = session.get("username")
+            self.first_name = session.get("first_name", "")
+            self.last_name = None
+            self.language_code = "ru"
+            self.is_bot = False
+    return _WebUser()

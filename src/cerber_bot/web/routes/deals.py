@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 from fastapi import APIRouter, Request, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from cerber_bot.web.deps import get_container, get_current_user_id, notify_user, templates
+from cerber_bot.web.deps import build_fake_user, get_container, get_current_user_id, notify_user, templates
 
 router = APIRouter(prefix="/deals", tags=["deals"])
 
@@ -56,19 +56,10 @@ async def deal_create(
     user_id = get_current_user_id(request)
     container = get_container(request)
 
-    class FakeUser:
-        def __init__(self, tid, session):
-            self.id = tid
-            self.username = session.get("username")
-            self.first_name = session.get("first_name", "")
-            self.last_name = None
-            self.language_code = "ru"
-            self.is_bot = False
-
     try:
         parsed_amount = Decimal(amount)
         result = await container.deal_service.create_deal_request(
-            FakeUser(user_id, request.session),
+            build_fake_user(user_id, request.session),
             seller_identifier=partner.strip(),
             amount=parsed_amount,
             terms=terms.strip(),
@@ -112,19 +103,10 @@ async def withdrawal_create(
     user_id = get_current_user_id(request)
     container = get_container(request)
 
-    class FakeUser:
-        def __init__(self, tid, session):
-            self.id = tid
-            self.username = session.get("username")
-            self.first_name = session.get("first_name", "")
-            self.last_name = None
-            self.language_code = "ru"
-            self.is_bot = False
-
     try:
         parsed = Decimal(amount)
         result = await container.deal_service.create_withdrawal_request(
-            FakeUser(user_id, request.session),
+            build_fake_user(user_id, request.session),
             amount_usdt=parsed,
             network=network,
             address=address.strip(),

@@ -486,13 +486,20 @@ class GiftApiClient:
         if extra_headers:
             headers.update(extra_headers)
 
-        response = await self.http_client.request(
-            method,
-            f"{self.base_url}{path}",
-            headers=headers,
-            params=params,
-            json=json_body,
-        )
+        try:
+            response = await self.http_client.request(
+                method,
+                f"{self.base_url}{path}",
+                headers=headers,
+                params=params,
+                json=json_body,
+            )
+        except httpx.TimeoutException as exc:
+            raise GiftApiError(f"GiftAPI timeout ({method} {path})") from exc
+        except httpx.ConnectError as exc:
+            raise GiftApiError(f"GiftAPI недоступен ({method} {path}): {exc}") from exc
+        except httpx.HTTPError as exc:
+            raise GiftApiError(f"GiftAPI сетевая ошибка ({method} {path}): {exc}") from exc
 
         try:
             payload = response.json()

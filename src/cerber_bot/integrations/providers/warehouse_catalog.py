@@ -1,8 +1,4 @@
-from collections.abc import Iterable, Mapping
-
-import httpx
-
-from cerber_bot.integrations.base import ProviderError
+"""Удалён — провайдерный слой не используется в production."""
 from cerber_bot.integrations.http import BaseHttpCatalogProvider
 from cerber_bot.integrations.schemas import Product
 from cerber_bot.texts import CATALOG_PROVIDER_TEXT

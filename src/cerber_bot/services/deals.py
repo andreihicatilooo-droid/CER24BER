@@ -1018,3 +1018,44 @@ class DealService:
             for request in requests:
                 views.append(await self._to_withdrawal_view(request))
             return views
+
+    async def send_moderator_message(
+        self,
+        moderator_id: int,
+        *,
+        deal_id: int,
+        body: str,
+    ) -> tuple[DealView, int, int]:
+        """Отправить сообщение от модератора в чат сделки.
+
+        Возвращает (DealView, buyer_telegram_id, seller_telegram_id).
+        """
+        if moderator_id not in self.moderator_ids:
+            raise DealPermissionError(DEAL_SERVICE_TEXT.MODERATOR_ONLY)
+
+        normalized_body = body.strip()
+        if not normalized_body:
+            raise DealServiceError(DEAL_SERVICE_TEXT.DEAL_CHAT_EMPTY)
+
+        async with self.session_factory() as session:
+            deal_repo = EscrowDealRepository(session)
+            message_repo = EscrowDealMessageRepository(session)
+
+            deal = await deal_repo.get_by_id(deal_id)
+            if deal is None:
+                raise DealServiceError(DEAL_SERVICE_TEXT.DEAL_NOT_FOUND)
+            if deal.status not in {"active", "disputed"}:
+                raise DealStateError(DEAL_SERVICE_TEXT.CHAT_ONLY_ACTIVE_OR_DISPUTE)
+
+            await message_repo.add(
+                deal_id=deal.id,
+                sender_telegram_id=moderator_id,
+                sender_role="moderator",
+                content_type="text",
+                body=normalized_body,
+            )
+            deal.updated_at = utcnow()
+            await session.commit()
+
+            view = await self._build_deal_view(session, deal, viewer_id=None)
+            return view, deal.buyer_telegram_id, deal.seller_telegram_id

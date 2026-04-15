@@ -1,8 +1,4 @@
-from decimal import Decimal
-
-from cerber_bot.integrations.base import CatalogProvider
-from cerber_bot.integrations.schemas import Product
-from cerber_bot.texts import DEMO_CATALOG_TEXT
+"""Удалён — провайдерный слой не используется в production."""
 
 
 class DemoCatalogProvider(CatalogProvider):

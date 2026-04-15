@@ -1,10 +1,4 @@
-from collections.abc import Mapping
-from decimal import Decimal, InvalidOperation
-
-import httpx
-
-from cerber_bot.integrations.base import CatalogProvider, ProviderError
-from cerber_bot.texts import CATALOG_PROVIDER_TEXT
+"""Удалён — провайдерный слой не используется в production."""
 
 
 class BaseHttpCatalogProvider(CatalogProvider):

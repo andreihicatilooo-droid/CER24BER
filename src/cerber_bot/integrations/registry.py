@@ -1,3 +1,5 @@
+"""Удалён — провайдерный слой не используется в production."""
+
 import logging
 
 import httpx

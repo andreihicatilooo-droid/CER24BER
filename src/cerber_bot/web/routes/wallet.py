@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 from fastapi import APIRouter, Request, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from cerber_bot.web.deps import get_container, get_current_user_id, notify_user, templates
+from cerber_bot.web.deps import build_fake_user, get_container, get_current_user_id, notify_user, templates
 
 router = APIRouter(prefix="/wallet", tags=["wallet"])
 
@@ -36,18 +36,9 @@ async def wallet_topup(request: Request, amount: str = Form(...)):
             "session": request.session,
         })
 
-    class FakeUser:
-        def __init__(self, tid, session):
-            self.id = tid
-            self.username = session.get("username")
-            self.first_name = session.get("first_name", "")
-            self.last_name = None
-            self.language_code = "ru"
-            self.is_bot = False
-
     try:
         link = await container.payment_service.create_top_up_link(
-            FakeUser(user_id, request.session), amount=parsed,
+            build_fake_user(user_id, request.session), amount=parsed,
         )
         await notify_user(
             request, user_id,

@@ -387,7 +387,7 @@ PROXY_TEST_TARGETS: dict[str, str] = {
 SERVICE_CHECKS: list[tuple[str, str, str | None, str, str | None]] = [
     ("Telegram API",  "TELEGRAM_API_URL", "TELEGRAM_PROXY", "https://api.telegram.org", None),
     ("NicePay",       "NICEPAY_BASE_URL", "NICEPAY_PROXY",  "https://nicepay.io",       None),
-    ("GiftAPI",       "GIFTAPI_BASE_URL", None,             "https://api.giftapi.io",   "ENABLE_GIFTAPI_PROVIDER"),
+    ("GiftAPI",       "GIFTAPI_BASE_URL", None,             "https://api.giftapi.io",   None),
 ]
 
 
@@ -615,14 +615,6 @@ ENV_SECTIONS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
     ]),
     ("GiftAPI (каталог товаров)", [
         (
-            "ENABLE_GIFTAPI_PROVIDER",
-            "Включить каталог GiftAPI (подарочные карты, eSIM и др.).\n"
-            "    true — товары GiftAPI появятся в витрине бота.\n"
-            "    false — каталог GiftAPI отключён.",
-            "true / false",
-            "true",
-        ),
-        (
             "GIFTAPI_BASE_URL",
             "URL API GiftAPI.\n"
             "    Sandbox — для тестов (заказы не списывают деньги).\n"
@@ -687,14 +679,6 @@ ENV_SECTIONS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
         ),
     ]),
     ("Дополнительно", [
-        (
-            "ENABLE_DEMO_PROVIDER",
-            "Демо-провайдер каталога с тестовыми товарами.\n"
-            "    true — в витрине появятся демо-товары (для проверки).\n"
-            "    false — только реальные провайдеры.",
-            "true / false",
-            "false",
-        ),
         (
             "MODERATOR_IDS",
             "Telegram ID модераторов через запятую. Могут принимать сделки.",

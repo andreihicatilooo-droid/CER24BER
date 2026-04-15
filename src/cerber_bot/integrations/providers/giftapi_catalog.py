@@ -1,9 +1,4 @@
-from __future__ import annotations
-
-import asyncio
-import re
-
-from cerber_bot.integrations.base import CatalogProvider
+"""Удалён — провайдерный слой не используется в production."""
 from cerber_bot.integrations.giftapi import GiftApiClient, GiftPricelistItem, GiftProductSummary, GiftSkuBasic
 from cerber_bot.integrations.schemas import Product
 from cerber_bot.texts import CATALOG_PROVIDER_TEXT

@@ -1,3 +1,5 @@
+"""Удалён — провайдерный слой не используется в production."""
+
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal

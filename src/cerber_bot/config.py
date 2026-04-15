@@ -36,12 +36,6 @@ class Settings(BaseSettings):
     exchange_rate_api_url: str = Field(default="https://open.er-api.com/v6/latest/USD", alias="EXCHANGE_RATE_API_URL")
     fallback_usdt_rub_rate: Decimal = Field(default=Decimal("90.00"), alias="FALLBACK_USDT_RUB_RATE")
     wallet_currency: str = Field(default="USD", alias="WALLET_CURRENCY")
-    enable_demo_provider: bool = Field(default=True, alias="ENABLE_DEMO_PROVIDER")
-    enable_giftapi_provider: bool = Field(default=True, alias="ENABLE_GIFTAPI_PROVIDER")
-    rest_provider_url: str | None = Field(default=None, alias="REST_PROVIDER_URL")
-    rest_provider_token: str | None = Field(default=None, alias="REST_PROVIDER_TOKEN")
-    warehouse_provider_url: str | None = Field(default=None, alias="WAREHOUSE_PROVIDER_URL")
-    warehouse_provider_token: str | None = Field(default=None, alias="WAREHOUSE_PROVIDER_TOKEN")
     giftapi_base_url: str = Field(
         default="https://sandbox.giftapi.io/api/v1/partner",
         alias="GIFTAPI_BASE_URL",

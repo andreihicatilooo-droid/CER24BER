@@ -1,8 +1,4 @@
-from decimal import Decimal
-
-import pytest
-
-from cerber_bot.integrations.base import CatalogProvider
+# Тест удалён — провайдерный слой удалён.
 from cerber_bot.integrations.schemas import Product
 from cerber_bot.services.catalog import CatalogService
 
