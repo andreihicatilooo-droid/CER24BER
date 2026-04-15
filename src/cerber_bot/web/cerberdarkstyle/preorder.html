@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NULL RELAY — Очередь</title>
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <div class="signal-rain" aria-hidden="true" data-signal-rain></div>
+    <header class="site-header">
+      <div class="shell header-row">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="8" stroke="#cc0018" stroke-width="1.6"/>
+              <path d="M12 7v5l3 3" stroke="#cc0018" stroke-width="1.4" stroke-linecap="square"/>
+            </svg>
+          </span>
+          <span class="brand-copy">
+            <strong>NULL RELAY</strong>
+            <span>preorder / operator tunnel</span>
+          </span>
+        </a>
+
+        <nav class="header-nav">
+          <a href="index.html">Каталог</a>
+          <a class="is-active" href="preorder.html">Очередь</a>
+          <a href="auth.html">Вход</a>
+          <a href="chat.html">Чат</a>
+        </nav>
+
+        <div class="header-tools">
+          <button class="theme-toggle" type="button" aria-label="Режим" data-theme-toggle>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/>
+            </svg>
+          </button>
+          <div class="balance-chip">
+            <i>₽</i>
+            <div>
+              <strong>8 160 ₽</strong>
+              <span>Баланс</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <div class="shell page-split">
+          <article class="page-title fade-up">
+            <span class="eyebrow">preorder / operator_tunnel / wait_state</span>
+            <h1>Очередь как тёмный тоннель оператора: район выбран, назад не идёшь, только ждёшь ответ из темноты.</h1>
+            <p>
+              Здесь другой темп. Не витрина — ожидание. Дешёвая лампочка в пустом подъезде,
+              один путь вперёд и тихий курсор на экране пока оператор молчит.
+            </p>
+            <div class="page-actions">
+              <a class="btn" href="#preorder-grid">Открыть очередь</a>
+              <a class="ghost-btn" href="index.html">Вернуться в узел</a>
+            </div>
+          </article>
+
+          <aside class="timeline-card fade-up delay-1">
+            <h3 style="margin-top: 0;">Ритм очереди</h3>
+            <ul class="timeline-list">
+              <li>
+                <strong>1. Выбор района и позиции</strong>
+                Один алиас — один активный заказ. Без исключений. Без торга.
+              </li>
+              <li>
+                <strong>2. Фиксация слота и оплаты</strong>
+                Оплата подтверждает место в очереди. Отмена невозможна после списания.
+              </li>
+              <li>
+                <strong>3. Ответ оператора</strong>
+                Оператор выходит на связь в чате. Вопросы вне чата игнорируются.
+              </li>
+            </ul>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="shell section-shell fade-up delay-2">
+          <div class="section-heading">
+            <div>
+              <h2>Статус операторов</h2>
+              <p>Холодные метки. Никакого маркетинга. Только актуальная информация по сети.</p>
+            </div>
+          </div>
+
+          <div class="info-strip">
+            <article class="operator-card">
+              <strong>Время ответа</strong>
+              <p>8–15 минут. Если оператор молчит дольше — ждёшь. Так устроен этот канал.</p>
+            </article>
+            <article class="operator-card">
+              <strong>Режим связи</strong>
+              <p>Только через чат покупки. Других каналов нет. Анонимность — это условие, не опция.</p>
+            </article>
+            <article class="operator-card">
+              <strong>Протокол</strong>
+              <p>Без объяснений, без извинений. Либо маршрут работает, либо возврат без лишних слов.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="preorder-grid">
+        <div class="shell section-shell">
+          <div class="section-heading">
+            <div>
+              <h2>Города и позиции</h2>
+              <p>Только активные узлы. Закрытые районы не отображаются. Что видишь — то доступно.</p>
+            </div>
+            <div class="city-row" data-chip-group>
+              <button class="city-pill is-active" type="button" data-chip>Москва</button>
+              <button class="city-pill" type="button" data-chip>Казань</button>
+              <button class="city-pill" type="button" data-chip>Самара</button>
+            </div>
+          </div>
+
+          <div class="side-layout">
+            <div class="product-grid">
+              <article
+                class="product-card"
+                data-product-card
+                data-title="Concrete Queue"
+                data-price="5 400 ₽"
+                data-old-price=""
+                data-description="Слот оператора. Не товар на полке — место в очереди. Ответ в чате после подтверждения оплаты."
+                data-locations="ЦАО · Оператор A|ЮАО · Оператор B"
+              >
+                <div class="product-top">
+                  <div>
+                    <span class="tag hot">Operator queue</span>
+                    <h3>Concrete Queue</h3>
+                  </div>
+                  <div class="price-block">
+                    <strong>5 400 ₽</strong>
+                  </div>
+                </div>
+                <p>Место в очереди. Не товар. Оператор сам выйдет на связь когда придёт время. Молчи и жди.</p>
+                <div class="product-meta">
+                  <span class="badge">Ответ в чате</span>
+                  <span class="badge">2 оператора</span>
+                  <span class="badge">Оплата сразу</span>
+                </div>
+                <div class="card-actions">
+                  <button class="btn" type="button" data-open-product>Открыть</button>
+                  <a class="ghost-link" href="auth.html">Пополнить</a>
+                </div>
+              </article>
+
+              <article
+                class="product-card"
+                data-product-card
+                data-title="Lamp District"
+                data-price="6 100 ₽"
+                data-old-price="6 900 ₽"
+                data-description="Приоритетный слот. Выше в очереди. Оператор отвечает первым. Дороже — потому что быстрее."
+                data-locations="Кировский|Вахитовский|Советский"
+              >
+                <div class="product-top">
+                  <div>
+                    <span class="tag">Priority</span>
+                    <h3>Lamp District</h3>
+                  </div>
+                  <div class="price-block">
+                    <strong>6 100 ₽</strong>
+                    <span>6 900 ₽</span>
+                  </div>
+                </div>
+                <p>Для тех, кто не хочет ждать в конце тоннеля. Приоритет стоит денег. Скидка — ограниченное окно.</p>
+                <div class="product-meta">
+                  <span class="badge">Priority slot</span>
+                  <span class="badge"><strong>-11%</strong></span>
+                  <span class="badge">1–2 часа</span>
+                </div>
+                <div class="card-actions">
+                  <button class="btn" type="button" data-open-product>Открыть</button>
+                  <a class="ghost-link" href="index.html">Каталог</a>
+                </div>
+              </article>
+            </div>
+
+            <aside class="side-panel">
+              <h3>Правила очереди</h3>
+              <p class="muted">Очередь — это не магазин. Это тоннель. Ты входишь, платишь, ждёшь, получаешь.</p>
+              <ul class="info-list">
+                <li><span class="dot"></span><span>Один алиас — один активный слот в очереди.</span></li>
+                <li><span class="dot"></span><span>Отмена после оплаты невозможна. Деньги замораживаются.</span></li>
+                <li><span class="dot"></span><span>Оператор не обязан объяснять задержки. Это условие сети.</span></li>
+              </ul>
+
+              <div class="info-card" style="margin-top: 16px;">
+                <strong>Молчание — норма</strong>
+                <p class="muted">Отсутствие ответа не означает проблему. Оператор выйдет на связь когда посчитает нужным.</p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <nav class="mobile-dock">
+      <a href="index.html">Каталог</a>
+      <a class="is-active" href="preorder.html">Очередь</a>
+      <a href="auth.html">Вход</a>
+      <a href="chat.html">Чат</a>
+      <a href="index.html#reviews">Эфир</a>
+    </nav>
+
+    <div class="modal" data-modal>
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
+            <span class="eyebrow">tunnel / slot_details</span>
+            <h2 data-modal-title>UNKNOWN</h2>
+          </div>
+          <button class="icon-button" type="button" aria-label="Закрыть" data-close-modal>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="modal-grid">
+          <div>
+            <p class="muted" data-modal-description></p>
+            <ul class="info-list" data-modal-locations></ul>
+          </div>
+
+          <aside class="price-panel">
+            <strong data-modal-price>0 ₽</strong>
+            <span class="muted" data-modal-old-price></span>
+            <div class="card-actions" style="margin-top: 16px;">
+              <a class="btn" href="auth.html">Войти в узел</a>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <script src="assets/app.js"></script>
+  </body>
+</html>

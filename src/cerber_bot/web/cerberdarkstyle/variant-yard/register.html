@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ровное движение — Регистрация</title>
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <div class="scene-noise" aria-hidden="true"></div>
+    <div class="scene-beam" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="shell header-row">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">РД</span>
+          <span class="brand-copy">
+            <strong>Ровное движение</strong>
+            <span>регистрация / входной узел</span>
+          </span>
+        </a>
+
+        <nav class="header-nav">
+          <a href="index.html">Визитка</a>
+          <a class="is-active" href="register.html">Регистрация</a>
+          <a href="join.html">Команда</a>
+          <a href="chat.html">Чат</a>
+        </nav>
+
+        <a class="header-cta" href="chat.html">Открыть чат</a>
+      </div>
+    </header>
+
+    <main class="section">
+      <div class="shell form-layout">
+        <article class="form-card intro-card">
+          <span class="eyebrow">новая форма</span>
+          <h1>Вместо сухого логина здесь полноценный стартовый экран: alias, канал связи, город, мотивация и правила входа.</h1>
+          <p>
+            Форма сделана как мост между старой авторизацией и новым стилем. Её можно разбить на два реальных маршрута:
+            `register` и `login`, но визуально держать в одном темном сценарии входа.
+          </p>
+
+          <div class="intro-stack">
+            <div class="note-card">
+              <strong>Что получает пользователь</strong>
+              <p>Доступ к стартовым карточкам, внутренней support-комнате, контактам администраторов и навигации по разделам.</p>
+            </div>
+            <div class="note-card">
+              <strong>Что получает команда</strong>
+              <p>Чёткий профиль заявки: псевдоним, город, удобный канал связи, рабочее окно и краткий контекст.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="form-card">
+          <div class="section-head compact">
+            <div>
+              <span class="eyebrow">вход / заявка</span>
+              <h2>Создать новый alias</h2>
+            </div>
+            <p>Статический UI без реальной интеграции, только для проектирования форм и полей.</p>
+          </div>
+
+          <form class="data-form">
+            <div class="field-grid two-columns">
+              <label class="field">
+                <span>Alias</span>
+                <input type="text" placeholder="rovno.echo" />
+              </label>
+              <label class="field">
+                <span>Основной канал связи</span>
+                <input type="text" placeholder="@nickname или matrix id" />
+              </label>
+            </div>
+
+            <div class="field-grid two-columns">
+              <label class="field">
+                <span>Город</span>
+                <select>
+                  <option>Выберите город</option>
+                  <option>Москва</option>
+                  <option>Санкт-Петербург</option>
+                  <option>Казань</option>
+                  <option>Екатеринбург</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Формат связи</span>
+                <select>
+                  <option>Telegram</option>
+                  <option>Element</option>
+                  <option>Внутренний чат</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="field">
+              <span>Что нужно сейчас</span>
+              <textarea rows="5" placeholder="Коротко: покупки, поддержка, подключение к команде, общие вопросы"></textarea>
+            </label>
+
+            <div class="field-grid two-columns">
+              <label class="field">
+                <span>Пароль</span>
+                <input type="password" placeholder="••••••••••" />
+              </label>
+              <label class="field">
+                <span>Окно активности</span>
+                <input type="text" placeholder="например: 19:00-02:00" />
+              </label>
+            </div>
+
+            <label class="checkbox-row">
+              <input type="checkbox" />
+              <span>Понимаю, что это только дизайн-концепт: все поля и контакты демонстрационные.</span>
+            </label>
+
+            <div class="action-row">
+              <button class="btn" type="button">Создать доступ</button>
+              <a class="ghost-btn" href="chat.html">Открыть демо-чат</a>
+            </div>
+          </form>
+        </article>
+      </div>
+    </main>
+
+    <script src="assets/app.js"></script>
+  </body>
+</html>

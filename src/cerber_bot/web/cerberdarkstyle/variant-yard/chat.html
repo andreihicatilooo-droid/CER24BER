@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ровное движение — Внутренний чат</title>
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <div class="scene-noise" aria-hidden="true"></div>
+    <div class="scene-beam" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="shell header-row">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">РД</span>
+          <span class="brand-copy">
+            <strong>Ровное движение</strong>
+            <span>внутренний чат / после регистрации</span>
+          </span>
+        </a>
+
+        <nav class="header-nav">
+          <a href="index.html">Визитка</a>
+          <a href="register.html">Регистрация</a>
+          <a href="join.html">Команда</a>
+          <a class="is-active" href="chat.html">Чат</a>
+        </nav>
+
+        <a class="header-cta" href="register.html">Новый доступ</a>
+      </div>
+    </header>
+
+    <main class="section">
+      <div class="shell chat-layout">
+        <aside class="chat-sidebar form-card">
+          <div class="section-head compact">
+            <div>
+              <span class="eyebrow">комнаты</span>
+              <h2>Потоки</h2>
+            </div>
+          </div>
+
+          <div class="room-list">
+            <button class="room-button is-active" type="button" data-room-button data-room="support" data-room-title="Support room" data-room-status="админ на линии / ответ до 6 минут">
+              <strong>Support room</strong>
+              <span>вопросы, заявки, маршруты</span>
+            </button>
+            <button class="room-button" type="button" data-room-button data-room="contacts" data-room-title="Контакты и каналы" data-room-status="актуальные handles и резервные точки связи">
+              <strong>Контакты и каналы</strong>
+              <span>telegram / bot / element</span>
+            </button>
+            <button class="room-button" type="button" data-room-button data-room="team" data-room-title="Командный поток" data-room-status="набор, смены, короткие объявления">
+              <strong>Командный поток</strong>
+              <span>онбординг и смены</span>
+            </button>
+          </div>
+        </aside>
+
+        <section class="chat-room form-card">
+          <div class="chat-header">
+            <div>
+              <span class="eyebrow">после регистрации</span>
+              <h2 data-room-title>Support room</h2>
+            </div>
+            <p data-room-status>админ на линии / ответ до 6 минут</p>
+          </div>
+
+          <div class="message-list" data-room-feed>
+            <article class="message">
+              <span class="message-author">admin.north</span>
+              <p>Добро пожаловать. В этом макете чат показывает структуру, контакты и рабочий ритм после регистрации.</p>
+            </article>
+            <article class="message me">
+              <span class="message-author">rovno.echo</span>
+              <p>Нужен быстрый старт и список актуальных контактов.</p>
+            </article>
+          </div>
+
+          <div class="composer">
+            <input type="text" placeholder="Сообщение в демо-комнату" />
+            <button class="btn" type="button">Отправить</button>
+          </div>
+        </section>
+
+        <aside class="contact-rail form-card">
+          <div class="section-head compact">
+            <div>
+              <span class="eyebrow">контакты администраторов</span>
+              <h2>На связи</h2>
+            </div>
+          </div>
+
+          <div class="contact-stack">
+            <article class="mini-contact">
+              <strong>admin.north</strong>
+              <span>внутренний чат</span>
+              <p>@rovno_admin_north</p>
+            </article>
+            <article class="mini-contact">
+              <strong>support.bot</strong>
+              <span>telegram bot</span>
+              <p>@rovno_movement_bot</p>
+            </article>
+            <article class="mini-contact">
+              <strong>quiet.room</strong>
+              <span>element room</span>
+              <p>#rovno-movement:matrix.local</p>
+            </article>
+          </div>
+
+          <div class="note-card rail-note">
+            <strong>Смысл страницы</strong>
+            <p>Это безопасный mock внутреннего support-чата после регистрации. Здесь нет реальной синхронизации и внешних интеграций.</p>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <script src="assets/app.js"></script>
+  </body>
+</html>

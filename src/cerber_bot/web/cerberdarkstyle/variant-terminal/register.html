@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ровное движение — Регистрация Node</title>
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <div class="scanlines" aria-hidden="true"></div>
+    <div class="terminal-rain" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="shell header-row">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">01</span>
+          <span class="brand-copy">
+            <strong>Ровное движение</strong>
+            <span>register / access node</span>
+          </span>
+        </a>
+
+        <nav class="header-nav">
+          <a href="index.html">Визитка</a>
+          <a class="is-active" href="register.html">Регистрация</a>
+          <a href="join.html">Команда</a>
+          <a href="chat.html">Чат</a>
+        </nav>
+
+        <a class="header-cta" href="chat.html">Открыть чат</a>
+      </div>
+    </header>
+
+    <main class="section">
+      <div class="shell form-layout">
+        <article class="terminal-window intro-panel">
+          <span class="window-label">register / brief</span>
+          <h1>Новая форма выглядит как командный узел: один экран для заявки, входа, канала связи и рабочего ритма.</h1>
+          <p>
+            В этом варианте поля подчёркнуто функциональные. Сначала alias и канал связи, затем город, режим активности,
+            короткий контекст и подтверждение того, что пользователь понял правила входа.
+          </p>
+
+          <div class="bullet-stack">
+            <div class="inline-card">
+              <strong>После регистрации</strong>
+              <p>Появляется внутренняя комната, карточки администраторов и список резервных каналов.</p>
+            </div>
+            <div class="inline-card">
+              <strong>Для команды</strong>
+              <p>Заявка сразу даёт понятный профиль без лишней социальной биографии и длинной анкеты.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="terminal-window form-panel">
+          <div class="section-head compact">
+            <div>
+              <span class="window-label">input / form</span>
+              <h2>Создать новый профиль</h2>
+            </div>
+          </div>
+
+          <form class="data-form">
+            <div class="field-grid two-columns">
+              <label class="field">
+                <span>Alias</span>
+                <input type="text" placeholder="rvn.node.01" />
+              </label>
+              <label class="field">
+                <span>Handle</span>
+                <input type="text" placeholder="@handle или matrix id" />
+              </label>
+            </div>
+
+            <div class="field-grid two-columns">
+              <label class="field">
+                <span>Город</span>
+                <select>
+                  <option>Москва</option>
+                  <option>Санкт-Петербург</option>
+                  <option>Казань</option>
+                  <option>Екатеринбург</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Режим связи</span>
+                <select>
+                  <option>Telegram</option>
+                  <option>Element</option>
+                  <option>Внутренний чат</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="field-grid two-columns">
+              <label class="field">
+                <span>Окно активности</span>
+                <input type="text" placeholder="18:00-01:00" />
+              </label>
+              <label class="field">
+                <span>Пароль</span>
+                <input type="password" placeholder="••••••••••" />
+              </label>
+            </div>
+
+            <label class="field">
+              <span>Короткий контекст</span>
+              <textarea rows="5" placeholder="Что нужно: покупки, доступ к поддержке, подключение к команде, общие вопросы"></textarea>
+            </label>
+
+            <label class="checkbox-row">
+              <input type="checkbox" />
+              <span>Понимаю, что это только статический mock и все каналы показаны как дизайн-плейсхолдеры.</span>
+            </label>
+
+            <div class="action-row">
+              <button class="btn" type="button">Создать доступ</button>
+              <a class="ghost-btn" href="chat.html">Открыть room</a>
+            </div>
+          </form>
+        </article>
+      </div>
+    </main>
+
+    <script src="assets/app.js"></script>
+  </body>
+</html>

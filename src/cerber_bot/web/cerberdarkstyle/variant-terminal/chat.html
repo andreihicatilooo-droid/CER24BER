@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ровное движение — Support Room</title>
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <div class="scanlines" aria-hidden="true"></div>
+    <div class="terminal-rain" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="shell header-row">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">01</span>
+          <span class="brand-copy">
+            <strong>Ровное движение</strong>
+            <span>support room / internal mock</span>
+          </span>
+        </a>
+
+        <nav class="header-nav">
+          <a href="index.html">Визитка</a>
+          <a href="register.html">Регистрация</a>
+          <a href="join.html">Команда</a>
+          <a class="is-active" href="chat.html">Чат</a>
+        </nav>
+
+        <a class="header-cta" href="register.html">Новый доступ</a>
+      </div>
+    </header>
+
+    <main class="section">
+      <div class="shell chat-layout">
+        <aside class="terminal-window sidebar-panel">
+          <span class="window-label">rooms / stack</span>
+          <div class="room-list">
+            <button class="room-button is-active" type="button" data-room-button data-room="support" data-room-title="Support room" data-room-status="lead admin active / answer in 4 min">
+              <strong>Support room</strong>
+              <span>общий поток поддержки</span>
+            </button>
+            <button class="room-button" type="button" data-room-button data-room="contacts" data-room-title="Контакты и каналы" data-room-status="публичные handles и резервные ветки">
+              <strong>Контакты и каналы</strong>
+              <span>telegram / element / bot</span>
+            </button>
+            <button class="room-button" type="button" data-room-button data-room="team" data-room-title="Командный поток" data-room-status="роли, смены и короткие объявления">
+              <strong>Командный поток</strong>
+              <span>набор и внутренняя координация</span>
+            </button>
+          </div>
+        </aside>
+
+        <section class="terminal-window chat-panel">
+          <div class="chat-head">
+            <div>
+              <span class="window-label">room / active</span>
+              <h2 data-room-title>Support room</h2>
+            </div>
+            <p data-room-status>lead admin active / answer in 4 min</p>
+          </div>
+
+          <div class="message-feed" data-room-feed>
+            <article class="message-card">
+              <span class="message-author">lead.admin</span>
+              <p>Это безопасный mock внутреннего чата после регистрации. Он нужен для структуры и атмосферы, не для реальной интеграции.</p>
+            </article>
+            <article class="message-card mine">
+              <span class="message-author">rvn.node.01</span>
+              <p>Нужен маршрут после входа и список контактов.</p>
+            </article>
+          </div>
+
+          <div class="composer">
+            <input type="text" placeholder="message://support-room" />
+            <button class="btn" type="button">send</button>
+          </div>
+        </section>
+
+        <aside class="terminal-window contact-panel">
+          <span class="window-label">admins / contacts</span>
+          <div class="contact-stack">
+            <article class="mini-contact">
+              <strong>lead.admin</strong>
+              <span>internal room</span>
+              <p>@rovno_admin_lead</p>
+            </article>
+            <article class="mini-contact">
+              <strong>relay.bot</strong>
+              <span>telegram bot</span>
+              <p>@rovno_relay_bot</p>
+            </article>
+            <article class="mini-contact">
+              <strong>matrix.fallback</strong>
+              <span>element room</span>
+              <p>#rovno-terminal:matrix.local</p>
+            </article>
+          </div>
+          <div class="inline-card footer-note">
+            <strong>Назначение</strong>
+            <p>Макет показывает внутреннюю chat-страницу после регистрации и правую колонку с администраторами и каналами.</p>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <script src="assets/app.js"></script>
+  </body>
+</html>

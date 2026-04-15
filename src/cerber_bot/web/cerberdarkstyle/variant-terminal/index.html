@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ровное движение — Terminal Noir</title>
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <div class="scanlines" aria-hidden="true"></div>
+    <div class="terminal-rain" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="shell header-row">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">01</span>
+          <span class="brand-copy">
+            <strong>Ровное движение</strong>
+            <span>terminal noir / entry node</span>
+          </span>
+        </a>
+
+        <nav class="header-nav">
+          <a class="is-active" href="index.html">Визитка</a>
+          <a href="register.html">Регистрация</a>
+          <a href="join.html">Команда</a>
+          <a href="chat.html">Чат</a>
+        </nav>
+
+        <a class="header-cta" href="register.html">Запустить доступ</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="shell hero-grid">
+          <article class="terminal-window hero-copy">
+            <span class="window-label">root / landing</span>
+            <div class="prompt-line">rovno_movement.boot --mode private-store --tone noir</div>
+            <h1>Тёмная визитка как командная строка ночного города: минимум слов, максимум маршрутов, контактов и чёткого входа.</h1>
+            <p>
+              Этот вариант жёстче и суше: острая типографика, phosphor-линии, ложные статусы, плиточное меню и внутренний чат,
+              оформленные как единая терминальная система для бренда с underground-настроением.
+            </p>
+            <div class="hero-actions">
+              <a class="btn" href="register.html">Начать покупки</a>
+              <a class="ghost-btn" href="#contacts">Открыть контакты</a>
+            </div>
+          </article>
+
+          <aside class="terminal-window side-console">
+            <span class="window-label">menu / tiles</span>
+            <div class="tile-grid">
+              <a class="tile tile-main" href="register.html">
+                <span class="tile-code">/02</span>
+                <strong>Начать покупки</strong>
+                <p>Центральная карточка ведёт в обновлённую форму входа и регистрации.</p>
+              </a>
+              <a class="tile" href="#contacts">
+                <span class="tile-code">/01</span>
+                <strong>Актуальные контакты</strong>
+                <p>Telegram chat, bot и Element room в одном блоке.</p>
+              </a>
+              <a class="tile" href="join.html">
+                <span class="tile-code">/03</span>
+                <strong>В команду</strong>
+                <p>Условия работы и роли без лишнего декора.</p>
+              </a>
+              <a class="tile" href="chat.html">
+                <span class="tile-code">/04</span>
+                <strong>Чат после регистрации</strong>
+                <p>Внутренний support-room с администраторами и потоками.</p>
+              </a>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section" id="contacts">
+        <div class="shell">
+          <div class="section-head">
+            <div>
+              <span class="window-label">contacts / live</span>
+              <h2>Контакты выведены на первый экран, потому что в этом стиле главное не длинный pitch, а быстрый доступ к каналу связи.</h2>
+            </div>
+            <p>Статические handles и подписи нужны только как визуальный каркас будущего legal brand-сайта.</p>
+          </div>
+
+          <div class="contact-grid">
+            <article class="terminal-window contact-card">
+              <span class="contact-type">telegram chat</span>
+              <h3>Live room</h3>
+              <p>Главная публичная комната с анонсами, вопросами и ответами на старте.</p>
+              <ul class="meta-list">
+                <li>@rovno_live_room</li>
+                <li>короткие анонсы</li>
+                <li>видимый ритм смены</li>
+              </ul>
+            </article>
+
+            <article class="terminal-window contact-card">
+              <span class="contact-type">telegram bot</span>
+              <h3>Relay bot</h3>
+              <p>Плейсхолдер для FAQ, первого сценария onboarding и перенаправления в поддержку.</p>
+              <ul class="meta-list">
+                <li>@rovno_relay_bot</li>
+                <li>быстрый старт</li>
+                <li>автоматический FAQ</li>
+              </ul>
+            </article>
+
+            <article class="terminal-window contact-card">
+              <span class="contact-type">element room</span>
+              <h3>Matrix fallback</h3>
+              <p>Резервная комната с более спокойной потоковой навигацией по темам и support-полосам.</p>
+              <ul class="meta-list">
+                <li>#rovno-terminal:matrix.local</li>
+                <li>структурные ветки</li>
+                <li>тихий канал</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section-tight">
+        <div class="shell info-strip">
+          <article class="terminal-window info-card">
+            <span class="window-label">step / 01</span>
+            <h3>Визитка</h3>
+            <p>Tile-меню закрывает основную IA прямо на первом экране.</p>
+          </article>
+          <article class="terminal-window info-card">
+            <span class="window-label">step / 02</span>
+            <h3>Регистрация</h3>
+            <p>Форма собирает alias, город, канал связи и рабочий контекст.</p>
+          </article>
+          <article class="terminal-window info-card">
+            <span class="window-label">step / 03</span>
+            <h3>Чат</h3>
+            <p>После входа открывается support-room с контактами и короткими потоками.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="shell join-banner terminal-window">
+          <div>
+            <span class="window-label">join / conditions</span>
+            <h2>Страница команды в этом варианте ощущается как операторская консоль: роли, требования и короткий путь к заявке.</h2>
+          </div>
+          <div class="chip-row">
+            <span>support</span>
+            <span>moderation</span>
+            <span>content</span>
+            <span>shift</span>
+          </div>
+          <a class="btn" href="join.html">Открыть условия</a>
+        </div>
+      </section>
+    </main>
+
+    <script src="assets/app.js"></script>
+  </body>
+</html>

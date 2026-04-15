@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NULL RELAY — Чат</title>
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <div class="signal-rain" aria-hidden="true" data-signal-rain></div>
+    <header class="site-header">
+      <div class="shell header-row">
+        <a class="brand" href="index.html">
+          <span class="brand-mark">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="#cc0018" stroke-width="1.6" stroke-linejoin="square"/>
+            </svg>
+          </span>
+          <span class="brand-copy">
+            <strong>NULL RELAY</strong>
+            <span>chat / tg_sync / encrypted</span>
+          </span>
+        </a>
+
+        <nav class="header-nav">
+          <a href="index.html">Каталог</a>
+          <a href="preorder.html">Очередь</a>
+          <a href="auth.html">Вход</a>
+          <a class="is-active" href="chat.html">Чат</a>
+        </nav>
+
+        <div class="header-tools">
+          <button class="theme-toggle" type="button" aria-label="Режим" data-theme-toggle>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/>
+            </svg>
+          </button>
+          <div class="balance-chip">
+            <i>₽</i>
+            <div>
+              <strong>12 480 ₽</strong>
+              <span>Баланс</span>
+            </div>
+          </div>
+          <button class="icon-button" type="button" aria-label="Профиль">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M9 10h6M9 14h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="square"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="chat-main">
+      <div class="shell chat-layout">
+
+        <!-- ── Левая панель: комнаты ────────────────────────── -->
+        <aside class="chat-sidebar fade-up">
+          <div class="chat-sidebar-head">
+            <span class="eyebrow">null_relay / rooms</span>
+          </div>
+
+          <div class="room-list">
+            <button
+              class="room-button is-active"
+              type="button"
+              data-chat-room="support"
+            >
+              <div class="room-button-top">
+                <strong>Support</strong>
+                <span class="room-badge tg-live">
+                  <span class="tg-dot is-live"></span>TG
+                </span>
+              </div>
+              <span>чат магазина · синхр.</span>
+            </button>
+
+            <button
+              class="room-button"
+              type="button"
+              data-chat-room="contacts"
+            >
+              <div class="room-button-top">
+                <strong>Контакты</strong>
+                <span class="room-badge">актуальные</span>
+              </div>
+              <span>каналы и операторы</span>
+            </button>
+
+            <button
+              class="room-button"
+              type="button"
+              data-chat-room="earn"
+            >
+              <div class="room-button-top">
+                <strong>Заработок</strong>
+                <span class="room-badge hot">набор</span>
+              </div>
+              <span>начни зарабатывать</span>
+            </button>
+          </div>
+
+          <!-- TG sync status block -->
+          <div class="tg-status-card">
+            <div class="tg-status-row">
+              <span class="tg-dot is-live"></span>
+              <strong>TG SYNC · LIVE</strong>
+            </div>
+            <span class="muted">@null_relay_support</span>
+            <div class="tg-metrics">
+              <div><strong>847</strong><span>в канале</span></div>
+              <div><strong>12</strong><span>онлайн</span></div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- ── Центральная панель: контент комнат ──────────── -->
+        <section class="chat-panel fade-up delay-1">
+
+          <!-- ══ Комната: Support / TG chat ═══════════════════ -->
+          <div class="chat-room-view" data-chat-view="support">
+            <div class="chat-panel-head">
+              <div>
+                <span class="eyebrow">support / tg_bridge / encrypted</span>
+                <h2>Чат магазина</h2>
+              </div>
+              <div class="tg-sync-badge">
+                <span class="tg-dot is-live"></span>
+                <span>Синхр. TG · @null_relay_support</span>
+              </div>
+            </div>
+
+            <div class="message-feed" data-message-feed>
+              <article class="message-card tg">
+                <div class="message-meta">
+                  <span class="message-author">admin.null</span>
+                  <span class="message-tag">TG</span>
+                  <span class="message-time">02:14</span>
+                </div>
+                <p>Узел работает. Все маршруты активны. Задержек нет.</p>
+              </article>
+
+              <article class="message-card tg">
+                <div class="message-meta">
+                  <span class="message-author">relay.bot</span>
+                  <span class="message-tag">BOT</span>
+                  <span class="message-time">02:15</span>
+                </div>
+                <p>Москва: 84 позиции. Спб: 53. Казань: 29. Пополнение в 04:00.</p>
+              </article>
+
+              <article class="message-card mine">
+                <div class="message-meta">
+                  <span class="message-author">you</span>
+                  <span class="message-time">02:17</span>
+                </div>
+                <p>Нужен маршрут в ЦАО после 03:00.</p>
+              </article>
+
+              <article class="message-card tg">
+                <div class="message-meta">
+                  <span class="message-author">admin.null</span>
+                  <span class="message-tag">TG</span>
+                  <span class="message-time">02:19</span>
+                </div>
+                <p>Маршрут выдаётся автоматически после подтверждения оплаты. Ручная выдача не производится.</p>
+              </article>
+
+              <article class="message-card tg">
+                <div class="message-meta">
+                  <span class="message-author">relay.bot</span>
+                  <span class="message-tag">BOT</span>
+                  <span class="message-time">02:31</span>
+                </div>
+                <p>Баланс #alias_0091: 12 480 ₽. Активных заказов: 0. Доступных позиций в Москве: 84.</p>
+              </article>
+
+              <article class="message-card system">
+                <p>— Синхронизировано с Telegram · @null_relay_support · сквозное шифрование —</p>
+              </article>
+            </div>
+
+            <div class="composer">
+              <input
+                type="text"
+                placeholder="сообщение // только текст"
+                data-composer-input
+                autocomplete="off"
+              />
+              <button class="btn" type="button" data-composer-send>Отправить</button>
+            </div>
+          </div>
+
+          <!-- ══ Комната: Актуальные контакты ══════════════════ -->
+          <div class="chat-room-view is-hidden" data-chat-view="contacts">
+            <div class="chat-panel-head">
+              <div>
+                <span class="eyebrow">contacts / verified / актуально</span>
+                <h2>Актуальные контакты</h2>
+              </div>
+              <span class="muted">Обновлено сегодня · 01:30</span>
+            </div>
+
+            <div class="contacts-grid">
+              <article class="contact-card primary">
+                <div class="contact-type">Основной TG-канал</div>
+                <strong>@null_relay_official</strong>
+                <p>Анонсы, статусы узлов, обновления каталога. Только чтение.</p>
+                <div class="contact-meta">
+                  <span class="badge">1 248 подписчиков</span>
+                  <span class="badge">только чтение</span>
+                </div>
+              </article>
+
+              <article class="contact-card">
+                <div class="contact-type">Support Bot</div>
+                <strong>@null_relay_bot</strong>
+                <p>Технические вопросы, статус заказа, проверка баланса. Авто-ответ 24/7.</p>
+                <div class="contact-meta">
+                  <span class="badge">бот</span>
+                  <span class="badge">ответ 5–10 мин</span>
+                </div>
+              </article>
+
+              <article class="contact-card">
+                <div class="contact-type">Оператор · Москва</div>
+                <strong>@null_msk_op</strong>
+                <p>Вопросы по маршрутам Москвы. Только для активных заказов.</p>
+                <div class="contact-meta">
+                  <span class="badge">только активным</span>
+                  <span class="badge">мск</span>
+                </div>
+              </article>
+
+              <article class="contact-card">
+                <div class="contact-type">Оператор · Спб</div>
+                <strong>@null_spb_op</strong>
+                <p>Вопросы по маршрутам Санкт-Петербурга. Только для активных заказов.</p>
+                <div class="contact-meta">
+                  <span class="badge">только активным</span>
+                  <span class="badge">спб</span>
+                </div>
+              </article>
+
+              <article class="contact-card backup">
+                <div class="contact-type">Резервный канал</div>
+                <strong>@null_relay_backup</strong>
+                <p>Только при недоступности основного канала. По умолчанию молчит.</p>
+                <div class="contact-meta">
+                  <span class="badge">резерв</span>
+                  <span class="badge">только чтение</span>
+                </div>
+              </article>
+
+              <article class="contact-card onion">
+                <div class="contact-type">Onion Mirror</div>
+                <strong>nullrelay7x3k.onion</strong>
+                <p>Доступ через Tor Browser. Зеркало без логов сессии и без JS-трекеров.</p>
+                <div class="contact-meta">
+                  <span class="badge">tor only</span>
+                  <span class="badge">no logs</span>
+                </div>
+              </article>
+            </div>
+
+            <div class="contacts-notice">
+              <span class="eyebrow">протокол / важно</span>
+              <p>Нет "закрытых ботов", "личных операторов" и "дополнительных каналов". Всё перечисленное выше — единственные официальные точки. Остальное — мошенники.</p>
+            </div>
+          </div>
+
+          <!-- ══ Комната: Начни зарабатывать ════════════════════ -->
+          <div class="chat-room-view is-hidden" data-chat-view="earn">
+            <div class="chat-panel-head">
+              <div>
+                <span class="eyebrow">team / набор открыт / recruit</span>
+                <h2>Начни зарабатывать</h2>
+              </div>
+              <span class="badge hot">Набор открыт</span>
+            </div>
+
+            <div class="earn-layout">
+              <p class="earn-intro">
+                Нас воспитала улица. Мы не предлагаем офис или карьеру. Мы предлагаем настоящий заработок
+                для тех, у кого нет других вариантов — или кто выбрал именно этот путь.
+              </p>
+
+              <div class="earn-grid">
+                <article class="earn-card">
+                  <span class="earn-num">01</span>
+                  <strong>Кладмен</strong>
+                  <p>Работа в своём районе. Ты знаешь каждый подъезд. Без встреч с покупателями. Только маршруты.</p>
+                  <div class="earn-meta">
+                    <span class="badge"><strong>30–45%</strong> с выдачи</span>
+                    <span class="badge">ежедневно</span>
+                    <span class="badge">наличные / крипта</span>
+                  </div>
+                </article>
+
+                <article class="earn-card">
+                  <span class="earn-num">02</span>
+                  <strong>Оператор</strong>
+                  <p>Работа в чате. Принимаешь заказы, контролируешь выдачу, координируешь кладменов. Удалённо.</p>
+                  <div class="earn-meta">
+                    <span class="badge">фикс + %</span>
+                    <span class="badge">смены 12ч</span>
+                    <span class="badge">строгий отбор</span>
+                  </div>
+                </article>
+
+                <article class="earn-card">
+                  <span class="earn-num">03</span>
+                  <strong>Закупщик</strong>
+                  <p>Организация поставок. Работа с сетью. Высокая ответственность и соответствующая оплата.</p>
+                  <div class="earn-meta">
+                    <span class="badge">высокий порог входа</span>
+                    <span class="badge">только рекомендация</span>
+                  </div>
+                </article>
+              </div>
+
+              <div class="earn-requirements">
+                <h3>Что нужно</h3>
+                <ul class="info-list">
+                  <li><span class="dot"></span><span>Реальный район. Ты живёшь там, где работаешь — без исключений.</span></li>
+                  <li><span class="dot"></span><span>Чистая история. Без долгов перед сетью и без громких провалов.</span></li>
+                  <li><span class="dot"></span><span>Рабочий телефон на отдельном номере. Личное и рабочее не смешиваются.</span></li>
+                  <li><span class="dot"></span><span>Протокол молчания. Работа не обсуждается нигде кроме рабочего чата.</span></li>
+                </ul>
+              </div>
+
+              <div class="earn-cta">
+                <div class="info-card">
+                  <strong>Как подать заявку</strong>
+                  <p class="muted">Напиши в @null_relay_recruit. Коротко: район, опыт, роль. Ответим в течение суток или не ответим вообще.</p>
+                </div>
+                <a class="btn" href="auth.html">Войти и подать заявку</a>
+              </div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- ── Правая панель: онлайн + статус узлов ─────────── -->
+        <aside class="chat-rail fade-up delay-2">
+          <div class="rail-section">
+            <span class="eyebrow">в сети</span>
+            <div class="online-list">
+              <div class="online-item">
+                <span class="tg-dot is-live"></span>
+                <span>admin.null</span>
+              </div>
+              <div class="online-item">
+                <span class="tg-dot is-live"></span>
+                <span>relay.bot</span>
+              </div>
+              <div class="online-item">
+                <span class="tg-dot is-live"></span>
+                <span>Alias_07</span>
+              </div>
+              <div class="online-item">
+                <span class="tg-dot"></span>
+                <span>Alias_19</span>
+              </div>
+              <div class="online-item">
+                <span class="tg-dot is-live"></span>
+                <span>Alias_31</span>
+              </div>
+              <div class="online-item">
+                <span class="tg-dot"></span>
+                <span>Alias_44</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="rail-section">
+            <span class="eyebrow">статус узлов</span>
+            <div class="node-status">
+              <div class="node-status-row">
+                <span>Москва</span>
+                <span class="status-ok">ACTIVE</span>
+              </div>
+              <div class="node-status-row">
+                <span>Спб</span>
+                <span class="status-ok">ACTIVE</span>
+              </div>
+              <div class="node-status-row">
+                <span>Казань</span>
+                <span class="status-warn">DELAY</span>
+              </div>
+              <div class="node-status-row">
+                <span>Екб</span>
+                <span class="status-ok">ACTIVE</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="rail-section">
+            <div class="info-card">
+              <strong>Шифрование</strong>
+              <p class="muted">Сообщения синхронизируются через зашифрованный Telegram bridge. Логи не хранятся.</p>
+            </div>
+          </div>
+        </aside>
+
+      </div>
+    </main>
+
+    <nav class="mobile-dock">
+      <a href="index.html">Каталог</a>
+      <a href="preorder.html">Очередь</a>
+      <a href="auth.html">Вход</a>
+      <a class="is-active" href="chat.html">Чат</a>
+      <a href="index.html#reviews">Эфир</a>
+    </nav>
+
+    <script src="assets/app.js"></script>
+  </body>
+</html>
