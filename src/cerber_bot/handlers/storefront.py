@@ -28,18 +28,22 @@ from cerber_bot.keyboards.storefront import (
     STORE_CATEGORY_OPEN_PREFIX,
     STORE_DETAIL_BACK_ACTION,
     STORE_DETAIL_OFFERS_PAGE_PREFIX,
+    STORE_FIELD_CANCEL_ACTION,
+    STORE_FIELD_FILL_PREFIX,
     STORE_HOME_ACTION,
     STORE_ORDER_ACTION_PREFIX,
     STORE_ORDERS_ACTION,
     STORE_ORDERS_PAGE_PREFIX,
     STORE_PRODUCT_ACTION_PREFIX,
     STORE_PRODUCTS_PAGE_PREFIX,
+    STORE_REFRESH_ACTION,
     STORE_SEARCH_PAGE_PREFIX,
     STORE_SEARCH_PROMPT_ACTION,
     STORE_TOP_UP_CUSTOM_ACTION,
     STORE_TOP_UP_PREFIX,
     STORE_WALLET_ACTION,
     build_categories_keyboard,
+    build_field_input_keyboard,
     build_order_detail_keyboard,
     build_orders_keyboard,
     build_product_detail_keyboard,
@@ -49,6 +53,7 @@ from cerber_bot.keyboards.storefront import (
 )
 from cerber_bot.services.store import (
     DEFAULT_WALLET_CURRENCY,
+    SUPPORTED_AUTO_FIELDS,
     InsufficientBalanceError,
     PageInfo,
     ProductUnavailableError,
@@ -72,6 +77,7 @@ from cerber_bot.texts import STORE_KEYBOARD_TEXT, STOREFRONT_TEXT
 class StorefrontStates(StatesGroup):
     waiting_for_search_query = State()
     waiting_for_top_up_amount = State()
+    waiting_for_field_value = State()  # сбор значений required_fields перед покупкой
 
 
 PRODUCTS_PER_PAGE = 6
@@ -449,6 +455,153 @@ def build_storefront_router(container: AppContainer) -> Router:
     async def handle_noop(callback: CallbackQuery) -> None:
         await callback.answer()
 
+    @router.callback_query(F.data.startswith(STORE_FIELD_FILL_PREFIX))
+    async def handle_field_fill_start(callback: CallbackQuery, state: FSMContext) -> None:
+        """Начало сбора required_fields: запрашиваем первое поле у пользователя."""
+        message = extract_message(callback)
+        if message is None or callback.from_user is None:
+            await callback.answer()
+            return
+
+        data = await state.get_data()
+        product_id = data.get("active_product_id")
+        if not product_id:
+            await callback.answer(STOREFRONT_TEXT.CALLBACK_REOPEN_PRODUCT)
+            return
+
+        sku_id = callback.data.removeprefix(STORE_FIELD_FILL_PREFIX)
+        try:
+            product = await container.store_service.get_product_view(str(product_id))
+        except (StoreServiceError, GiftApiError) as error:
+            await callback.answer(str(error), show_alert=True)
+            return
+
+        offer = next((o for o in product.offers if o.sku_id == sku_id), None)
+        if offer is None or not offer.buyable:
+            await callback.answer(STOREFRONT_TEXT.CALLBACK_REOPEN_PRODUCT)
+            return
+
+        # Сериализуем поля для FSM (только не-auto коды)
+        pending_fields = [
+            {
+                "code": getattr(f, "code", ""),
+                "name": getattr(f, "name", ""),
+                "description": getattr(f, "description", "") or "",
+                "required": getattr(f, "required", True),
+                "type": getattr(f, "field_type", "string"),
+            }
+            for f in offer.required_fields
+        ]
+        if not pending_fields:
+            # Нет полей — сразу покупаем
+            await callback.answer(STOREFRONT_TEXT.CALLBACK_FIELD_START)
+            try:
+                result = await container.store_service.purchase_offer(callback.from_user, product_id=str(product_id), sku_id=sku_id)
+            except (StoreServiceError, GiftApiError) as error:
+                await send_screen(message, render_store_error(error), build_wallet_keyboard(), callback=callback)
+                return
+            await state.set_state(None)
+            await send_screen(message, render_purchase_result(result), build_order_detail_keyboard(), callback=callback)
+            return
+
+        await state.update_data(
+            field_sku_id=sku_id,
+            field_product_id=str(product_id),
+            field_pending=pending_fields,
+            field_values={},
+        )
+        await state.set_state(StorefrontStates.waiting_for_field_value)
+        first_field = pending_fields[0]
+        prompt = _build_field_prompt(first_field, done=0, total=len(pending_fields))
+        await callback.answer(STOREFRONT_TEXT.CALLBACK_FIELD_START)
+        await message.answer(prompt, reply_markup=build_field_input_keyboard())
+
+    @router.message(StorefrontStates.waiting_for_field_value)
+    async def handle_field_value(message: Message, state: FSMContext) -> None:
+        """Принять значение поля, спросить следующее или запустить покупку."""
+        if message.from_user is None:
+            return
+
+        data = await state.get_data()
+        pending: list[dict] = list(data.get("field_pending") or [])
+        values: dict = dict(data.get("field_values") or {})
+        sku_id: str = str(data.get("field_sku_id") or "")
+        product_id: str = str(data.get("field_product_id") or "")
+        total_fields: int = len(pending)
+
+        if not pending or not sku_id or not product_id:
+            await state.clear()
+            await message.answer(STOREFRONT_TEXT.CALLBACK_REOPEN_PRODUCT, reply_markup=build_store_home_keyboard())
+            return
+
+        current = pending.pop(0)
+        raw_value = (message.text or "").strip()
+
+        # «-» пропускает опциональное поле
+        if raw_value == "-" and not current.get("required", True):
+            pass  # не добавляем в values
+        elif not raw_value:
+            # Пустой ввод — повторить запрос
+            done = total_fields - len(pending) - 1
+            await message.answer(_build_field_prompt(current, done=done, total=total_fields), reply_markup=build_field_input_keyboard())
+            return
+        else:
+            # Конвертируем значение в нужный тип (integer поля — числа)
+            field_type = current.get("type", "string")
+            if field_type == "integer":
+                if not raw_value.lstrip("-").isdigit():
+                    done = total_fields - len(pending) - 1
+                    await message.answer(STOREFRONT_TEXT.FIELD_PROMPT_INTEGER_ERROR + "\n\n" + _build_field_prompt(current, done=done, total=total_fields), reply_markup=build_field_input_keyboard())
+                    return
+                values[current["code"]] = int(raw_value)
+            else:
+                values[current["code"]] = raw_value
+
+        if pending:
+            # Есть ещё поля
+            await state.update_data(field_pending=pending, field_values=values)
+            done = total_fields - len(pending)
+            next_field = pending[0]
+            await message.answer(_build_field_prompt(next_field, done=done, total=total_fields), reply_markup=build_field_input_keyboard())
+            return
+
+        # Все поля собраны — делаем покупку
+        await state.set_state(None)
+        try:
+            result = await container.store_service.purchase_offer(
+                message.from_user,
+                product_id=product_id,
+                sku_id=sku_id,
+                customer_fields=values,
+            )
+        except (StoreServiceError, GiftApiError) as error:
+            await message.answer(render_store_error(error), reply_markup=build_wallet_keyboard())
+            return
+
+        await state.clear()
+        await message.answer(render_purchase_result(result), reply_markup=build_order_detail_keyboard())
+
+    @router.callback_query(F.data == STORE_FIELD_CANCEL_ACTION)
+    async def handle_field_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+        """Отмена ввода required_fields — возврат на карточку товара."""
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+
+        data = await state.get_data()
+        product_id = data.get("field_product_id") or data.get("active_product_id")
+        await state.clear()
+        await callback.answer(STOREFRONT_TEXT.CALLBACK_FIELD_CANCELED)
+
+        if product_id:
+            try:
+                await render_product_detail(message, state, container, product_id=str(product_id), offers_page=1, callback=callback)
+                return
+            except (StoreServiceError, GiftApiError):
+                pass
+        await send_screen(message, STOREFRONT_TEXT.STORE_TITLE, build_store_home_keyboard(), callback=callback)
+
     return router
 
 
@@ -693,13 +846,19 @@ def render_product_detail_screen(product: StoreProductView, offers: tuple[StoreP
         lines.append("")
         lines.append(escape(product.description))
 
-    if product.required_fields:
+    # Показываем только те поля, которые нужно запрашивать у пользователя (не auto-заполняемые)
+    user_fields = [
+        f for f in product.required_fields
+        if getattr(f, 'code', None) not in SUPPORTED_AUTO_FIELDS
+    ]
+    if user_fields:
         lines.append("")
         lines.append(STOREFRONT_TEXT.PRODUCT_FIELDS_TITLE)
-        for field in product.required_fields[:6]:
+        for field in user_fields[:6]:
+            req_mark = "*" if getattr(field, 'required', True) else ""
             lines.append(
                 STOREFRONT_TEXT.PRODUCT_FIELD.format(
-                    name=escape(getattr(field, 'name', getattr(field, 'code', 'field'))),
+                    name=escape(getattr(field, 'name', getattr(field, 'code', 'field'))) + req_mark,
                     code=escape(getattr(field, 'code', 'field')),
                 )
             )
@@ -711,7 +870,12 @@ def render_product_detail_screen(product: StoreProductView, offers: tuple[StoreP
         return "\n".join(lines)
 
     for offer in offers:
-        status = STOREFRONT_TEXT.PRODUCT_OFFER_AVAILABLE if offer.buyable else offer.reason_unavailable or STOREFRONT_TEXT.PRODUCT_OFFER_UNAVAILABLE
+        if offer.buyable and offer.required_fields:
+            status = STOREFRONT_TEXT.PRODUCT_OFFER_NEED_FIELDS
+        elif offer.buyable:
+            status = STOREFRONT_TEXT.PRODUCT_OFFER_AVAILABLE
+        else:
+            status = offer.reason_unavailable or STOREFRONT_TEXT.PRODUCT_OFFER_UNAVAILABLE
         price_text = format_money(offer.price, offer.currency) if offer.price is not None else STORE_KEYBOARD_TEXT.PRICE_ON_REQUEST
         lines.append("")
         lines.append(f"<b>{escape(offer.name)}</b>")
@@ -850,6 +1014,21 @@ def parse_decimal(value: str) -> Decimal:
         raise ValueError(STOREFRONT_TEXT.INVALID_TOP_UP_AMOUNT) from error
     return amount.quantize(Decimal("0.01"))
 
+
+def _build_field_prompt(field: dict, *, done: int, total: int) -> str:
+    """Формирует текст запроса значения для одного required_field."""
+    name = escape(field.get("name") or field.get("code") or "поле")
+    description = field.get("description") or ""
+    required = field.get("required", True)
+    progress = STOREFRONT_TEXT.FIELD_PROGRESS.format(done=done, total=total)
+    lines = [f"{progress}"]
+    prompt = STOREFRONT_TEXT.FIELD_PROMPT.format(name=name)
+    if not required:
+        prompt += STOREFRONT_TEXT.FIELD_PROMPT_OPTIONAL
+    lines.append(prompt)
+    if description:
+        lines.append(STOREFRONT_TEXT.FIELD_PROMPT_DESCRIPTION.format(description=escape(description)))
+    return "\n".join(lines)
 
 def pretty_json(raw_payload: str) -> str:
     try:

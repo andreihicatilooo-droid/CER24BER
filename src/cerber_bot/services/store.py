@@ -305,14 +305,25 @@ class StoreService:
         detail = await self.gift_api_service.get_product_detail(product_id)
         required_fields = tuple(detail.required_fields or ())
 
+        # Коды полей, которые пользователь вводит сам (не auto-заполняемые)
+        user_field_codes = {
+            getattr(f, "code", None)
+            for f in required_fields
+            if getattr(f, "code", None) not in SUPPORTED_AUTO_FIELDS
+        }
+        # Если пользователь сам вводит amount — цена динамическая, но оффер доступен
+        amount_in_user_fields = "amount" in user_field_codes
+
         offers: list[StoreProductOffer] = []
         for sku in detail.skus:
             reason: str | None = None
-            if sku.price is None:
-                reason = STORE_SERVICE_TEXT.REASON_DYNAMIC_PRICE
-            elif sku.stock <= 0:
+            if sku.stock <= 0:
                 reason = STORE_SERVICE_TEXT.REASON_OUT_OF_STOCK
-            elif detail.denomination_type == "custom":
+            elif sku.price is None and not amount_in_user_fields:
+                # Нет цены и пользователь не вводит amount — реально недоступно
+                reason = STORE_SERVICE_TEXT.REASON_DYNAMIC_PRICE
+            elif detail.denomination_type == "custom" and not amount_in_user_fields:
+                # Кастомный номинал без поля amount — недоступно
                 reason = STORE_SERVICE_TEXT.REASON_CUSTOM_AMOUNT
 
             # Поля, которые нужно запросить у покупателя (не auto-заполняемые)
@@ -523,17 +534,19 @@ class StoreService:
         offer = next((item for item in product.offers if item.sku_id == sku_id), None)
         if offer is None:
             raise ProductUnavailableError(STORE_SERVICE_TEXT.SKU_NOT_FOUND)
-        if not offer.buyable or offer.price is None:
+        if not offer.buyable:
             raise ProductUnavailableError(offer.reason_unavailable or STORE_SERVICE_TEXT.SKU_NOT_BUYABLE)
 
         await self.ensure_user(telegram_user)
         wallet = await self.get_wallet_snapshot(telegram_user.id)
-        try:
-            required_wallet_amount = await self.exchange_rate_service.convert(offer.price, offer.currency, wallet.currency)
-        except ExchangeRateError as error:
-            raise StoreServiceError(str(error)) from error
-        if wallet.balance < required_wallet_amount:
-            raise InsufficientBalanceError(wallet.balance, required_wallet_amount, wallet.currency)
+        if offer.price is not None:
+            # Предварительная проверка баланса (только когда цена известна заранее)
+            try:
+                required_wallet_amount = await self.exchange_rate_service.convert(offer.price, offer.currency, wallet.currency)
+            except ExchangeRateError as error:
+                raise StoreServiceError(str(error)) from error
+            if wallet.balance < required_wallet_amount:
+                raise InsufficientBalanceError(wallet.balance, required_wallet_amount, wallet.currency)
 
         external_id = build_external_order_id(telegram_user.id)
         order_fields: dict[str, object] = {"quantity": 1}
@@ -553,7 +566,9 @@ class StoreService:
             )
         )
 
-        order_total_amount = normalize_money_amount(gift_order.total_amount if gift_order.total_amount > Decimal("0") else offer.price)
+        order_total_amount = normalize_money_amount(
+            gift_order.total_amount if gift_order.total_amount > Decimal("0") else (offer.price or Decimal("0"))
+        )
         order_item = next((item for item in gift_order.items if item.sku_id == sku_id), gift_order.items[0] if gift_order.items else None)
         sku_name = order_item.sku_name if order_item is not None else offer.name
         delivery_payload = json.dumps(order_item.delivery_data, ensure_ascii=False) if order_item and order_item.delivery_data else None

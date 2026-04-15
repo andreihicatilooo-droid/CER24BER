@@ -22,6 +22,8 @@ STORE_ORDERS_ACTION = "store:orders"
 STORE_ORDERS_PAGE_PREFIX = "store:op:"
 STORE_ORDER_ACTION_PREFIX = "store:o:"
 STORE_BUY_SKU_PREFIX = "store:buy:"
+STORE_FIELD_FILL_PREFIX = "store:ff:"  # суффикс — sku_id
+STORE_FIELD_CANCEL_ACTION = "store:fc"
 
 
 def build_store_home_keyboard() -> InlineKeyboardMarkup:
@@ -107,19 +109,33 @@ def build_product_detail_keyboard(
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for offer in offers:
-        if not offer.buyable or offer.price is None:
+        if not offer.buyable:
             continue
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=truncate_text(
-                        STORE_KEYBOARD_TEXT.buy_offer(offer.name, format_money(offer.price, offer.currency)),
-                        38,
-                    ),
-                    callback_data=f"{STORE_BUY_SKU_PREFIX}{offer.sku_id}",
-                )
-            ]
-        )
+        if offer.required_fields:
+            # Оффер требует данных покупателя — кнопка заполнения
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=truncate_text(
+                            STORE_KEYBOARD_TEXT.fill_offer(offer.name),
+                            38,
+                        ),
+                        callback_data=f"{STORE_FIELD_FILL_PREFIX}{offer.sku_id}",
+                    )
+                ]
+            )
+        else:
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=truncate_text(
+                            STORE_KEYBOARD_TEXT.buy_offer(offer.name, format_money(offer.price, offer.currency)),
+                            38,
+                        ),
+                        callback_data=f"{STORE_BUY_SKU_PREFIX}{offer.sku_id}",
+                    )
+                ]
+            )
 
     nav_row = build_pagination_row(
         previous_callback=f"{STORE_DETAIL_OFFERS_PAGE_PREFIX}{page_info.page - 1}" if page_info.has_previous else None,
@@ -137,6 +153,15 @@ def build_product_detail_keyboard(
     )
     rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=STORE_HOME_ACTION)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def build_field_input_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура с кнопкой «Отмена» при вводе обязательных полей."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.FIELD_CANCEL, callback_data=STORE_FIELD_CANCEL_ACTION)]
+        ]
+    )
 
 
 def build_wallet_keyboard() -> InlineKeyboardMarkup:

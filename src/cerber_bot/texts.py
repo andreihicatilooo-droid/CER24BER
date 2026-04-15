@@ -76,6 +76,8 @@ class STORE_KEYBOARD_TEXT:
     PRICE_ON_REQUEST = "цена по запросу"
     PRICE_FROM_TEMPLATE = "от {amount}"
     BUY_TEMPLATE = "Купить {offer_name} • {price}"
+    FILL_TEMPLATE = "✏️ {offer_name} — заполнить данные"
+    FIELD_CANCEL = "❌ Отмена"
     CATEGORY_TEMPLATE = "{category_name} ({product_count})"
     PRODUCT_TEMPLATE = "{product_name} • {price_label}"
     ORDER_TEMPLATE = "#{order_id} {product_name} • {total_amount}"
@@ -92,6 +94,10 @@ class STORE_KEYBOARD_TEXT:
     @classmethod
     def buy_offer(cls, offer_name: str, price: str) -> str:
         return cls.BUY_TEMPLATE.format(offer_name=offer_name, price=price)
+
+    @classmethod
+    def fill_offer(cls, offer_name: str) -> str:
+        return cls.FILL_TEMPLATE.format(offer_name=offer_name)
 
     @classmethod
     def category_card(cls, category_name: str, product_count: int) -> str:
@@ -390,6 +396,7 @@ class STOREFRONT_TEXT:
     PRODUCT_OFFERS_TITLE = "<b>Предложения</b> | страница {page}/{total_pages}"
     PRODUCT_OFFERS_EMPTY = "Нет SKU для отображения."
     PRODUCT_OFFER_AVAILABLE = "доступен"
+    PRODUCT_OFFER_NEED_FIELDS = "✏️ требует ввода данных"
     PRODUCT_OFFER_UNAVAILABLE = "недоступен"
     PRODUCT_OFFER_PRICE = "Цена: {value}"
     PRODUCT_OFFER_STOCK = "Остаток: {stock}"
@@ -438,6 +445,14 @@ class STOREFRONT_TEXT:
     PAYMENT_LINK_AUTO_UPDATE = "После успешной оплаты NicePay пришлет callback, и баланс обновится автоматически."
     PAYMENT_LINK_EXPIRES_UNKNOWN = "не указано"
     PRODUCT_TITLE_PREFIX = "Поиск: {query}"
+
+    FIELD_PROMPT = "Введите <b>{name}</b>:"
+    FIELD_PROMPT_DESCRIPTION = "\n{description}"
+    FIELD_PROMPT_OPTIONAL = " (необязательно, или отправьте <code>-</code> для пропуска)"
+    FIELD_PROMPT_INTEGER_ERROR = "⚠️ Введите целое число (без букв и символов)."
+    FIELD_PROGRESS = "Поле {done} из {total}"
+    CALLBACK_FIELD_START = "Заполняем данные для заказа..."
+    CALLBACK_FIELD_CANCELED = "Заполнение данных отменено"
     CATALOG_TITLE = "Каталог CERBER"
 
     @classmethod
