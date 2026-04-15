@@ -19,8 +19,6 @@ from cerber_bot.config import Settings, load_settings
 from cerber_bot.db.session import create_engine, create_session_factory, ensure_database_parent, init_database
 from cerber_bot.integrations.giftapi import GiftApiClient
 from cerber_bot.integrations.nicepay import NicePayClient
-from cerber_bot.integrations.registry import build_providers
-from cerber_bot.services.catalog import CatalogService
 from cerber_bot.services.deals import DealService
 from cerber_bot.services.exchange import ExchangeRateService
 from cerber_bot.services.giftapi import GiftApiService
@@ -36,7 +34,6 @@ class AppContainer:
     session_factory: async_sessionmaker[AsyncSession]
     http_client: httpx.AsyncClient
     nicepay_http_client: httpx.AsyncClient
-    catalog_service: CatalogService
     exchange_rate_service: ExchangeRateService
     gift_api_service: GiftApiService
     deal_service: DealService
@@ -113,11 +110,6 @@ class AppContainer:
             withdrawal_min_amount_usdt=resolved_settings.withdrawal_min_amount_usdt,
             withdrawal_networks=resolved_settings.withdrawal_networks,
         )
-        providers = build_providers(resolved_settings, http_client, giftapi_client=giftapi_client)
-        catalog_service = CatalogService(
-            providers=providers,
-            cache_ttl_seconds=resolved_settings.catalog_cache_ttl,
-        )
 
         return cls(
             settings=resolved_settings,
@@ -125,7 +117,6 @@ class AppContainer:
             session_factory=session_factory,
             http_client=http_client,
             nicepay_http_client=nicepay_http_client,
-            catalog_service=catalog_service,
             exchange_rate_service=exchange_rate_service,
             gift_api_service=gift_api_service,
             deal_service=deal_service,

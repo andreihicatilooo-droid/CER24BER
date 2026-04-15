@@ -369,12 +369,6 @@ def amount_to_minor_units(amount: Decimal) -> int:
     return int((normalized * 100).to_integral_value(rounding=ROUND_HALF_UP))
 
 
-def format_money(amount: Decimal, currency: str) -> str:
-    normalized = normalize_amount(amount)
-    text = format(normalized, "f").rstrip("0").rstrip(".")
-    return f"{text} {currency}"
-
-
 def to_callback_result(completion: PaymentCompletion, *, method: str | None) -> PaymentCallbackResult:
     return PaymentCallbackResult(
         result="success",

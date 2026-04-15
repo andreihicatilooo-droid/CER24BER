@@ -6,6 +6,7 @@ __pycache__/
 *.pyo
 *.db
 data/
+data/old.env.save/  # личная заметка, не удалять
 dist/
 build/
 *.egg-info/

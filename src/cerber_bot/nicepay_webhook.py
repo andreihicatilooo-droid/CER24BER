@@ -15,7 +15,8 @@ from aiogram.exceptions import AiogramError
 
 from cerber_bot.container import AppContainer
 from cerber_bot.keyboards.storefront import build_wallet_keyboard
-from cerber_bot.services.payments import PaymentCallbackResult, PaymentFlowError, format_money
+from cerber_bot.services.payments import PaymentCallbackResult, PaymentFlowError
+from cerber_bot.services.store import format_money
 from cerber_bot.texts import PAYMENT_TEXT
 
 

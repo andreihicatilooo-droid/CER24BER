@@ -27,7 +27,7 @@ from cerber_bot.db.repositories.wallet import WalletTransactionRepository
 from cerber_bot.integrations.giftapi import GiftApiError, GiftApiClient, GiftCategory, GiftPricelistItem, GiftProductDetail, GiftProductSummary
 from cerber_bot.services.exchange import ExchangeRateError, ExchangeRateService, WalletQuote
 from cerber_bot.services.giftapi import GiftApiOrderDraft, GiftApiService
-from cerber_bot.texts import STORE_SERVICE_TEXT
+from cerber_bot.texts import COMMON_TEXT, STORE_SERVICE_TEXT
 
 
 logger = logging.getLogger(__name__)
@@ -749,7 +749,9 @@ def shorten_plain_text(value: str, limit: int) -> str:
     return normalized[: limit - 1].rstrip() + "…"
 
 
-def format_money(amount: Decimal, currency: str) -> str:
+def format_money(amount: Decimal | None, currency: str) -> str:
+    if amount is None:
+        return f"{COMMON_TEXT.NOT_AVAILABLE} {currency}"
     normalized = normalize_money_amount(amount)
     text = format(normalized, "f").rstrip("0").rstrip(".")
     return f"{text} {currency}"

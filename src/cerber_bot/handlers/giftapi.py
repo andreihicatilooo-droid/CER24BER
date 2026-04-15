@@ -43,6 +43,7 @@ from cerber_bot.keyboards.giftapi_menu import (
     build_giftapi_menu,
 )
 from cerber_bot.keyboards.main_menu import build_main_menu
+from cerber_bot.services.store import format_money
 from cerber_bot.texts import COMMON_TEXT, GIFTAPI_TEXT
 
 
@@ -598,14 +599,6 @@ def render_order_creation_prompt() -> str:
         f"<pre>{escape(json.dumps(template, ensure_ascii=False, indent=2))}</pre>\n"
         f"{GIFTAPI_TEXT.ORDER_CREATION_CANCEL}"
     )
-
-
-def format_money(amount: Decimal | None, currency: str) -> str:
-    if amount is None:
-        return f"{COMMON_TEXT.NOT_AVAILABLE} {currency}"
-    normalized = amount.quantize(Decimal("0.01"))
-    text = format(normalized, "f").rstrip("0").rstrip(".")
-    return f"{text} {currency}"
 
 
 def format_datetime(value: object) -> str:
