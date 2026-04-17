@@ -31,9 +31,14 @@ class RukassaConfigurationError(RukassaError):
 
 
 class RukassaRequestError(RukassaError):
-    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+    def __init__(self, message: str, *, status_code: int | None = None, api_error_code: int | None = None) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.api_error_code = api_error_code
+
+
+class RukassaFrozenError(RukassaRequestError):
+    """Магазин заморожен или не активирован в Rukassa (код ошибки 300)."""
 
 
 @dataclass(slots=True, frozen=True)
@@ -137,9 +142,15 @@ class RukassaClient:
             raise RukassaRequestError(f"Rukassa сетевая ошибка: {error}") from error
 
         if "error" in body:
-            raise RukassaRequestError(
-                f"Rukassa API ошибка {body.get('error')}: {body.get('message', '')}"
-            )
+            api_code = body.get("error")
+            try:
+                api_code_int = int(api_code)  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                api_code_int = None
+            msg = f"Rukassa API ошибка {api_code}: {body.get('message', '')}"
+            if api_code_int == 300:
+                raise RukassaFrozenError(msg, api_error_code=api_code_int)
+            raise RukassaRequestError(msg, api_error_code=api_code_int)
 
         payment_id = body.get("id")
         payment_url = body.get("url")

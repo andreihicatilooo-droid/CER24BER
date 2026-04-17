@@ -568,6 +568,9 @@ class RUKASSA_TEXT:
     UNKNOWN_STATUS = "Rukassa вернул неизвестный статус: {status}."
     CREDIT_DESCRIPTION_DIRECT = "Пополнение через Rukassa на {paid_text}"
     CREDIT_DESCRIPTION_CONVERTED = "Пополнение через Rukassa: оплачено {paid_text}, зачислено {credited_text}"
+    FROZEN_FALLBACK_UNAVAILABLE = (
+        "Платёжная система временно недоступна. Обратитесь к администратору."
+    )
 
     @classmethod
     def unknown_status(cls, status: str) -> str:

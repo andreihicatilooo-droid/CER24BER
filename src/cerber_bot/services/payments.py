@@ -20,7 +20,7 @@ from cerber_bot.db.repositories.payments import WalletPaymentRepository
 from cerber_bot.db.repositories.users import UserRepository
 from cerber_bot.db.repositories.wallet import WalletTransactionRepository
 from cerber_bot.integrations.nicepay import NicePayClient, NicePayError
-from cerber_bot.integrations.rukassa import RukassaClient, RukassaError, RUKASSA_PAID_STATUS
+from cerber_bot.integrations.rukassa import RukassaClient, RukassaError, RukassaFrozenError, RUKASSA_PAID_STATUS
 from cerber_bot.services.exchange import ExchangeRateError, ExchangeRateService
 from cerber_bot.services.store import format_money
 from cerber_bot.texts import PAYMENT_SERVICE_TEXT, RUKASSA_TEXT
@@ -169,12 +169,18 @@ class PaymentService:
         amount_minor_units = amount_to_minor_units(normalized_amount)
 
         if self._use_rukassa and force_provider != "nicepay":
-            return await self._create_rukassa_top_up_link(
-                telegram_user=telegram_user,
-                normalized_amount=normalized_amount,
-                payload=payload,
-                description=description,
-            )
+            try:
+                return await self._create_rukassa_top_up_link(
+                    telegram_user=telegram_user,
+                    normalized_amount=normalized_amount,
+                    payload=payload,
+                    description=description,
+                )
+            except RukassaFrozenError:
+                # Магазин заморожен — пробуем NicePay как резервный провайдер
+                if not self.nicepay_client.is_configured:
+                    raise PaymentFlowError(RUKASSA_TEXT.FROZEN_FALLBACK_UNAVAILABLE) from None
+                # Продолжаем выполнение ниже — создаём NicePay-платёж
 
         async with self.session_factory() as session:
             user_repository = UserRepository(session)
