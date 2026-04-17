@@ -438,6 +438,11 @@ class PaymentService:
             return to_callback_result(completion, method=notification.method)
 
     @property
+    def is_rukassa_mode(self) -> bool:
+        """True, если Rukassa настроена и используется как провайдер платежей."""
+        return self._use_rukassa
+
+    @property
     def is_h2h_mode(self) -> bool:
         return bool(self.method) and self.nicepay_client.is_configured and not self._use_rukassa
 

@@ -207,21 +207,21 @@ def build_field_input_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def build_wallet_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP, callback_data=STORE_TOP_UP_CUSTOM_ACTION)],
-            [
-                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_H2H, callback_data=STORE_TOP_UP_H2H_ACTION),
-                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_LINK, callback_data=STORE_TOP_UP_LINK_ACTION),
-            ],
-            [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.RECENT_OPERATIONS, callback_data=STORE_WALLET_HISTORY_ACTION)],
-            [
-                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.ORDERS, callback_data=STORE_ORDERS_ACTION),
-                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=MAIN_MENU_ACTION),
-            ],
-        ]
-    )
+def build_wallet_keyboard(*, show_h2h_row: bool = True) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP, callback_data=STORE_TOP_UP_CUSTOM_ACTION)],
+    ]
+    if show_h2h_row:
+        rows.append([
+            InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_H2H, callback_data=STORE_TOP_UP_H2H_ACTION),
+            InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_LINK, callback_data=STORE_TOP_UP_LINK_ACTION),
+        ])
+    rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.RECENT_OPERATIONS, callback_data=STORE_WALLET_HISTORY_ACTION)])
+    rows.append([
+        InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.ORDERS, callback_data=STORE_ORDERS_ACTION),
+        InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=MAIN_MENU_ACTION),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def build_wallet_history_keyboard() -> InlineKeyboardMarkup:

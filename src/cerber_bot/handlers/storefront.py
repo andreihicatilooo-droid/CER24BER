@@ -105,6 +105,10 @@ OFFERS_PER_PAGE = 5
 def build_storefront_router(container: AppContainer) -> Router:
     router = Router(name="storefront")
 
+    def _wallet_kb() -> InlineKeyboardMarkup:
+        """Клавиатура кошелька с учётом активного провайдера платежей."""
+        return build_wallet_keyboard(show_h2h_row=not container.payment_service.is_rukassa_mode)
+
     @router.callback_query(F.data == STORE_HOME_ACTION)
     async def handle_store_home(callback: CallbackQuery, state: FSMContext) -> None:
         message = extract_message(callback)
@@ -424,7 +428,7 @@ def build_storefront_router(container: AppContainer) -> Router:
             return
         await state.update_data(top_up_method="h2h", h2h_nicepay_method=selected_method)
         await state.set_state(StorefrontStates.waiting_for_top_up_amount)
-        await message.answer(STOREFRONT_TEXT.TOP_UP_CUSTOM_PROMPT, reply_markup=build_wallet_keyboard())
+        await message.answer(STOREFRONT_TEXT.TOP_UP_CUSTOM_PROMPT, reply_markup=_wallet_kb())
         await callback.answer(STOREFRONT_TEXT.CALLBACK_H2H_METHOD_SELECTED)
 
     @router.callback_query(F.data == STORE_TOP_UP_LINK_ACTION)
@@ -435,7 +439,7 @@ def build_storefront_router(container: AppContainer) -> Router:
             return
         await state.update_data(top_up_method="link")
         await state.set_state(StorefrontStates.waiting_for_top_up_amount)
-        await message.answer(STOREFRONT_TEXT.TOP_UP_CUSTOM_PROMPT, reply_markup=build_wallet_keyboard())
+        await message.answer(STOREFRONT_TEXT.TOP_UP_CUSTOM_PROMPT, reply_markup=_wallet_kb())
         await callback.answer(STOREFRONT_TEXT.CALLBACK_TOP_UP_AMOUNT_READY)
 
     @router.callback_query(F.data.startswith(STORE_TOP_UP_PREFIX))
@@ -453,7 +457,7 @@ def build_storefront_router(container: AppContainer) -> Router:
             try:
                 h2h = await container.payment_service.create_h2h_payment(callback.from_user, amount)
             except (PaymentFlowError, PaymentConfigurationError, StoreServiceError) as error:
-                await send_screen(message, render_store_error(error), build_wallet_keyboard(), callback=callback)
+                await send_screen(message, render_store_error(error), _wallet_kb(), callback=callback)
                 return
             await state.set_state(None)
             await send_h2h_details(message, h2h, callback=callback)
@@ -462,13 +466,13 @@ def build_storefront_router(container: AppContainer) -> Router:
             try:
                 payment_link = await container.payment_service.create_top_up_link(callback.from_user, amount)
             except (PaymentFlowError, PaymentConfigurationError, StoreServiceError) as error:
-                await send_screen(message, render_store_error(error), build_wallet_keyboard(), callback=callback)
+                await send_screen(message, render_store_error(error), _wallet_kb(), callback=callback)
                 return
             await state.set_state(None)
             try:
                 await send_top_up_link(message, payment_link)
             except (TelegramBadRequest, TelegramNetworkError) as error:
-                await send_screen(message, render_store_error(error), build_wallet_keyboard(), callback=callback)
+                await send_screen(message, render_store_error(error), _wallet_kb(), callback=callback)
 
     @router.callback_query(F.data == STORE_TOP_UP_CUSTOM_ACTION)
     async def handle_top_up_custom_prompt(callback: CallbackQuery, state: FSMContext) -> None:
@@ -480,7 +484,7 @@ def build_storefront_router(container: AppContainer) -> Router:
         await state.set_state(StorefrontStates.waiting_for_top_up_amount)
         await message.answer(
             STOREFRONT_TEXT.TOP_UP_CUSTOM_PROMPT,
-            reply_markup=build_wallet_keyboard(),
+            reply_markup=_wallet_kb(),
         )
         await callback.answer(STOREFRONT_TEXT.CALLBACK_TOP_UP_AMOUNT_READY)
 
@@ -502,7 +506,7 @@ def build_storefront_router(container: AppContainer) -> Router:
                     message.from_user, amount, method=h2h_nicepay_method
                 )
             except (PaymentFlowError, PaymentConfigurationError, StoreServiceError, ValueError) as error:
-                await message.answer(render_store_error(error), reply_markup=build_wallet_keyboard())
+                await message.answer(render_store_error(error), reply_markup=_wallet_kb())
                 return
             await state.set_state(None)
             await send_h2h_details(message, h2h)
@@ -511,13 +515,13 @@ def build_storefront_router(container: AppContainer) -> Router:
                 amount = parse_decimal(message.text or "")
                 payment_link = await container.payment_service.create_top_up_link(message.from_user, amount)
             except (PaymentFlowError, PaymentConfigurationError, StoreServiceError, ValueError) as error:
-                await message.answer(render_store_error(error), reply_markup=build_wallet_keyboard())
+                await message.answer(render_store_error(error), reply_markup=_wallet_kb())
                 return
             await state.set_state(None)
             try:
                 await send_top_up_link(message, payment_link)
             except (TelegramBadRequest, TelegramNetworkError) as error:
-                await message.answer(render_store_error(error), reply_markup=build_wallet_keyboard())
+                await message.answer(render_store_error(error), reply_markup=_wallet_kb())
 
     @router.callback_query(F.data.startswith(STORE_H2H_CONFIRM_PREFIX))
     async def handle_h2h_confirm(callback: CallbackQuery, state: FSMContext) -> None:
@@ -554,7 +558,7 @@ def build_storefront_router(container: AppContainer) -> Router:
             return
 
         await state.set_state(None)
-        await send_screen(message, render_wallet_text_simple(), build_wallet_keyboard(), callback=callback)
+        await send_screen(message, render_wallet_text_simple(), _wallet_kb(), callback=callback)
         await callback.answer(STOREFRONT_TEXT.CALLBACK_H2H_CANCELED)
 
     @router.callback_query(F.data.startswith(STORE_H2H_PROOF_SKIP_PREFIX))
@@ -565,7 +569,7 @@ def build_storefront_router(container: AppContainer) -> Router:
             return
 
         await state.set_state(None)
-        await send_screen(message, render_wallet_text_simple(), build_wallet_keyboard(), callback=callback)
+        await send_screen(message, render_wallet_text_simple(), _wallet_kb(), callback=callback)
         await callback.answer(STOREFRONT_TEXT.CALLBACK_H2H_PROOF_SKIPPED)
 
     @router.message(StorefrontStates.waiting_for_h2h_proof)
@@ -580,7 +584,7 @@ def build_storefront_router(container: AppContainer) -> Router:
         payment_id = str(data.get("h2h_payment_id") or "")
         if not payment_id:
             await state.set_state(None)
-            await message.answer(render_wallet_text_simple(), reply_markup=build_wallet_keyboard())
+            await message.answer(render_wallet_text_simple(), reply_markup=_wallet_kb())
             return
 
         # Telegram: photo[-1] — наибольший размер
@@ -617,7 +621,7 @@ def build_storefront_router(container: AppContainer) -> Router:
         await state.set_state(None)
         await message.answer(
             "\n".join([STOREFRONT_TEXT.H2H_CONFIRMED_TITLE, STOREFRONT_TEXT.H2H_CONFIRMED_HINT]),
-            reply_markup=build_wallet_keyboard(),
+            reply_markup=_wallet_kb(),
         )
 
     @router.callback_query(F.data.startswith(STORE_BUY_SKU_PREFIX))
@@ -641,7 +645,7 @@ def build_storefront_router(container: AppContainer) -> Router:
                 sku_id=sku_id,
             )
         except (StoreServiceError, GiftApiError) as error:
-            await send_screen(message, render_store_error(error), build_wallet_keyboard(), callback=callback)
+            await send_screen(message, render_store_error(error), _wallet_kb(), callback=callback)
             await callback.answer(STOREFRONT_TEXT.CALLBACK_PURCHASE_FAILED)
             return
 
@@ -741,7 +745,7 @@ def build_storefront_router(container: AppContainer) -> Router:
             try:
                 result = await container.store_service.purchase_offer(callback.from_user, product_id=str(product_id), sku_id=sku_id)
             except (StoreServiceError, GiftApiError) as error:
-                await send_screen(message, render_store_error(error), build_wallet_keyboard(), callback=callback)
+                await send_screen(message, render_store_error(error), _wallet_kb(), callback=callback)
                 return
             await state.set_state(None)
             await send_screen(message, render_purchase_result(result), build_order_detail_keyboard(), callback=callback)
@@ -818,7 +822,7 @@ def build_storefront_router(container: AppContainer) -> Router:
                 customer_fields=values,
             )
         except (StoreServiceError, GiftApiError) as error:
-            await message.answer(render_store_error(error), reply_markup=build_wallet_keyboard())
+            await message.answer(render_store_error(error), reply_markup=_wallet_kb())
             return
 
         await state.clear()
@@ -1012,7 +1016,7 @@ async def render_wallet_screen(
 ) -> None:
     wallet = await container.store_service.get_wallet_snapshot(telegram_id)
     await state.update_data(current_view_type="wallet")
-    await send_screen(message, render_wallet_text(wallet), build_wallet_keyboard(), callback=callback)
+    await send_screen(message, render_wallet_text(wallet), _wallet_kb(), callback=callback)
 
 
 async def render_orders(
