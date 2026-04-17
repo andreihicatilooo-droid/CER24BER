@@ -181,7 +181,7 @@ def build_wallet_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.CUSTOM_AMOUNT, callback_data=STORE_TOP_UP_CUSTOM_ACTION)],
             [
                 InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.ORDERS, callback_data=STORE_ORDERS_ACTION),
-                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=STORE_HOME_ACTION),
+                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=MAIN_MENU_ACTION),
             ],
         ]
     )
