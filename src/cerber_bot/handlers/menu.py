@@ -440,20 +440,9 @@ def build_deals_router(container: AppContainer) -> Router:
             return
 
         content_type, summary = summarize_user_message(message)
-        try:
-            relay = await container.deal_service.record_chat_message(
-                message.from_user.id,
-                deal_id=deal_id,
-                content_type=content_type,
-                body=summary,
-            )
-        except DealServiceError as error:
-            await message.answer(render_deal_error(error), reply_markup=build_deal_open_keyboard(deal_id))
-            return
 
-        await state.clear()
-
-        # Загружаем фото на nbox.me (только для content_type == "photo")
+        # Для фото — загружаем на nbox.me ДО сохранения в БД,
+        # чтобы ссылка попала в тело сообщения и историю чата сделки.
         nbox_url: str | None = None
         if content_type == "photo" and message.photo and message.bot is not None:
             photo_size = message.photo[-1]
@@ -462,6 +451,22 @@ def build_deals_router(container: AppContainer) -> Router:
                 filename = f"deal_{deal_id}_{photo_size.file_id[:8]}.jpg"
                 nbox_url = await container.nbox_service.upload_photo(bio, filename=filename)
 
+        # Если nbox загрузил фото — используем ссылку как тело; иначе — описание
+        body = nbox_url if nbox_url else summary
+
+        try:
+            relay = await container.deal_service.record_chat_message(
+                message.from_user.id,
+                deal_id=deal_id,
+                content_type=content_type,
+                body=body,
+            )
+        except DealServiceError as error:
+            await message.answer(render_deal_error(error), reply_markup=build_deal_open_keyboard(deal_id))
+            return
+
+        await state.clear()
+
         notification_text = render_deal_message_notification(relay, nbox_url=nbox_url)
         await notify_user_safe(
             message.bot,
@@ -469,15 +474,17 @@ def build_deals_router(container: AppContainer) -> Router:
             notification_text,
             reply_markup=build_deal_open_keyboard(deal_id),
         )
-        try:
-            await message.copy_to(relay.recipient_id)
-        except (TelegramBadRequest, TelegramNetworkError):
-            await notify_user_safe(
-                message.bot,
-                relay.recipient_id,
-                DEAL_HANDLER_TEXT.attachment_forward_failed(escape(relay.preview)),
-                reply_markup=build_deal_open_keyboard(deal_id),
-            )
+        # Пересылаем вложение только если nbox не загрузил фото
+        if nbox_url is None:
+            try:
+                await message.copy_to(relay.recipient_id)
+            except (TelegramBadRequest, TelegramNetworkError):
+                await notify_user_safe(
+                    message.bot,
+                    relay.recipient_id,
+                    DEAL_HANDLER_TEXT.attachment_forward_failed(escape(relay.preview)),
+                    reply_markup=build_deal_open_keyboard(deal_id),
+                )
         await message.answer(render_deal_view(relay.deal), reply_markup=build_deal_detail_keyboard(relay.deal))
 
     @router.callback_query(F.data.startswith(DEAL_SUCCESS_PREFIX))
@@ -1100,7 +1107,8 @@ def format_timestamp(value: object, *, short: bool = False) -> str:
 
 
 def summarize_user_message(message: Message) -> tuple[str, str]:
-    content_type = str(message.content_type)
+    # aiogram 3: message.content_type — StrEnum, .value даёт «photo», «document» и т.д.
+    content_type: str = getattr(message.content_type, "value", str(message.content_type))
     if message.text:
         return content_type, shorten_text(message.text, 280)
     if message.caption:
