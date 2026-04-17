@@ -66,6 +66,20 @@ class Settings(BaseSettings):
         if isinstance(value, str) and not value.strip():
             return None
         return value
+
+    @field_validator("nicepay_webhook_port", mode="before")
+    @classmethod
+    def _empty_str_nicepay_port(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return 8080
+        return value
+
+    @field_validator("web_port", mode="before")
+    @classmethod
+    def _empty_str_web_port(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return 8088
+        return value
     payments_currency: str = Field(default="USD", alias="PAYMENTS_CURRENCY")
     payments_title: str = Field(default="CERBER wallet top-up", alias="PAYMENTS_TITLE")
     payments_description: str = Field(
