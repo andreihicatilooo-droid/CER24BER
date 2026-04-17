@@ -942,13 +942,17 @@ async def render_store_home(
         except (TelegramBadRequest, TelegramNetworkError):
             pass
     if image_path.exists():
-        await message.answer_photo(
-            photo=FSInputFile(image_path),
-            caption=caption,
-            reply_markup=keyboard,
-        )
+        try:
+            await message.answer_photo(
+                photo=FSInputFile(image_path),
+                caption=caption,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+            )
+        except (TelegramBadRequest, TelegramNetworkError):
+            await message.answer(caption, reply_markup=keyboard, parse_mode="HTML")
     else:
-        await message.answer(caption, reply_markup=keyboard)
+        await message.answer(caption, reply_markup=keyboard, parse_mode="HTML")
 
 
 async def render_categories(
@@ -1195,12 +1199,12 @@ async def send_screen(
 ) -> None:
     if callback is not None and callback.message is not None and callback.message.text:
         try:
-            await callback.message.edit_text(text, reply_markup=reply_markup)
+            await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode="HTML")
             return
         except TelegramBadRequest:
             pass
 
-    await message.answer(text, reply_markup=reply_markup)
+    await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
 
 
 def render_dashboard(dashboard: StoreDashboard) -> str:
