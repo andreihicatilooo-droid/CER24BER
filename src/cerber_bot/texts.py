@@ -586,12 +586,9 @@ class RUKASSA_TEXT:
         "Клиент Rukassa заморожен. Проверьте статус аккаунта "
         "и обратитесь в поддержку Rukassa."
     )
-<<<<<<< HEAD
     FROZEN_FALLBACK_UNAVAILABLE = (
         "Платёжная система временно недоступна. Обратитесь к администратору."
     )
-=======
->>>>>>> 900be0693be755d41112e7023befff1cdaa36ca3
 
     @classmethod
     def unknown_status(cls, status: str) -> str:
