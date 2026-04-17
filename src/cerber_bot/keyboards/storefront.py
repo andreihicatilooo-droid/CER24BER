@@ -32,6 +32,8 @@ STORE_POPULAR_PAGE_PREFIX = "store:popp:"  # пагинация популярн
 STORE_H2H_CONFIRM_PREFIX = "h2h:ok:"  # + payment_id — подтверждение перевода
 STORE_H2H_CANCEL_PREFIX = "h2h:x:"   # + payment_id — отмена H2H платежа
 STORE_H2H_PROOF_SKIP_PREFIX = "h2h:skip:"  # + payment_id — пропустить чек
+STORE_TOP_UP_H2H_ACTION = "store:tph2h"   # выбор метода H2H
+STORE_TOP_UP_LINK_ACTION = "store:tplink"  # выбор метода ссылка
 STORE_WALLET_HISTORY_ACTION = "store:whist"  # история операций кошелька
 
 
@@ -208,6 +210,10 @@ def build_wallet_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP, callback_data=STORE_TOP_UP_CUSTOM_ACTION)],
+            [
+                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_H2H, callback_data=STORE_TOP_UP_H2H_ACTION),
+                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_LINK, callback_data=STORE_TOP_UP_LINK_ACTION),
+            ],
             [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.RECENT_OPERATIONS, callback_data=STORE_WALLET_HISTORY_ACTION)],
             [
                 InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.ORDERS, callback_data=STORE_ORDERS_ACTION),

@@ -75,6 +75,8 @@ class STORE_KEYBOARD_TEXT:
     RECENT_OPERATIONS = "📋 Последние операции"
     CUSTOM_AMOUNT = "Своя сумма"
     PAY_WITH_NICEPAY = "Оплатить через NicePay"
+    TOP_UP_H2H = "📲 Напрямую (H2H)"
+    TOP_UP_LINK = "🔗 Через ссылку"
     H2H_I_PAID = "✅ Я перевёл"
     H2H_CANCEL = "❌ Отмена"
     H2H_UPLOAD_PROOF = "📎 Отправить чек"

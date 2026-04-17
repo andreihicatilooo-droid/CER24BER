@@ -46,6 +46,8 @@ from cerber_bot.keyboards.storefront import (
     STORE_H2H_CONFIRM_PREFIX,
     STORE_H2H_PROOF_SKIP_PREFIX,
     STORE_TOP_UP_CUSTOM_ACTION,
+    STORE_TOP_UP_H2H_ACTION,
+    STORE_TOP_UP_LINK_ACTION,
     STORE_TOP_UP_PREFIX,
     STORE_WALLET_ACTION,
     STORE_WALLET_HISTORY_ACTION,
@@ -397,6 +399,28 @@ def build_storefront_router(container: AppContainer) -> Router:
         await send_screen(message, render_wallet_history_text(wallet), build_wallet_history_keyboard(), callback=callback)
         await callback.answer(STOREFRONT_TEXT.CALLBACK_WALLET_HISTORY)
 
+    @router.callback_query(F.data == STORE_TOP_UP_H2H_ACTION)
+    async def handle_top_up_method_h2h(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+        await state.update_data(top_up_method="h2h")
+        await state.set_state(StorefrontStates.waiting_for_top_up_amount)
+        await message.answer(STOREFRONT_TEXT.TOP_UP_CUSTOM_PROMPT, reply_markup=build_wallet_keyboard())
+        await callback.answer(STOREFRONT_TEXT.CALLBACK_TOP_UP_AMOUNT_READY)
+
+    @router.callback_query(F.data == STORE_TOP_UP_LINK_ACTION)
+    async def handle_top_up_method_link(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+        await state.update_data(top_up_method="link")
+        await state.set_state(StorefrontStates.waiting_for_top_up_amount)
+        await message.answer(STOREFRONT_TEXT.TOP_UP_CUSTOM_PROMPT, reply_markup=build_wallet_keyboard())
+        await callback.answer(STOREFRONT_TEXT.CALLBACK_TOP_UP_AMOUNT_READY)
+
     @router.callback_query(F.data.startswith(STORE_TOP_UP_PREFIX))
     async def handle_top_up_fixed(callback: CallbackQuery, state: FSMContext) -> None:
         message = extract_message(callback)
@@ -448,7 +472,12 @@ def build_storefront_router(container: AppContainer) -> Router:
         if message.from_user is None:
             return
 
-        if container.payment_service.is_h2h_mode:
+        data = await state.get_data()
+        # Явный выбор метода имеет приоритет над is_h2h_mode
+        chosen_method = data.get("top_up_method")
+        use_h2h = chosen_method == "h2h" if chosen_method else container.payment_service.is_h2h_mode
+
+        if use_h2h:
             try:
                 amount = parse_decimal(message.text or "")
                 h2h = await container.payment_service.create_h2h_payment(message.from_user, amount)
