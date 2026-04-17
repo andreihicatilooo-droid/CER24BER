@@ -1016,7 +1016,12 @@ async def render_wallet_screen(
 ) -> None:
     wallet = await container.store_service.get_wallet_snapshot(telegram_id)
     await state.update_data(current_view_type="wallet")
-    await send_screen(message, render_wallet_text(wallet), _wallet_kb(), callback=callback)
+    await send_screen(
+        message,
+        render_wallet_text(wallet),
+        build_wallet_keyboard(show_h2h_row=not container.payment_service.is_rukassa_mode),
+        callback=callback,
+    )
 
 
 async def render_orders(
