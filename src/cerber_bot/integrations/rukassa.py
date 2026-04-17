@@ -144,7 +144,6 @@ class RukassaClient:
             raise RukassaRequestError(f"Rukassa сетевая ошибка: {error}") from error
 
         if "error" in body:
-<<<<<<< HEAD
             api_code = body.get("error")
             try:
                 api_code_int = int(api_code)  # type: ignore[arg-type]
@@ -154,9 +153,6 @@ class RukassaClient:
             if api_code_int == 300:
                 raise RukassaFrozenError(msg, api_error_code=api_code_int)
             raise RukassaRequestError(msg, api_error_code=api_code_int)
-=======
-            raise RukassaRequestError(self._build_api_error_message(body))
->>>>>>> 900be0693be755d41112e7023befff1cdaa36ca3
 
         payment_id = body.get("id")
         payment_url = body.get("url")
