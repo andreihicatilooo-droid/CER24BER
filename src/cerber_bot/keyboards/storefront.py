@@ -1,8 +1,9 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from cerber_bot.services.store import PageInfo, StoreCategoryCard, StoreOrderCard, StoreProductCard, StoreProductOffer, format_money
-from cerber_bot.keyboards.main_menu import MAIN_MENU_ACTION
 from cerber_bot.texts import STORE_KEYBOARD_TEXT
+
+MAIN_MENU_ACTION = "menu:main"
 
 
 STORE_HOME_ACTION = "store:home"
