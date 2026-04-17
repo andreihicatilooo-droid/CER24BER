@@ -36,8 +36,8 @@ class NboxService:
                 return None
             return page.first.url
         except NboxError as exc:
-            logger.warning("nbox.me: ошибка загрузки фото (%s): %s", filename, exc)
+            logger.error("nbox.me: ошибка загрузки фото (%s): %s", filename, exc, exc_info=True)
             return None
         except Exception as exc:
-            logger.warning("nbox.me: неожиданная ошибка при загрузке фото (%s): %s", filename, exc)
+            logger.error("nbox.me: неожиданная ошибка при загрузке фото (%s): %s", filename, exc, exc_info=True)
             return None

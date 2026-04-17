@@ -1,6 +1,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from cerber_bot.services.store import PageInfo, StoreCategoryCard, StoreOrderCard, StoreProductCard, StoreProductOffer, format_money
+from cerber_bot.keyboards.main_menu import MAIN_MENU_ACTION
 from cerber_bot.texts import STORE_KEYBOARD_TEXT
 
 
@@ -208,7 +209,7 @@ def build_orders_keyboard(orders: tuple[StoreOrderCard, ...], page_info: PageInf
     rows.append(
         [
             InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.WALLET, callback_data=STORE_WALLET_ACTION),
-            InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=STORE_HOME_ACTION),
+            InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=MAIN_MENU_ACTION),
         ]
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -221,7 +222,7 @@ def build_order_detail_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.ORDERS, callback_data=STORE_ORDERS_ACTION),
                 InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.WALLET, callback_data=STORE_WALLET_ACTION),
             ],
-            [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=STORE_HOME_ACTION)],
+            [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=MAIN_MENU_ACTION)],
         ]
     )
 

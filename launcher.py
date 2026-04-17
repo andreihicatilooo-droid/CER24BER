@@ -436,6 +436,7 @@ SERVICE_CHECKS: list[tuple[str, str, str | None, str, str | None]] = [
     ("Telegram API",  "TELEGRAM_API_URL", "TELEGRAM_PROXY", "https://api.telegram.org", None),
     ("NicePay",       "NICEPAY_BASE_URL", "NICEPAY_PROXY",  "https://nicepay.io",       None),
     ("GiftAPI",       "GIFTAPI_BASE_URL", None,             "https://api.giftapi.io",   None),
+    ("nbox.me",       "NBOX_BASE_URL",    None,             "https://nbox.me",          None),
 ]
 
 

@@ -873,12 +873,12 @@ class DEAL_HANDLER_TEXT:
     }
     CONTENT_WITH_CAPTION = "[{content_type}] {caption}"
     CONTENT_SUMMARIES = {
-        "photo": "[photo] Фото без подписи",
-        "document": "[document] Файл без подписи",
-        "video": "[video] Видео без подписи",
-        "voice": "[voice] Голосовое сообщение",
-        "audio": "[audio] Аудиофайл",
-        "sticker": "[sticker] Стикер",
+        "photo":    "📷 Фото",
+        "document": "📎 Файл",
+        "video":    "🎬 Видео",
+        "voice":    "🎤 Голосовое сообщение",
+        "audio":    "🎵 Аудиофайл",
+        "sticker":  "🎭 Стикер",
     }
     CONTENT_EMPTY = "[{content_type}] Сообщение без текста"
     CANCEL_COMMANDS = frozenset({"отмена", "cancel", "/cancel"})
