@@ -567,6 +567,16 @@ class RUKASSA_TEXT:
     UNKNOWN_STATUS = "Rukassa вернул неизвестный статус: {status}."
     CREDIT_DESCRIPTION_DIRECT = "Пополнение через Rukassa на {paid_text}"
     CREDIT_DESCRIPTION_CONVERTED = "Пополнение через Rukassa: оплачено {paid_text}, зачислено {credited_text}"
+    API_ERROR_WITH_MESSAGE = "Rukassa API ошибка {code}: {message}"
+    API_ERROR_NO_MESSAGE = "Rukassa API ошибка {code}"
+    API_ERROR_100_HINT = (
+        "Проверьте корректность RUKASSA_SHOP_ID и RUKASSA_TOKEN: "
+        "shop_id должен быть числом без лишних символов."
+    )
+    API_ERROR_300_HINT = (
+        "Клиент Rukassa заморожен. Проверьте статус аккаунта "
+        "и обратитесь в поддержку Rukassa."
+    )
 
     @classmethod
     def unknown_status(cls, status: str) -> str:
@@ -579,6 +589,12 @@ class RUKASSA_TEXT:
     @classmethod
     def credit_description_converted(cls, paid_text: str, credited_text: str) -> str:
         return cls.CREDIT_DESCRIPTION_CONVERTED.format(paid_text=paid_text, credited_text=credited_text)
+
+    @classmethod
+    def api_error(cls, code: str, message: str) -> str:
+        if message:
+            return cls.API_ERROR_WITH_MESSAGE.format(code=code, message=message)
+        return cls.API_ERROR_NO_MESSAGE.format(code=code)
 
 
 class NICEPAY_TEXT:

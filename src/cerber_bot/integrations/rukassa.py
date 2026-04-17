@@ -16,6 +16,8 @@ from dataclasses import dataclass
 
 import httpx
 
+from cerber_bot.texts import RUKASSA_TEXT
+
 
 JsonDict = dict[str, object]
 
@@ -137,9 +139,7 @@ class RukassaClient:
             raise RukassaRequestError(f"Rukassa сетевая ошибка: {error}") from error
 
         if "error" in body:
-            raise RukassaRequestError(
-                f"Rukassa API ошибка {body.get('error')}: {body.get('message', '')}"
-            )
+            raise RukassaRequestError(self._build_api_error_message(body))
 
         payment_id = body.get("id")
         payment_url = body.get("url")
@@ -152,6 +152,17 @@ class RukassaClient:
             payment_id=int(payment_id),
             payment_url=str(payment_url),
         )
+
+    @staticmethod
+    def _build_api_error_message(body: Mapping[str, object]) -> str:
+        code = str(body.get("error", "")).strip()
+        message = str(body.get("message", "")).strip()
+        base_message = RUKASSA_TEXT.api_error(code, message)
+        if code == "100":
+            return f"{base_message}. {RUKASSA_TEXT.API_ERROR_100_HINT}"
+        if code == "300":
+            return f"{base_message}. {RUKASSA_TEXT.API_ERROR_300_HINT}"
+        return base_message
 
     def parse_webhook(
         self,
