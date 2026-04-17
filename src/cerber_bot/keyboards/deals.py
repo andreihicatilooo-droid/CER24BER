@@ -8,6 +8,8 @@ from cerber_bot.services.store import PageInfo, format_money
 from cerber_bot.texts import DEAL_KEYBOARD_TEXT
 
 
+MAIN_MENU_ACTION = "menu:main"
+
 DEAL_HOME_ACTION = "deal:home"
 DEAL_NEW_ACTION = "deal:new"
 DEAL_LIST_ACTION = "deal:list"

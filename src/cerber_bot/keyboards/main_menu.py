@@ -1,8 +1,9 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from cerber_bot.config import Settings
-from cerber_bot.keyboards.deals import DEAL_HOME_ACTION
 from cerber_bot.keyboards.storefront import STORE_HOME_ACTION, STORE_ORDERS_ACTION, STORE_REFRESH_ACTION, STORE_SEARCH_PROMPT_ACTION, STORE_WALLET_ACTION
+
+DEAL_HOME_ACTION = "deal:home"
 from cerber_bot.texts import FAQ_TEXT, MAIN_MENU_TEXT
 
 
