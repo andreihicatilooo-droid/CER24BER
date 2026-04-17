@@ -20,6 +20,7 @@ from cerber_bot.db.session import create_engine, create_session_factory, ensure_
 from cerber_bot.integrations.giftapi import GiftApiClient
 from cerber_bot.integrations.nbox_service import NboxService
 from cerber_bot.integrations.nicepay import NicePayClient
+from cerber_bot.integrations.rukassa import RukassaClient
 from cerber_bot.services.deals import DealService
 from cerber_bot.services.exchange import ExchangeRateService
 from cerber_bot.services.giftapi import GiftApiService
@@ -82,9 +83,18 @@ class AppContainer:
             merchant_id=resolved_settings.nicepay_merchant_id,
             secret=resolved_settings.nicepay_secret,
         )
+        rukassa_client: RukassaClient | None = None
+        if resolved_settings.rukassa_shop_id and resolved_settings.rukassa_token:
+            rukassa_client = RukassaClient(
+                base_url=resolved_settings.rukassa_base_url,
+                http_client=http_client,
+                shop_id=resolved_settings.rukassa_shop_id,
+                token=resolved_settings.rukassa_token,
+            )
         payment_service = PaymentService(
             session_factory=session_factory,
             nicepay_client=nicepay_client,
+            rukassa_client=rukassa_client,
             exchange_rate_service=exchange_rate_service,
             wallet_currency=resolved_settings.wallet_currency,
             payment_currency=resolved_settings.payments_currency,
@@ -92,8 +102,8 @@ class AppContainer:
             description=resolved_settings.payments_description,
             min_amount=resolved_settings.payments_min_amount,
             max_amount=resolved_settings.payments_max_amount,
-            success_url=resolved_settings.nicepay_success_url,
-            fail_url=resolved_settings.nicepay_fail_url,
+            success_url=resolved_settings.rukassa_success_url if rukassa_client else resolved_settings.nicepay_success_url,
+            fail_url=resolved_settings.rukassa_fail_url if rukassa_client else resolved_settings.nicepay_fail_url,
             method=resolved_settings.nicepay_method,
         )
         store_service = StoreService(

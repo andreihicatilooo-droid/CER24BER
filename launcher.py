@@ -667,6 +667,40 @@ ENV_SECTIONS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
             "8080",
         ),
     ]),
+    ("Rukassa (платёжный шлюз, альтернатива NicePay)", [
+        (
+            "RUKASSA_BASE_URL",
+            "Базовый URL API Rukassa.",
+            "https://lk.rukassa.io/api/v1",
+            "https://lk.rukassa.io/api/v1",
+        ),
+        (
+            "RUKASSA_SHOP_ID",
+            "ID магазина из личного кабинета Rukassa.\n"
+            "    Если задан вместе с RUKASSA_TOKEN — Rukassa используется вместо NicePay.\n"
+            "    Укажите PAYMENTS_CURRENCY=RUB (Rukassa поддерживает только рубли).",
+            "Число из личного кабинета Rukassa",
+            "",
+        ),
+        (
+            "RUKASSA_TOKEN",
+            "API-токен из личного кабинета Rukassa.",
+            "Строка из личного кабинета Rukassa",
+            "",
+        ),
+        (
+            "RUKASSA_SUCCESS_URL",
+            "URL для перенаправления после успешной оплаты.",
+            "Пусто / https://your-site.com/success",
+            "",
+        ),
+        (
+            "RUKASSA_FAIL_URL",
+            "URL для перенаправления при неуспешной оплате.",
+            "Пусто / https://your-site.com/fail",
+            "",
+        ),
+    ]),
     ("GiftAPI (каталог товаров)", [
         (
             "GIFTAPI_BASE_URL",

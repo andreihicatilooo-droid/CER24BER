@@ -525,6 +525,36 @@ class GIFTAPI_CLIENT_TEXT:
     MISSING_SECRET = "Не задан GIFTAPI_SECRET для подписи заказов."
 
 
+class RUKASSA_TEXT:
+    SUCCESS_TITLE = "<b>Платёж Rukassa подтверждён</b>"
+    SUCCESS_AMOUNT = "Оплачено: {amount}"
+    SUCCESS_CREDITED = "Зачислено в кошелёк: {amount}"
+    SUCCESS_BALANCE = "Баланс кошелька: {amount}"
+    METHOD = "Метод: {method}"
+    SUCCESS_HINT = "Баланс обновлён автоматически, можно возвращаться в каталог."
+    ERROR_TITLE = "<b>Платёж Rukassa завершился с ошибкой</b>"
+    ERROR_AMOUNT = "Сумма: {amount}"
+    ERROR_HINT = "Средства не были зачислены на внутренний баланс."
+    ONLY_RUB_SUPPORTED = "Rukassa поддерживает только RUB. Установите PAYMENTS_CURRENCY=RUB."
+    WRONG_PROVIDER = "Платёж создан не через Rukassa и не может быть обработан этим вебхуком."
+    AMOUNT_MISMATCH = "Rukassa вернул сумму, не совпадающую с локальным счётом."
+    UNKNOWN_STATUS = "Rukassa вернул неизвестный статус: {status}."
+    CREDIT_DESCRIPTION_DIRECT = "Пополнение через Rukassa на {paid_text}"
+    CREDIT_DESCRIPTION_CONVERTED = "Пополнение через Rukassa: оплачено {paid_text}, зачислено {credited_text}"
+
+    @classmethod
+    def unknown_status(cls, status: str) -> str:
+        return cls.UNKNOWN_STATUS.format(status=status)
+
+    @classmethod
+    def credit_description_direct(cls, paid_text: str) -> str:
+        return cls.CREDIT_DESCRIPTION_DIRECT.format(paid_text=paid_text)
+
+    @classmethod
+    def credit_description_converted(cls, paid_text: str, credited_text: str) -> str:
+        return cls.CREDIT_DESCRIPTION_CONVERTED.format(paid_text=paid_text, credited_text=credited_text)
+
+
 class NICEPAY_TEXT:
     MISSING_CREDENTIALS = "Не заданы NICEPAY_MERCHANT_ID и NICEPAY_SECRET. Без них NicePay не сможет создать ссылку на оплату."
     CREATE_PAYMENT_FAILED = "Не удалось создать платеж NicePay."

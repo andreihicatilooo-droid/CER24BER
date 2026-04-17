@@ -7,7 +7,7 @@
 from decimal import Decimal
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -53,6 +53,19 @@ class Settings(BaseSettings):
     nicepay_webhook_host: str = Field(default="0.0.0.0", alias="NICEPAY_WEBHOOK_HOST")
     nicepay_webhook_port: int = Field(default=8080, alias="NICEPAY_WEBHOOK_PORT")
     nicepay_webhook_path: str = Field(default="/webhooks/nicepay", alias="NICEPAY_WEBHOOK_PATH")
+    rukassa_base_url: str = Field(default="https://lk.rukassa.io/api/v1", alias="RUKASSA_BASE_URL")
+    rukassa_shop_id: int | None = Field(default=None, alias="RUKASSA_SHOP_ID")
+    rukassa_token: str | None = Field(default=None, alias="RUKASSA_TOKEN")
+    rukassa_webhook_path: str = Field(default="/webhooks/rukassa", alias="RUKASSA_WEBHOOK_PATH")
+    rukassa_success_url: str | None = Field(default=None, alias="RUKASSA_SUCCESS_URL")
+    rukassa_fail_url: str | None = Field(default=None, alias="RUKASSA_FAIL_URL")
+
+    @field_validator("rukassa_shop_id", mode="before")
+    @classmethod
+    def _empty_str_to_none_int(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
     payments_currency: str = Field(default="USD", alias="PAYMENTS_CURRENCY")
     payments_title: str = Field(default="CERBER wallet top-up", alias="PAYMENTS_TITLE")
     payments_description: str = Field(

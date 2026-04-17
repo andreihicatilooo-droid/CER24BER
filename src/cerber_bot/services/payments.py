@@ -1,7 +1,9 @@
-"""Сервис платежей NicePay.
+"""Сервис платежей (NicePay / Rukassa).
 
 Создаёт ссылки на оплату, обрабатывает callback-уведомления, конвертирует
 валюту через ExchangeRateService и зачисляет средства на баланс пользователя.
+Поддерживает два провайдера: NicePay и Rukassa.
+Если настроен RUKASSA_SHOP_ID + RUKASSA_TOKEN, используется Rukassa; иначе — NicePay.
 """
 
 from __future__ import annotations
@@ -18,12 +20,14 @@ from cerber_bot.db.repositories.payments import WalletPaymentRepository
 from cerber_bot.db.repositories.users import UserRepository
 from cerber_bot.db.repositories.wallet import WalletTransactionRepository
 from cerber_bot.integrations.nicepay import NicePayClient, NicePayError
+from cerber_bot.integrations.rukassa import RukassaClient, RukassaError, RUKASSA_PAID_STATUS
 from cerber_bot.services.exchange import ExchangeRateError, ExchangeRateService
 from cerber_bot.services.store import format_money
-from cerber_bot.texts import PAYMENT_SERVICE_TEXT
+from cerber_bot.texts import PAYMENT_SERVICE_TEXT, RUKASSA_TEXT
 
 
 PAYMENT_PROVIDER_NAME = "nicepay"
+RUKASSA_PROVIDER_NAME = "rukassa"
 NICEPAY_LIMITS: dict[str, tuple[Decimal, Decimal]] = {
     "USD": (Decimal("10.00"), Decimal("990.00")),
     "EUR": (Decimal("10.00"), Decimal("850.00")),
@@ -103,6 +107,7 @@ class PaymentService:
         session_factory: async_sessionmaker[AsyncSession],
         *,
         nicepay_client: NicePayClient,
+        rukassa_client: RukassaClient | None = None,
         exchange_rate_service: ExchangeRateService,
         wallet_currency: str,
         payment_currency: str,
@@ -116,6 +121,7 @@ class PaymentService:
     ) -> None:
         self.session_factory = session_factory
         self.nicepay_client = nicepay_client
+        self.rukassa_client = rukassa_client
         self.exchange_rate_service = exchange_rate_service
         self.wallet_currency = wallet_currency
         self.payment_currency = payment_currency
@@ -128,10 +134,21 @@ class PaymentService:
         self.method = method.strip() if method else None
 
     @property
+    def _use_rukassa(self) -> bool:
+        """True, если Rukassa настроена и должна использоваться как основной провайдер."""
+        return self.rukassa_client is not None and self.rukassa_client.is_configured
+
+    @property
     def is_configured(self) -> bool:
+        if self._use_rukassa:
+            return True
         return self.nicepay_client.is_configured
 
     def ensure_configured(self) -> None:
+        if self._use_rukassa:
+            if self.payment_currency != "RUB":
+                raise PaymentConfigurationError(RUKASSA_TEXT.ONLY_RUB_SUPPORTED)
+            return
         self.nicepay_client.ensure_configured()
         if self.payment_currency not in NICEPAY_LIMITS:
             raise PaymentConfigurationError(
@@ -150,6 +167,14 @@ class PaymentService:
         payload = build_payment_payload(telegram_user.id)
         description = build_payment_description(self.description, normalized_amount, self.payment_currency)
         amount_minor_units = amount_to_minor_units(normalized_amount)
+
+        if self._use_rukassa:
+            return await self._create_rukassa_top_up_link(
+                telegram_user=telegram_user,
+                normalized_amount=normalized_amount,
+                payload=payload,
+                description=description,
+            )
 
         async with self.session_factory() as session:
             user_repository = UserRepository(session)
@@ -213,6 +238,78 @@ class PaymentService:
             wallet_currency=wallet_currency,
             amount_minor_units=amount_minor_units,
             expires_at=created_payment.expires_at,
+        )
+
+    async def _create_rukassa_top_up_link(
+        self,
+        *,
+        telegram_user: TelegramUserObject,
+        normalized_amount: Decimal,
+        payload: str,
+        description: str,
+    ) -> PaymentLink:
+        """Создать ссылку на оплату через Rukassa."""
+        assert self.rukassa_client is not None
+
+        async with self.session_factory() as session:
+            user_repository = UserRepository(session)
+            payment_repository = WalletPaymentRepository(session)
+            user, _ = await user_repository.get_or_create(
+                telegram_id=telegram_user.id,
+                username=telegram_user.username,
+                first_name=telegram_user.first_name,
+                last_name=telegram_user.last_name,
+                language_code=telegram_user.language_code,
+                is_bot=telegram_user.is_bot,
+                balance_currency=self.wallet_currency,
+            )
+            wallet_currency = user.balance_currency or self.wallet_currency
+            if not user.balance_currency:
+                user.balance_currency = wallet_currency
+            try:
+                estimated_wallet_amount = await self.exchange_rate_service.convert(
+                    normalized_amount,
+                    self.payment_currency,
+                    wallet_currency,
+                )
+            except ExchangeRateError as error:
+                raise PaymentFlowError(str(error)) from error
+
+            amount_rub = str(normalized_amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+            try:
+                created_payment = await self.rukassa_client.create_payment(
+                    order_id=payload,
+                    amount_rub=amount_rub,
+                    success_url=self.success_url,
+                    fail_url=self.fail_url,
+                )
+            except RukassaError as error:
+                raise PaymentFlowError(str(error)) from error
+
+            payment = await payment_repository.create_pending(
+                telegram_id=telegram_user.id,
+                payload=payload,
+                provider=RUKASSA_PROVIDER_NAME,
+                amount=normalized_amount,
+                currency=self.payment_currency,
+                title=self.title,
+                description=description,
+            )
+            payment.provider_payment_charge_id = str(created_payment.payment_id)
+            await session.commit()
+
+        return PaymentLink(
+            title=self.title,
+            description=description,
+            payload=payload,
+            payment_id=str(created_payment.payment_id),
+            payment_url=created_payment.payment_url,
+            currency=self.payment_currency,
+            amount=normalized_amount,
+            estimated_wallet_amount=estimated_wallet_amount,
+            wallet_currency=wallet_currency,
+            amount_minor_units=0,
+            expires_at=None,
         )
 
     async def process_callback(self, parameters: Mapping[str, object]) -> PaymentCallbackResult:
@@ -342,7 +439,140 @@ class PaymentService:
 
     @property
     def is_h2h_mode(self) -> bool:
-        return bool(self.method) and self.nicepay_client.is_configured
+        return bool(self.method) and self.nicepay_client.is_configured and not self._use_rukassa
+
+    async def process_rukassa_webhook(
+        self,
+        form_data: Mapping[str, str],
+        *,
+        signature_header: str,
+    ) -> PaymentCallbackResult:
+        """Обработать webhook-уведомление от Rukassa.
+
+        Args:
+            form_data:        Поля формы из тела POST-запроса.
+            signature_header: Значение заголовка Signature.
+
+        Returns:
+            PaymentCallbackResult с результатом обработки.
+
+        Raises:
+            PaymentFlowError: При любой ошибке обработки.
+        """
+        if self.rukassa_client is None:
+            raise PaymentFlowError("Rukassa не настроена.")
+        try:
+            notification = self.rukassa_client.parse_webhook(form_data, signature_header=signature_header)
+        except RukassaError as error:
+            raise PaymentFlowError(str(error)) from error
+
+        async with self.session_factory() as session:
+            user_repository = UserRepository(session)
+            wallet_repository = WalletTransactionRepository(session)
+            payment_repository = WalletPaymentRepository(session)
+
+            payment = await payment_repository.get_by_payload(notification.order_id)
+            if payment is None:
+                raise PaymentFlowError(PAYMENT_SERVICE_TEXT.PAYMENT_NOT_FOUND)
+            if payment.provider != RUKASSA_PROVIDER_NAME:
+                raise PaymentFlowError(RUKASSA_TEXT.WRONG_PROVIDER)
+
+            payment_amount = Decimal(str(payment.amount))
+            try:
+                webhook_amount = Decimal(notification.amount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                expected_amount = payment_amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            except Exception:
+                raise PaymentFlowError(RUKASSA_TEXT.AMOUNT_MISMATCH)
+            if webhook_amount != expected_amount:
+                raise PaymentFlowError(RUKASSA_TEXT.AMOUNT_MISMATCH)
+
+            provider_payment_id = str(notification.id)
+            payment_method = notification.payment_method
+
+            if notification.status != RUKASSA_PAID_STATUS:
+                if payment.status != "error":
+                    await payment_repository.mark_failed(
+                        payment,
+                        provider_reference=payment_method,
+                        provider_payment_id=provider_payment_id,
+                    )
+                    await session.commit()
+                return PaymentCallbackResult(
+                    result="error",
+                    telegram_id=payment.telegram_id,
+                    payload=payment.payload,
+                    payment_id=provider_payment_id,
+                    amount=payment_amount,
+                    currency=payment.currency,
+                    credited_amount=None,
+                    credited_currency=None,
+                    method=payment_method,
+                    balance_after=None,
+                )
+
+            user = await user_repository.get_by_telegram_id(payment.telegram_id, with_lock=True)
+            await session.refresh(payment)
+            if user is None:
+                raise PaymentFlowError(PAYMENT_SERVICE_TEXT.PAYMENT_NOT_FOUND)
+            wallet_currency = user.balance_currency or self.wallet_currency
+
+            if payment.status == "paid":
+                credited_transaction = await wallet_repository.get_by_reference(provider_payment_id)
+                await session.commit()
+                completion = PaymentCompletion(
+                    telegram_id=payment.telegram_id,
+                    amount=payment_amount,
+                    currency=payment.currency,
+                    credited_amount=(Decimal(str(credited_transaction.amount)) if credited_transaction is not None else None),
+                    credited_currency=(credited_transaction.currency if credited_transaction is not None else wallet_currency),
+                    balance_after=Decimal(str(user.balance)),
+                    payload=payment.payload,
+                    payment_id=provider_payment_id,
+                )
+                return to_callback_result(completion, method=payment_method)
+
+            try:
+                credited_amount = await self.exchange_rate_service.convert(
+                    payment_amount,
+                    payment.currency,
+                    wallet_currency,
+                )
+            except ExchangeRateError as error:
+                raise PaymentFlowError(str(error)) from error
+
+            user.balance_currency = wallet_currency
+            user.balance += credited_amount
+            await wallet_repository.add(
+                telegram_id=payment.telegram_id,
+                transaction_type="top_up",
+                amount=credited_amount,
+                currency=wallet_currency,
+                description=RUKASSA_TEXT.credit_description_direct(
+                    format_money(payment_amount, payment.currency)
+                ) if payment.currency == wallet_currency else RUKASSA_TEXT.credit_description_converted(
+                    format_money(payment_amount, payment.currency),
+                    format_money(credited_amount, wallet_currency),
+                ),
+                reference=provider_payment_id,
+            )
+            await payment_repository.mark_paid(
+                payment,
+                provider_reference=payment_method,
+                provider_payment_id=provider_payment_id,
+            )
+            await session.commit()
+
+            completion = PaymentCompletion(
+                telegram_id=payment.telegram_id,
+                amount=payment_amount,
+                currency=payment.currency,
+                credited_amount=credited_amount,
+                credited_currency=wallet_currency,
+                balance_after=Decimal(str(user.balance)),
+                payload=payment.payload,
+                payment_id=provider_payment_id,
+            )
+            return to_callback_result(completion, method=payment_method)
 
     async def create_h2h_payment(self, telegram_user: TelegramUserObject, amount: Decimal) -> PaymentH2HDetails:
         self.ensure_configured()
@@ -438,6 +668,8 @@ class PaymentService:
             raise PaymentFlowError(str(error)) from error
 
     def _effective_limits(self) -> tuple[Decimal, Decimal]:
+        if self._use_rukassa:
+            return self.min_amount, self.max_amount
         provider_min, provider_max = NICEPAY_LIMITS[self.payment_currency]
         min_amount = max(self.min_amount, provider_min)
         max_amount = min(self.max_amount, provider_max)
