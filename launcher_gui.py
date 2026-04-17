@@ -776,7 +776,7 @@ class CerberGUI:
             b.pack(side=tk.LEFT)
             self._tab_btns[key] = b
 
-        # Кнопка очистки справа
+        # Кнопки справа: Копировать и Очистить
         tk.Button(
             tab_bar, text="✕ Очистить",
             command=self._clear_log,
@@ -785,6 +785,16 @@ class CerberGUI:
             font=self._f_mono_s, relief=tk.FLAT, bd=0,
             padx=8, pady=6, cursor="hand2",
         ).pack(side=tk.RIGHT, padx=4)
+
+        self._btn_copy_log = tk.Button(
+            tab_bar, text="⎘ Копировать",
+            command=self._copy_logs,
+            fg=ACCENT_C, bg=BG_PANEL,
+            activeforeground=TEXT, activebackground=BG_PANEL,
+            font=self._f_mono_s, relief=tk.FLAT, bd=0,
+            padx=8, pady=6, cursor="hand2",
+        )
+        self._btn_copy_log.pack(side=tk.RIGHT, padx=2)
 
         # Акцентная линия
         tk.Frame(log_frame, bg=ACCENT, height=1).pack(fill=tk.X)
@@ -895,6 +905,14 @@ class CerberGUI:
             w.delete("1.0", f"{n - 600}.0")
         w.configure(state=tk.DISABLED)
         w.see(tk.END)
+
+    def _copy_logs(self) -> None:
+        """Копирует содержимое активного лога в буфер обмена и на 1 с подсвечивает кнопку."""
+        text = self._log_txt.get("1.0", tk.END)
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        self._btn_copy_log.configure(text="✓ Скопировано", fg=ACCENT_G)
+        self.root.after(1000, lambda: self._btn_copy_log.configure(text="⎘ Копировать", fg=ACCENT_C))
 
     def _clear_log(self) -> None:
         self._log_buffers[self._active_log].clear()
