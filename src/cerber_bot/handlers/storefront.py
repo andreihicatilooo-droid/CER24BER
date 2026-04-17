@@ -15,7 +15,7 @@ from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from cerber_bot.container import AppContainer
 from cerber_bot.handlers.menu import extract_message
@@ -932,7 +932,23 @@ async def render_store_home(
         telegram_id = callback.from_user.id
     dashboard = await container.store_service.get_dashboard(telegram_id)
     await state.update_data(current_view_type="home")
-    await send_screen(message, render_dashboard(dashboard), build_store_home_keyboard(), callback=callback)
+    caption = render_dashboard(dashboard)
+    keyboard = build_store_home_keyboard()
+    image_path = container.settings.start_image_path
+    # Всегда отправляем новое сообщение с изображением, старое удаляем
+    if callback is not None and callback.message is not None:
+        try:
+            await callback.message.delete()
+        except (TelegramBadRequest, TelegramNetworkError):
+            pass
+    if image_path.exists():
+        await message.answer_photo(
+            photo=FSInputFile(image_path),
+            caption=caption,
+            reply_markup=keyboard,
+        )
+    else:
+        await message.answer(caption, reply_markup=keyboard)
 
 
 async def render_categories(
@@ -949,6 +965,67 @@ async def render_categories(
     await send_screen(message, render_categories_screen(categories, page_info), build_categories_keyboard(categories, page_info, back_callback=back_callback), callback=callback)
 
 
+def _popular_emoji_and_desc(searchable: str) -> tuple[str, str]:
+    """Возвращает (эмодзи-префикс, русское описание) по ключевым словам продукта."""
+    t = searchable.lower()
+    if "telegram" in t and "premium" in t:
+        return "💎", STOREFRONT_TEXT.POPULAR_DESC_TELEGRAM_PREMIUM
+    if "telegram" in t and "star" in t:
+        return "⭐", STOREFRONT_TEXT.POPULAR_DESC_TELEGRAM_STARS
+    if "mts" in t or "мтс" in t:
+        return "📡", STOREFRONT_TEXT.POPULAR_DESC_MTS
+    if "visa" in t:
+        return "💳", STOREFRONT_TEXT.POPULAR_DESC_VISA
+    if "steam" in t:
+        return "🎮", STOREFRONT_TEXT.POPULAR_DESC_STEAM
+    return "", ""
+
+
+def _is_steam_ru(searchable: str) -> bool:
+    """Проверяет, является ли Steam-продукт российским регионом."""
+    tokens = set(searchable.lower().split())
+    return "ru" in tokens or "russia" in tokens or "рос" in searchable.lower()
+
+
+def _filter_popular_products(
+    products: tuple,
+) -> tuple:
+    """Фильтрует популярные товары: Steam — только ru-регион."""
+    result = []
+    for p in products:
+        t = p.searchable_text.lower()
+        if "steam" in t and not _is_steam_ru(p.searchable_text):
+            continue
+        result.append(p)
+    return tuple(result)
+
+
+def render_popular_products_screen(products: tuple, page_info: "PageInfo") -> str:
+    lines = [
+        f"<b>{escape(STOREFRONT_TEXT.POPULAR_TITLE)}</b>",
+        STOREFRONT_TEXT.PAGE_OF.format(page=page_info.page, total_pages=page_info.total_pages),
+    ]
+    if not products:
+        lines.append(STOREFRONT_TEXT.PRODUCTS_EMPTY)
+        return "\n".join(lines)
+
+    for product in products:
+        emoji, ru_desc = _popular_emoji_and_desc(product.searchable_text)
+        display_name = f"{emoji} {product.name}" if emoji else product.name
+        lines.append("")
+        lines.append(f"<b>{escape(display_name)}</b>")
+        if product.category_name:
+            lines.append(STOREFRONT_TEXT.PRODUCT_CATEGORY.format(value=escape(product.category_name)))
+        lines.append(STOREFRONT_TEXT.PRODUCT_PRICE.format(value=escape(format_price_range(product))))
+        lines.append(STOREFRONT_TEXT.PRODUCT_SKU.format(sku_count=product.sku_count, buyable_sku_count=product.buyable_sku_count))
+        lines.append(STOREFRONT_TEXT.PRODUCT_STOCK.format(stock=product.total_stock))
+        if ru_desc:
+            lines.append(ru_desc)
+        elif product.summary:
+            lines.append(escape(product.summary))
+    return "\n".join(lines)
+
+
 async def render_popular(
     message: Message,
     state: FSMContext,
@@ -961,6 +1038,7 @@ async def render_popular(
     if not all_products:
         # Fallback: нет истории покупок — берём keyword-based популярное
         all_products = await container.store_service.get_popular_products()
+    all_products = _filter_popular_products(all_products)
     if not all_products:
         await send_screen(message, STOREFRONT_TEXT.POPULAR_EMPTY, build_store_home_keyboard(), callback=callback)
         return
@@ -968,7 +1046,7 @@ async def render_popular(
     start = (page - 1) * PRODUCTS_PER_PAGE
     products = all_products[start: start + PRODUCTS_PER_PAGE]
     await state.update_data(current_view_type="popular", popular_page=page_info.page)
-    text = render_products_screen(products, page_info, title=STOREFRONT_TEXT.POPULAR_TITLE)
+    text = render_popular_products_screen(products, page_info)
     await send_screen(message, text, build_popular_keyboard(products, page_info), callback=callback)
 
 
