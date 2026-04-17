@@ -189,6 +189,54 @@ _Обновлено: 2026-04-18_
 
 ---
 
+## 🧹 Технический долг (аудит 2026-04-18)
+
+### 🔴 Критично
+- [ ] Удалить дублирующий NicePay webhook (aiohttp): убрать `nicepay_webhook.py`, удалить запуск из `main.py`, убрать поля из `config.py` и `.env.example`
+      📂 Файлы: `main.py`, `nicepay_webhook.py`, `config.py`, `.env.example`
+      ⚠️ Риск: если FastAPI webhook работает — удаление безопасно
+      ✅ Готово когда: webhook только через FastAPI, все упоминания aiohttp удалены
+- [ ] Удалить весь провайдерный слой (9 файлов): `services/catalog.py`, `integrations/base.py`, `integrations/schemas.py`, `integrations/http.py`, `integrations/registry.py`, `integrations/providers/demo.py`, `integrations/providers/giftapi_catalog.py`, `integrations/providers/rest_catalog.py`, `integrations/providers/warehouse_catalog.py`
+      📂 Файлы: см. выше
+      ⚠️ Риск: не импортируются, удаление безопасно
+      ✅ Готово когда: grep по имени любого файла — пусто
+- [ ] Добавить `CALLBACK_DEAL_NOT_FOUND` в `DEAL_HANDLER_TEXT` (texts.py)
+      📂 Файлы: `texts.py`
+      ⚠️ Риск: иначе AttributeError в admin.py
+      ✅ Готово когда: admin-бот не падает при открытии несуществующей сделки
+- [ ] Сделать `user_service` полем AppContainer (container.py)
+      📂 Файлы: `container.py`, `handlers/start.py`, `handlers/menu.py`, `handlers/admin.py`
+      ⚠️ Риск: заменить все вызовы `build_user_service()` на `user_service`
+      ✅ Готово когда: сервис создаётся один раз
+- [ ] Проверить дублирование adjust_balance (services/store.py, services/users.py)
+      📂 Файлы: `services/store.py`, `services/users.py`
+      ⚠️ Риск: возможно, одна из реализаций лишняя
+      ✅ Готово когда: нет дублирующих adjust_balance
+
+### 🟡 Средний
+- [ ] Устранить дублирование MAIN_MENU_ACTION (keyboards/main_menu.py, storefront.py, deals.py)
+      📂 Файлы: `keyboards/main_menu.py`, `keyboards/storefront.py`, `keyboards/deals.py`
+      ⚠️ Риск: оставить только в main_menu.py, в остальных — импортировать
+      ✅ Готово когда: grep по MAIN_MENU_ACTION — только одно определение
+- [ ] Удалить неиспользуемые алиасы в keyboards/deals.py (DEAL_CREATE_ACTION, DEAL_LIST_PAGE_PREFIX, DEAL_CONFIRM_PREFIX)
+      📂 Файлы: `keyboards/deals.py`
+      ⚠️ Риск: нигде не используются
+      ✅ Готово когда: grep по имени — пусто
+- [ ] Удалить debug_nicepay.py (dev-артефакт)
+      📂 Файлы: `debug_nicepay.py`
+      ⚠️ Риск: не используется в production
+      ✅ Готово когда: файл отсутствует
+- [ ] Удалить data/old.env.save/ (архив с кредами)
+      📂 Файлы: `data/old.env.save/`
+      ⚠️ Риск: возможная утечка секретов
+      ✅ Готово когда: папка отсутствует
+- [ ] Удалить web/cerberdarkstyle/ (неиспользуемая тема)
+      📂 Файлы: `web/cerberdarkstyle/`
+      ⚠️ Риск: не подключена к приложению
+      ✅ Готово когда: папка отсутствует
+
+---
+
 ## 🟢 Низкий приоритет
 
 - [x] Логировать webhook URL NicePay при старте бота — _2026-04-15_
