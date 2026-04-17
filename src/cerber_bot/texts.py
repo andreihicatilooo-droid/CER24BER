@@ -21,9 +21,9 @@ class COMMON_TEXT:
 
 class START_TEXT:
     BASE_CAPTION = (
-        "<b>CERBER</b>\n"
-        "Цифровой магазин с каталогом GiftAPI, гарантом сделок, персональным балансом и историей операций.\n"
-        "Открой меню ниже, чтобы перейти в витрину, кошелек, гарант-сделки и вывод в USDT."
+        "<b>CERBER</b> — безопасный магазин цифровых товаров\n"
+        "Покупай eSIM, подписки и gift-карты с мгновенной доставкой. Продавай и покупай через гаранта — без риска обмана.\n"
+        "Выбери раздел ниже 👇"
     )
     NEW_USER_NOTE = "\n\nВаш профиль создан и сохранен в базе данных."
     RETURNING_USER_NOTE = "\n\nРады видеть вас снова."
@@ -35,14 +35,14 @@ class START_TEXT:
 
 
 class MAIN_MENU_TEXT:
-    STORE = "Магазин"
-    SEARCH = "Поиск"
-    WALLET = "Кошелек"
-    DEALS = "Гарант сделки"
-    ORDERS = "Мои заказы"
-    PROFILE = "Профиль"
-    REFRESH = "Обновить каталог"
-    SUPPORT = "Поддержка"
+    STORE = "🛍️ Магазин"
+    SEARCH = "🔍 Поиск"
+    WALLET = "💳 Кошелёк"
+    DEALS = "🤝Гарант"
+    ORDERS = "📦 Мои заказы"
+    PROFILE = "👤 Профиль"
+    REFRESH = "🔄 Обновить каталог"
+    SUPPORT = "🆘 Поддержка"
     WEB_APP = "🌐 Веб-магазин"
     FAQ = "❓ FAQ"
 
@@ -56,7 +56,7 @@ class GIFTAPI_MENU_TEXT:
     ORDER_LOOKUP = "Заказ по UUID"
     CREATE_ORDER = "Создать заказ"
     ESIM_STATUS = "eSIM статус"
-    STOREFRONT = "🛍 Витрина"
+    STOREFRONT = "🛍 Витрина GiftAPI"
     BACK = "Назад"
 
 
