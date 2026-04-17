@@ -651,8 +651,13 @@ ENV_SECTIONS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
         ),
         (
             "NICEPAY_METHOD",
-            "Метод оплаты по умолчанию. Пусто = NicePay покажет выбор пользователю.",
-            "Пусто / card_rub / paypal_usd / crypto_usdt и др.",
+            "Метод H2H-оплаты по умолчанию (обработка прямо в боте, без открытия ссылки).\n"
+            "    Пусто — пополнение создаёт платёжную ссылку (классический редирект).\n"
+            "    Задан — включается H2H-режим: бот показывает реквизиты прямо в чате.\n"
+            "    Доступные методы: bankcard_rub, sbp_rub, bankcard_uah, bankcard_kzt,\n"
+            "      yoomoney_rub, advcash_rub, advcash_usd, payeer_rub, payeer_usd и др.\n"
+            "    Пользователь также может выбрать метод вручную кнопками в кошельке.",
+            "Пусто (ссылка) / bankcard_rub / sbp_rub / yoomoney_rub / payeer_rub",
             "",
         ),
         (
