@@ -1,7 +1,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from cerber_bot.services.store import PageInfo, StoreCategoryCard, StoreOrderCard, StoreProductCard, StoreProductOffer, format_money
-from cerber_bot.texts import STORE_KEYBOARD_TEXT
+from cerber_bot.texts import NICEPAY_H2H_METHODS, STORE_KEYBOARD_TEXT
 
 MAIN_MENU_ACTION = "menu:main"
 
@@ -32,6 +32,7 @@ STORE_POPULAR_PAGE_PREFIX = "store:popp:"  # пагинация популярн
 STORE_H2H_CONFIRM_PREFIX = "h2h:ok:"  # + payment_id — подтверждение перевода
 STORE_H2H_CANCEL_PREFIX = "h2h:x:"   # + payment_id — отмена H2H платежа
 STORE_H2H_PROOF_SKIP_PREFIX = "h2h:skip:"  # + payment_id — пропустить чек
+STORE_H2H_METHOD_PREFIX = "h2h:mt:"   # + method_code — выбор метода H2H
 STORE_TOP_UP_H2H_ACTION = "store:tph2h"   # выбор метода H2H
 STORE_TOP_UP_LINK_ACTION = "store:tplink"  # выбор метода ссылка
 STORE_WALLET_HISTORY_ACTION = "store:whist"  # история операций кошелька
@@ -302,6 +303,29 @@ def format_card_price(product: StoreProductCard) -> str:
     if product.max_price is None or product.max_price == product.min_price:
         return format_money(product.min_price, product.currency)
     return STORE_KEYBOARD_TEXT.price_from(format_money(product.min_price, product.currency))
+
+
+def build_h2h_method_keyboard(methods: list[str] | None = None) -> InlineKeyboardMarkup:
+    """Клавиатура выбора метода H2H оплаты NicePay.
+
+    Показывает доступные методы по два в ряд плюс кнопку «Назад» к кошельку.
+    Если ``methods`` не передан — показывает все методы из ``NICEPAY_H2H_METHODS``.
+    """
+    method_codes = methods if methods is not None else list(NICEPAY_H2H_METHODS.keys())
+    rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for code in method_codes:
+        label = NICEPAY_H2H_METHODS.get(code, code)
+        row.append(InlineKeyboardButton(text=label, callback_data=f"{STORE_H2H_METHOD_PREFIX}{code}"))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append(
+        [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.H2H_BACK_TO_WALLET, callback_data=STORE_WALLET_ACTION)]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def build_h2h_details_keyboard(payment_id: str) -> InlineKeyboardMarkup:

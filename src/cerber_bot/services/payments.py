@@ -574,9 +574,16 @@ class PaymentService:
             )
             return to_callback_result(completion, method=payment_method)
 
-    async def create_h2h_payment(self, telegram_user: TelegramUserObject, amount: Decimal) -> PaymentH2HDetails:
+    async def create_h2h_payment(
+        self,
+        telegram_user: TelegramUserObject,
+        amount: Decimal,
+        *,
+        method: str | None = None,
+    ) -> PaymentH2HDetails:
         self.ensure_configured()
-        if not self.method:
+        effective_method = method or self.method
+        if not effective_method:
             raise PaymentConfigurationError(PAYMENT_SERVICE_TEXT.H2H_METHOD_REQUIRED)
         normalized_amount = normalize_amount(amount)
         min_amount, max_amount = self._effective_limits()
@@ -619,7 +626,7 @@ class PaymentService:
                     customer=build_customer_account(telegram_user),
                     amount_minor=amount_minor_units,
                     currency=self.payment_currency,
-                    method=self.method,
+                    method=effective_method,
                 )
             except NicePayError as error:
                 raise PaymentFlowError(str(error)) from error
@@ -643,7 +650,7 @@ class PaymentService:
             amount=normalized_amount,
             amount_minor=amount_minor_units,
             status=h2h_payment.status,
-            method=h2h_payment.method or self.method,
+            method=h2h_payment.method or effective_method,
             details=h2h_payment.details,
             expire=h2h_payment.expire,
             estimated_wallet_amount=estimated_wallet_amount,

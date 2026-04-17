@@ -44,6 +44,7 @@ from cerber_bot.keyboards.storefront import (
     STORE_SEARCH_PROMPT_ACTION,
     STORE_H2H_CANCEL_PREFIX,
     STORE_H2H_CONFIRM_PREFIX,
+    STORE_H2H_METHOD_PREFIX,
     STORE_H2H_PROOF_SKIP_PREFIX,
     STORE_TOP_UP_CUSTOM_ACTION,
     STORE_TOP_UP_H2H_ACTION,
@@ -54,6 +55,7 @@ from cerber_bot.keyboards.storefront import (
     build_categories_keyboard,
     build_field_input_keyboard,
     build_h2h_details_keyboard,
+    build_h2h_method_keyboard,
     build_h2h_proof_keyboard,
     build_order_detail_keyboard,
     build_orders_keyboard,
@@ -84,14 +86,13 @@ from cerber_bot.services.store import (
     format_money,
 )
 from cerber_bot.services.payments import PaymentConfigurationError, PaymentFlowError, PaymentH2HDetails, PaymentH2HDetails
-from cerber_bot.texts import STORE_KEYBOARD_TEXT, STOREFRONT_TEXT
+from cerber_bot.texts import NICEPAY_H2H_METHODS, STORE_KEYBOARD_TEXT, STOREFRONT_TEXT
 
 
 class StorefrontStates(StatesGroup):
     waiting_for_search_query = State()
     waiting_for_top_up_amount = State()
     waiting_for_field_value = State()  # сбор значений required_fields перед покупкой
-    waiting_for_h2h_proof = State()    # ожидание фото-чека после H2H-оплаты
     waiting_for_h2h_proof = State()    # ожидание фото-чека после H2H-оплаты
 
 
@@ -405,10 +406,26 @@ def build_storefront_router(container: AppContainer) -> Router:
         if message is None:
             await callback.answer()
             return
-        await state.update_data(top_up_method="h2h")
+        await message.answer(
+            STOREFRONT_TEXT.H2H_METHOD_SELECT_PROMPT,
+            reply_markup=build_h2h_method_keyboard(),
+        )
+        await callback.answer()
+
+    @router.callback_query(F.data.startswith(STORE_H2H_METHOD_PREFIX))
+    async def handle_h2h_method_selected(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+        selected_method = callback.data.removeprefix(STORE_H2H_METHOD_PREFIX).strip()
+        if selected_method not in NICEPAY_H2H_METHODS:
+            await callback.answer("Неизвестный метод", show_alert=True)
+            return
+        await state.update_data(top_up_method="h2h", h2h_nicepay_method=selected_method)
         await state.set_state(StorefrontStates.waiting_for_top_up_amount)
         await message.answer(STOREFRONT_TEXT.TOP_UP_CUSTOM_PROMPT, reply_markup=build_wallet_keyboard())
-        await callback.answer(STOREFRONT_TEXT.CALLBACK_TOP_UP_AMOUNT_READY)
+        await callback.answer(STOREFRONT_TEXT.CALLBACK_H2H_METHOD_SELECTED)
 
     @router.callback_query(F.data == STORE_TOP_UP_LINK_ACTION)
     async def handle_top_up_method_link(callback: CallbackQuery, state: FSMContext) -> None:
@@ -480,7 +497,10 @@ def build_storefront_router(container: AppContainer) -> Router:
         if use_h2h:
             try:
                 amount = parse_decimal(message.text or "")
-                h2h = await container.payment_service.create_h2h_payment(message.from_user, amount)
+                h2h_nicepay_method: str | None = data.get("h2h_nicepay_method")
+                h2h = await container.payment_service.create_h2h_payment(
+                    message.from_user, amount, method=h2h_nicepay_method
+                )
             except (PaymentFlowError, PaymentConfigurationError, StoreServiceError, ValueError) as error:
                 await message.answer(render_store_error(error), reply_markup=build_wallet_keyboard())
                 return

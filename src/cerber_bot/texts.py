@@ -81,6 +81,7 @@ class STORE_KEYBOARD_TEXT:
     H2H_CANCEL = "❌ Отмена"
     H2H_UPLOAD_PROOF = "📎 Отправить чек"
     H2H_SKIP_PROOF = "Пропустить"
+    H2H_BACK_TO_WALLET = "← Назад"
     PAGINATION_PREVIOUS = "◀"
     PAGINATION_PLACEHOLDER = "·"
     PAGINATION_NEXT = "▶"
@@ -353,6 +354,20 @@ class GIFTAPI_TEXT:
         return cls.VALIDATION_TEMPLATE.format(parts=parts)
 
 
+# Словарь доступных H2H-методов NicePay: код → метка для пользователя
+NICEPAY_H2H_METHODS: dict[str, str] = {
+    "bankcard_rub": "💳 Банковская карта (RUB)",
+    "sbp_rub": "📱 СБП (RUB)",
+    "yoomoney_rub": "💰 ЮMoney (RUB)",
+    "advcash_rub": "🏦 AdvCash (RUB)",
+    "payeer_rub": "🔵 Payeer (RUB)",
+    "advcash_usd": "🏦 AdvCash (USD)",
+    "payeer_usd": "🔵 Payeer (USD)",
+    "bankcard_uah": "💳 Банковская карта (UAH)",
+    "bankcard_kzt": "💳 Банковская карта (KZT)",
+}
+
+
 class STOREFRONT_TEXT:
     CALLBACK_HOME_UNAVAILABLE = "Витрина временно недоступна"
     CALLBACK_HOME_OPENED = "Главная витрина"
@@ -374,6 +389,7 @@ class STOREFRONT_TEXT:
     CALLBACK_H2H_CANCELED = "Платёж отменён"
     CALLBACK_H2H_PROOF_UPLOADED = "Чек отправлен"
     CALLBACK_H2H_PROOF_SKIPPED = "Пропущено"
+    CALLBACK_H2H_METHOD_SELECTED = "Метод выбран, жду сумму"
     CALLBACK_TOP_UP_AMOUNT_READY = "Жду сумму"
     CALLBACK_PURCHASE_FAILED = "Покупка не выполнена"
     CALLBACK_ORDER_CREATED = "Заказ создан"
@@ -471,6 +487,10 @@ class STOREFRONT_TEXT:
     PRODUCT_TITLE_PREFIX = "Поиск: {query}"
 
     H2H_PAYMENT_TITLE = "<b>Реквизиты для оплаты</b>"
+    H2H_METHOD_SELECT_PROMPT = (
+        "<b>Выберите метод оплаты</b>\n\n"
+        "Укажите, как вы хотите перевести средства напрямую через NicePay H2H."
+    )
     H2H_PAYMENT_METHOD = "Метод: {method}"
     H2H_PAYMENT_AMOUNT = "Сумма к переводу: {amount}"
     H2H_PAYMENT_ESTIMATED = "Ожидаемое зачисление: {amount}"
