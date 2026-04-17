@@ -1,6 +1,6 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from cerber_bot.keyboards.storefront import STORE_HOME_ACTION
+from cerber_bot.keyboards.storefront import STORE_GIFTAPI_ACTION, STORE_HOME_ACTION
 from cerber_bot.texts import GIFTAPI_MENU_TEXT
 
 
@@ -35,7 +35,7 @@ def build_giftapi_menu() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text=GIFTAPI_MENU_TEXT.CREATE_ORDER, callback_data=GIFTAPI_CREATE_ORDER_ACTION),
                 InlineKeyboardButton(text=GIFTAPI_MENU_TEXT.ESIM_STATUS, callback_data=GIFTAPI_ESIM_ACTION),
             ],
-            [InlineKeyboardButton(text=GIFTAPI_MENU_TEXT.STOREFRONT, callback_data=STORE_HOME_ACTION)],
+            [InlineKeyboardButton(text=GIFTAPI_MENU_TEXT.STOREFRONT, callback_data=STORE_GIFTAPI_ACTION)],
             [InlineKeyboardButton(text=GIFTAPI_MENU_TEXT.BACK, callback_data=GIFTAPI_BACK_ACTION)],
         ]
     )
