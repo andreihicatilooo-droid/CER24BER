@@ -106,9 +106,9 @@ class RukassaClient:
         """
         self.ensure_configured()
 
-        payload: JsonDict = {
-            "shop_id": self.shop_id,
-            "token": self.token,
+        payload: dict[str, str] = {
+            "shop_id": str(self.shop_id),
+            "token": self.token or "",
             "order_id": order_id,
             "amount": amount_rub,
         }
@@ -124,7 +124,7 @@ class RukassaClient:
         try:
             response = await self.http_client.post(
                 f"{self.base_url}/create",
-                json=payload,
+                data=payload,
             )
             response.raise_for_status()
             body: JsonDict = response.json()

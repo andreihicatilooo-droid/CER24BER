@@ -155,7 +155,7 @@ class PaymentService:
                 PAYMENT_SERVICE_TEXT.unsupported_currency(self.payment_currency, ', '.join(sorted(NICEPAY_LIMITS)))
             )
 
-    async def create_top_up_link(self, telegram_user: TelegramUserObject, amount: Decimal) -> PaymentLink:
+    async def create_top_up_link(self, telegram_user: TelegramUserObject, amount: Decimal, *, force_provider: str | None = None) -> PaymentLink:
         self.ensure_configured()
         normalized_amount = normalize_amount(amount)
         min_amount, max_amount = self._effective_limits()
@@ -168,7 +168,7 @@ class PaymentService:
         description = build_payment_description(self.description, normalized_amount, self.payment_currency)
         amount_minor_units = amount_to_minor_units(normalized_amount)
 
-        if self._use_rukassa:
+        if self._use_rukassa and force_provider != "nicepay":
             return await self._create_rukassa_top_up_link(
                 telegram_user=telegram_user,
                 normalized_amount=normalized_amount,
@@ -282,6 +282,7 @@ class PaymentService:
                     amount_rub=amount_rub,
                     success_url=self.success_url,
                     fail_url=self.fail_url,
+                    user_code=str(telegram_user.id),
                 )
             except RukassaError as error:
                 raise PaymentFlowError(str(error)) from error
@@ -441,6 +442,11 @@ class PaymentService:
     def is_rukassa_mode(self) -> bool:
         """True, если Rukassa настроена и используется как провайдер платежей."""
         return self._use_rukassa
+
+    @property
+    def is_nicepay_link_configured(self) -> bool:
+        """True, если NicePay настроен в режиме ссылки (не H2H)."""
+        return self.nicepay_client.is_configured and not bool(self.method)
 
     @property
     def is_h2h_mode(self) -> bool:

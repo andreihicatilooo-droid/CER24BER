@@ -49,6 +49,7 @@ from cerber_bot.keyboards.storefront import (
     STORE_TOP_UP_CUSTOM_ACTION,
     STORE_TOP_UP_H2H_ACTION,
     STORE_TOP_UP_LINK_ACTION,
+    STORE_TOP_UP_NICEPAY_ACTION,
     STORE_TOP_UP_RUKASSA_ACTION,
     STORE_TOP_UP_CATALOG_ACTION,
     STORE_TOP_UP_PREFIX,
@@ -415,12 +416,15 @@ def build_storefront_router(container: AppContainer) -> Router:
             return
         is_rukassa = container.payment_service.is_rukassa_mode
         is_h2h = container.payment_service.is_h2h_mode
-        is_link = container.payment_service.is_configured and not is_h2h
+        is_nicepay_link = container.payment_service.is_nicepay_link_configured
+        is_link = container.payment_service.is_configured and not is_h2h and not is_rukassa and not is_nicepay_link
+        # Когда активны оба провайдера, показываем каждый отдельно
         await message.answer(
             STOREFRONT_TEXT.TOP_UP_CATALOG_PROMPT,
             reply_markup=build_top_up_catalog_keyboard(
                 show_h2h=is_h2h,
-                show_link=is_link and not is_rukassa,
+                show_link=is_link,
+                show_nicepay=is_nicepay_link,
                 show_rukassa=is_rukassa,
             ),
         )
@@ -471,6 +475,18 @@ def build_storefront_router(container: AppContainer) -> Router:
             await callback.answer()
             return
         await state.update_data(top_up_method="link")
+        await state.set_state(StorefrontStates.waiting_for_top_up_amount)
+        await message.answer(STOREFRONT_TEXT.TOP_UP_CUSTOM_PROMPT, reply_markup=_wallet_kb())
+        await callback.answer(STOREFRONT_TEXT.CALLBACK_TOP_UP_AMOUNT_READY)
+
+    @router.callback_query(F.data == STORE_TOP_UP_NICEPAY_ACTION)
+    async def handle_top_up_method_nicepay(callback: CallbackQuery, state: FSMContext) -> None:
+        """Явный выбор NicePay (когда активны оба провайдера)."""
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+        await state.update_data(top_up_method="nicepay_link")
         await state.set_state(StorefrontStates.waiting_for_top_up_amount)
         await message.answer(STOREFRONT_TEXT.TOP_UP_CUSTOM_PROMPT, reply_markup=_wallet_kb())
         await callback.answer(STOREFRONT_TEXT.CALLBACK_TOP_UP_AMOUNT_READY)
@@ -530,7 +546,8 @@ def build_storefront_router(container: AppContainer) -> Router:
         # Явный выбор метода имеет приоритет над is_h2h_mode
         chosen_method = data.get("top_up_method")
         use_h2h = chosen_method == "h2h" if chosen_method else container.payment_service.is_h2h_mode
-        use_link = chosen_method in ("link", "rukassa") or (not use_h2h and chosen_method is None)
+        use_nicepay_forced = chosen_method == "nicepay_link"
+        use_link = chosen_method in ("link", "rukassa") or (not use_h2h and not use_nicepay_forced and chosen_method is None)
 
         if use_h2h:
             try:
@@ -544,6 +561,20 @@ def build_storefront_router(container: AppContainer) -> Router:
                 return
             await state.set_state(None)
             await send_h2h_details(message, h2h)
+        elif use_nicepay_forced:
+            try:
+                amount = parse_decimal(message.text or "")
+                payment_link = await container.payment_service.create_top_up_link(
+                    message.from_user, amount, force_provider="nicepay"
+                )
+            except (PaymentFlowError, PaymentConfigurationError, StoreServiceError, ValueError) as error:
+                await message.answer(render_store_error(error), reply_markup=_wallet_kb())
+                return
+            await state.set_state(None)
+            try:
+                await send_top_up_link(message, payment_link)
+            except (TelegramBadRequest, TelegramNetworkError) as error:
+                await message.answer(render_store_error(error), reply_markup=_wallet_kb())
         else:
             try:
                 amount = parse_decimal(message.text or "")

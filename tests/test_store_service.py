@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from aiogram.types import User
 
+from cerber_bot.db.repositories.orders import UserOrderRepository
 from cerber_bot.db.session import create_engine, create_session_factory, init_database
 from cerber_bot.integrations.giftapi import (
     GiftCategory,
@@ -284,5 +285,133 @@ async def test_store_service_manual_balance_adjustment_updates_wallet(tmp_path: 
 
     with pytest.raises(StoreServiceError):
         await service.adjust_balance(telegram_user, Decimal("0.00"), transaction_type="manual_credit")
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_order_repository_top_product_ids(tmp_path: Path) -> None:
+    database_url = f"sqlite+aiosqlite:///{(tmp_path / 'top-products.db').as_posix()}"
+    engine = create_engine(database_url)
+    session_factory = create_session_factory(engine)
+    await init_database(engine)
+
+    async with session_factory() as session:
+        repo = UserOrderRepository(session)
+        from cerber_bot.db.models import UserOrder, utcnow
+
+        def make_order(product_id: str, provider: str, status: str) -> UserOrder:
+            import uuid
+            now = utcnow()
+            return UserOrder(
+                telegram_id=1,
+                external_id=str(uuid.uuid4()),
+                provider_order_id=None,
+                provider=provider,
+                product_id=product_id,
+                product_name=f"Product {product_id}",
+                sku_id="sku-1",
+                sku_name="SKU 1",
+                status=status,
+                total_amount=Decimal("10.00"),
+                currency="RUB",
+                delivery_payload=None,
+                error_message=None,
+                created_at=now,
+                updated_at=now,
+            )
+
+        # product-A — 3 completed, product-B — 1 completed, product-C — 2 completed
+        # product-D — 5 покупок, но статус error — не должен попасть
+        for _ in range(3):
+            session.add(make_order("product-A", "giftapi", "completed"))
+        session.add(make_order("product-B", "giftapi", "completed"))
+        for _ in range(2):
+            session.add(make_order("product-C", "giftapi", "completed"))
+        for _ in range(5):
+            session.add(make_order("product-D", "giftapi", "error"))
+        # product-E — completed, но другой провайдер
+        session.add(make_order("product-E", "demo", "completed"))
+        await session.commit()
+
+        # Без фильтра провайдера: A(3), C(2), B(1), E(1)
+        top_all = await repo.top_product_ids(limit=10)
+        assert top_all[0] == "product-A"
+        assert top_all[1] == "product-C"
+        assert "product-D" not in top_all
+
+        # С фильтром по giftapi: E не попадает
+        top_giftapi = await repo.top_product_ids(limit=10, provider="giftapi")
+        assert "product-E" not in top_giftapi
+        assert top_giftapi[0] == "product-A"
+
+        # limit=1
+        top_one = await repo.top_product_ids(limit=1)
+        assert len(top_one) == 1
+        assert top_one[0] == "product-A"
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_order_repository_top_product_ids(tmp_path: Path) -> None:
+    database_url = f"sqlite+aiosqlite:///{(tmp_path / 'top-products.db').as_posix()}"
+    engine = create_engine(database_url)
+    session_factory = create_session_factory(engine)
+    await init_database(engine)
+
+    async with session_factory() as session:
+        repo = UserOrderRepository(session)
+        from cerber_bot.db.models import UserOrder, utcnow
+
+        def make_order(product_id: str, provider: str, status: str) -> UserOrder:
+            import uuid
+            now = utcnow()
+            return UserOrder(
+                telegram_id=1,
+                external_id=str(uuid.uuid4()),
+                provider_order_id=None,
+                provider=provider,
+                product_id=product_id,
+                product_name=f"Product {product_id}",
+                sku_id="sku-1",
+                sku_name="SKU 1",
+                status=status,
+                total_amount=Decimal("10.00"),
+                currency="RUB",
+                delivery_payload=None,
+                error_message=None,
+                created_at=now,
+                updated_at=now,
+            )
+
+        # product-A — 3 completed, product-B — 1 completed, product-C — 2 completed
+        # product-D — 5 покупок, но статус error — не должен попасть
+        for _ in range(3):
+            session.add(make_order("product-A", "giftapi", "completed"))
+        session.add(make_order("product-B", "giftapi", "completed"))
+        for _ in range(2):
+            session.add(make_order("product-C", "giftapi", "completed"))
+        for _ in range(5):
+            session.add(make_order("product-D", "giftapi", "error"))
+        # product-E — completed, но другой провайдер
+        session.add(make_order("product-E", "demo", "completed"))
+        await session.commit()
+
+        # Без фильтра провайдера: A(3), C(2), B(1), E(1)
+        top_all = await repo.top_product_ids(limit=10)
+        assert top_all[0] == "product-A"
+        assert top_all[1] == "product-C"
+        assert "product-D" not in top_all
+
+        # С фильтром по giftapi: E не попадает
+        top_giftapi = await repo.top_product_ids(limit=10, provider="giftapi")
+        assert "product-E" not in top_giftapi
+        assert top_giftapi[0] == "product-A"
+
+        # limit=1
+        top_one = await repo.top_product_ids(limit=1)
+        assert len(top_one) == 1
+        assert top_one[0] == "product-A"
 
     await engine.dispose()

@@ -19,7 +19,7 @@ SQLITE_RELATIVE_PREFIX = f"{SQLITE_ASYNC_PREFIX}./"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",
-        env_file_encoding="utf-8",
+        env_file_encoding="utf-8-sig",
         extra="ignore",
         case_sensitive=False,
     )

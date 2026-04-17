@@ -30,6 +30,55 @@
 
 <div class="surface fade-up" style="margin-bottom:14px">
     <div class="section-heading"><h2>Пополнить баланс</h2></div>
+
+    {% if show_nicepay and show_rukassa %}
+    {# Оба провайдера активны — показываем два отдельных блока #}
+    <div style="margin-bottom:12px">
+        <div class="eyebrow" style="margin-bottom:8px;font-size:0.78rem">💳 Через NicePay</div>
+        <form method="post" action="/wallet/topup/nicepay">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+                {% for amt in [10, 25, 50, 100] %}
+                <button type="submit" name="amount" value="{{ amt }}" class="ghost-btn btn-sm">+{{ amt }}</button>
+                {% endfor %}
+            </div>
+            <div class="form-row">
+                <input type="number" name="amount" step="0.01" min="1" placeholder="Своя сумма...">
+                <button type="submit" class="btn btn-sm">Пополнить</button>
+            </div>
+        </form>
+    </div>
+    <div style="border-top:1px solid var(--border);margin:14px 0"></div>
+    <div>
+        <div class="eyebrow" style="margin-bottom:8px;font-size:0.78rem">💰 Через Rukassa</div>
+        <form method="post" action="/wallet/topup/rukassa">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+                {% for amt in [100, 250, 500, 1000] %}
+                <button type="submit" name="amount" value="{{ amt }}" class="ghost-btn btn-sm">+{{ amt }} ₽</button>
+                {% endfor %}
+            </div>
+            <div class="form-row">
+                <input type="number" name="amount" step="0.01" min="1" placeholder="Своя сумма (₽)...">
+                <button type="submit" class="btn btn-sm">Пополнить</button>
+            </div>
+        </form>
+    </div>
+
+    {% elif show_rukassa %}
+    {# Только Rukassa #}
+    <form method="post" action="/wallet/topup">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+            {% for amt in [100, 250, 500, 1000] %}
+            <button type="submit" name="amount" value="{{ amt }}" class="ghost-btn btn-sm">+{{ amt }} ₽</button>
+            {% endfor %}
+        </div>
+        <div class="form-row">
+            <input type="number" name="amount" step="0.01" min="1" placeholder="Своя сумма (₽)...">
+            <button type="submit" class="btn btn-sm">Пополнить через Rukassa</button>
+        </div>
+    </form>
+
+    {% else %}
+    {# Только NicePay (или ничего не настроено) #}
     <form method="post" action="/wallet/topup">
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
             {% for amt in [10, 25, 50, 100] %}
@@ -41,6 +90,7 @@
             <button type="submit" class="btn btn-sm">Пополнить</button>
         </div>
     </form>
+    {% endif %}
 </div>
 
 <div class="surface fade-up">

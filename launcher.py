@@ -1417,6 +1417,15 @@ def _run(
 
 
 if __name__ == "__main__":
+    # Пробуем запустить tkinter GUI (встроен в Python, не требует установки)
+    try:
+        import tkinter as _tk  # noqa: F401
+        from launcher_gui import run_gui
+        run_gui()
+        sys.exit(0)
+    except Exception:
+        pass  # GUI недоступен — используем ANSI-терминал
+
     parser = argparse.ArgumentParser(description="CERBER Bot Launcher")
     parser.add_argument("--no-tunnel", action="store_true", help="Не запускать tunnel")
     parser.add_argument(

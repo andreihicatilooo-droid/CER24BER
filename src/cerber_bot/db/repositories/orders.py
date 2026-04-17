@@ -10,6 +10,28 @@ class UserOrderRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def top_product_ids(self, *, limit: int = 10, provider: str | None = None) -> list[str]:
+        """Вернуть список product_id, отсортированных по количеству успешных покупок DESC.
+
+        Args:
+            limit:    Максимальное количество записей.
+            provider: Фильтр по провайдеру (например 'giftapi'). None — все.
+        """
+        query = (
+            select(UserOrder.product_id, func.count(UserOrder.id).label("cnt"))
+            .where(UserOrder.status == "completed")
+        )
+        if provider is not None:
+            query = query.where(UserOrder.provider == provider)
+        query = (
+            query
+            .group_by(UserOrder.product_id)
+            .order_by(func.count(UserOrder.id).desc())
+            .limit(limit)
+        )
+        result = await self.session.execute(query)
+        return [row.product_id for row in result.all()]
+
     async def create(
         self,
         *,

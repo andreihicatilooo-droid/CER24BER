@@ -35,6 +35,7 @@ STORE_H2H_PROOF_SKIP_PREFIX = "h2h:skip:"  # + payment_id — пропустит
 STORE_H2H_METHOD_PREFIX = "h2h:mt:"   # + method_code — выбор метода H2H
 STORE_TOP_UP_H2H_ACTION = "store:tph2h"      # выбор метода H2H
 STORE_TOP_UP_LINK_ACTION = "store:tplink"    # выбор метода ссылка
+STORE_TOP_UP_NICEPAY_ACTION = "store:tpnp"   # явный выбор NicePay (когда оба провайдера активны)
 STORE_TOP_UP_RUKASSA_ACTION = "store:tpruk"  # пополнение через Rukassa
 STORE_TOP_UP_CATALOG_ACTION = "store:tpcat"  # каталог провайдеров пополнения
 STORE_WALLET_HISTORY_ACTION = "store:whist"  # история операций кошелька
@@ -226,6 +227,7 @@ def build_top_up_catalog_keyboard(
     *,
     show_h2h: bool = False,
     show_link: bool = False,
+    show_nicepay: bool = False,
     show_rukassa: bool = False,
 ) -> InlineKeyboardMarkup:
     """Каталог доступных способов пополнения баланса."""
@@ -234,6 +236,8 @@ def build_top_up_catalog_keyboard(
         rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_H2H, callback_data=STORE_TOP_UP_H2H_ACTION)])
     if show_link:
         rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_LINK, callback_data=STORE_TOP_UP_LINK_ACTION)])
+    if show_nicepay:
+        rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_NICEPAY, callback_data=STORE_TOP_UP_NICEPAY_ACTION)])
     if show_rukassa:
         rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_RUKASSA, callback_data=STORE_TOP_UP_RUKASSA_ACTION)])
     rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.BACK, callback_data=STORE_WALLET_ACTION)])
