@@ -52,6 +52,7 @@ async def test_rukassa_create_payment_error_300_shows_frozen_hint() -> None:
             )
         else:
             raise AssertionError("Expected RukassaRequestError for API error 300")
+<<<<<<< HEAD
 import httpx
 import pytest
 
@@ -106,3 +107,5 @@ async def test_rukassa_create_payment_error_300_shows_frozen_hint() -> None:
             )
         else:
             raise AssertionError("Expected RukassaRequestError for API error 300")
+=======
+>>>>>>> 900be0693be755d41112e7023befff1cdaa36ca3
