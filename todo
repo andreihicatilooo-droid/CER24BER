@@ -3,7 +3,100 @@ _Обновлено: 2026-04-18_
 
 ---
 
-## � Высокий приоритет
+## 🔴 Высокий приоритет
+
+#### 🔗 Цепочка «Аккаунты Telegram — GetMyTG» — строго по порядку
+
+- [ ] [1/8] Конфиг и ENV: добавить GetMyTG-переменные
+      📂 Файлы: `config.py`, `.env.example`, `launcher.py`
+      **Что делать:**
+      - Добавить в `Settings`: `getmytg_api_key: str | None`, `getmytg_base_url: str` (default: `https://api.getmytg.com/v1`), `getmytg_webhook_path: str` (default: `/webhooks/getmytg`), `getmytg_webhook_secret: str | None`
+      - Добавить в `.env.example` с плейсхолдерами
+      - Добавить в соответствующую секцию `ENV_SECTIONS` в `launcher.py`
+      ⚠️ Риск: `.env.example` и `launcher.py` должны быть синхронизированы — см. инструкцию `env-launcher-sync`
+      ✅ Готово когда: `Settings` валидируется без ошибок; новые поля видны в GUI лаунчера
+
+- [ ] [2/8] DB: модель TgAccountPurchase + репозиторий
+      📂 Файлы: `db/models.py`, `db/repositories/tgaccounts.py` (новый)
+      🔗 После: [1/8]
+      **Что делать:**
+      - Добавить `TgAccountPurchase` в `models.py`: поля `id`, `telegram_id` (BigInteger), `getmytg_purchase_id` (Integer, unique), `country_code` (String 2), `phone_number` (String 20, nullable), `status` (String 16), `amount` (Numeric 12,2), `currency` (String 8), `verification_code` (String 32, nullable), `verification_password` (String 128, nullable), `purchase_type` (String 16), `created_at`, `updated_at`
+      - Создать `TgAccountRepository`: методы `create`, `get_by_id`, `get_by_getmytg_id`, `list_by_telegram_id`, `update_status`, `update_verification`
+      - Новая таблица — `create_all()` создаст её без ALTER TABLE
+      ⚠️ Риск: поле `getmytg_purchase_id` должно быть `unique=True` и `index=True` чтобы избежать дублей при webhook-ретраях
+      ✅ Готово когда: таблица создаётся при старте; репозиторий проходит mypy без ошибок
+
+- [ ] [3/8] HTTP-клиент GetMyTGClient
+      📂 Файлы: `integrations/getmytg.py` (новый), `doc/api/getmytg-hint.json` (уже создан ✅)
+      🔗 После: [1/8]
+      **Что делать:**
+      - Класс `GetMyTGClient(is_configured: bool)`, async httpx, заголовок `x-api-key`
+      - Методы: `health_check()`, `list_countries(auth=False)`, `list_countries_personal()`, `get_country(country_code)`, `get_profile()`, `create_purchase(country_code)`, `get_purchase(purchase_id)`, `request_code(purchase_id, callback_url=None)`, `refund_purchase(purchase_id)`
+      - `GetMyTGError(RuntimeError)`, `GetMyTGConfigError`, `GetMyTGRequestError(status_code, error)`
+      - Обернуть `httpx.ConnectError` и `httpx.TimeoutException` в `GetMyTGError`
+      ⚠️ Риск: публичные эндпоинты (`/accounts/countries`, `/service/health`) — без заголовка `x-api-key`; не слать ключ туда; `is_configured = api_key is not None`
+      ⚠️ Риск: деньги — строка decimal + currency_code (НЕ integer minor units как NicePay)
+      ✅ Готово когда: тест `test_getmytg_client.py` проходит со stub-ответами
+
+- [ ] [4/8] Сервис TgAccountService
+      📂 Файлы: `services/tgaccounts.py` (новый)
+      🔗 После: [2/8], [3/8]
+      **Что делать:**
+      - `TgAccountService(client, session_factory, wallet_service_or_repo)` — оркестрация
+      - Методы: `get_catalog(sort, page)`, `get_country_details(country_code)`, `buy_account(telegram_id, country_code)` → создаёт покупку на GetMyTG + сохраняет в БД, `request_verification(telegram_id, purchase_id, callback_url)`, `get_my_purchases(telegram_id)`, `refund(telegram_id, purchase_id)`
+      - `buy_account` должен проверять, что у пользователя хватает баланса ДО обращения к GetMyTG API (защита от двойного списания)
+      - Поднимать `TgAccountServiceError` при известных проблемах
+      ⚠️ Риск: GetMyTG сам списывает с их баланса, не с нашего кошелька — нужно предварительно списать с `TelegramUser.balance` (атомарно через SELECT FOR UPDATE), затем вызвать API; при ошибке API — откатить транзакцию
+      ⚠️ Риск: статус жизненного цикла PENDING→SUCCESS→ERROR→REFUND — хранить актуальный в нашей БД
+      ✅ Готово когда: `buy_account` тест проходит с моком GetMyTGClient
+
+- [ ] [5/8] Контейнер: регистрация клиента и сервиса
+      📂 Файлы: `container.py`
+      🔗 После: [3/8], [4/8]
+      **Что делать:**
+      - Добавить поля `getmytg_client: GetMyTGClient | None` и `tgaccounts_service: TgAccountService | None` в `AppContainer`
+      - В `AppContainer.build()`: инициализировать `GetMyTGClient` если `settings.getmytg_api_key` задан, создать `TgAccountService`
+      ⚠️ Риск: `TgAccountService` нужен даже без ключа (для публичного каталога); `getmytg_client` может быть `None` — сервис должен проверять `client.is_configured` перед защищёнными вызовами
+      ✅ Готово когда: `AppContainer.build()` не падает ни с ключом, ни без него
+
+- [ ] [6/8] Клавиатуры раздела «Аккаунты Telegram»
+      📂 Файлы: `keyboards/tgaccounts.py` (новый), `keyboards/main_menu.py`
+      🔗 После: [5/8]
+      **Что делать:**
+      - Prefix callback_data: `tgacc`
+      - Кнопки: список стран с пагинацией, карточка страны (флаг + название + цена + доступность), кнопка «Купить», «Мои покупки», «Получить код», «Возврат», «Назад»
+      - Добавить кнопку «📱 Аккаунты TG» в главное меню `build_main_menu()`
+      ⚠️ Риск: callback_data с JSON-payload: ограничение 64 байта в aiogram — использовать короткие ключи (`cc` вместо `country_code`)
+      ✅ Готово когда: все кнопки созданы; callback_data ≤ 64 байт
+
+- [ ] [7/8] Хэндлер tgaccounts — FSM и навигация
+      📂 Файлы: `handlers/tgaccounts.py` (новый), `handlers/__init__.py`
+      🔗 После: [6/8]
+      **Что делать:**
+      - `build_tgaccounts_router(container: AppContainer) -> Router`
+      - Экраны: каталог стран (пагинация), карточка страны (детали + цена со скидкой), подтверждение покупки (FSM), экран «Мои покупки», карточка покупки + статус, кнопка «Получить код» (показать номер + код + пароль), «Возврат»
+      - Регистрировать в `main.py` аналогично другим роутерам
+      - Все тексты — только в `texts.py`
+      ⚠️ Риск: `request_code` может занять 5-30 сек — показать «⏳ Получаем код...» до `await`, затем отредактировать сообщение
+      ⚠️ Риск: `callback.answer()` истекает — вызывать ДО длинных API-запросов
+      ✅ Готово когда: полный флоу работает: каталог → карточка → покупка → «Получить код» → показ кода
+
+- [ ] [8/8] Webhook-эндпоинт GetMyTG в FastAPI
+      📂 Файлы: `web/routes/getmytg.py` (новый), `web/app.py`
+      🔗 После: [7/8]
+      **Что делать:**
+      - `POST /webhooks/getmytg` — принимает `WebhookSuccessPayload` и `WebhookFailedPayload`
+      - Верифицировать подпись через `GETMYTG_WEBHOOK_SECRET` если задан
+      - При SUCCESS: обновить `TgAccountPurchase.status` + сохранить `verification_code`, `verification_password`; уведомить пользователя в Telegram
+      - При FAILED: обновить статус в ERROR; уведомить пользователя
+      - Регистрировать роутер в `web/app.py`
+      ⚠️ Риск: `bot` доступен в `web/app.py` через `app.state.bot` — не None при старте
+      ⚠️ Риск: идемпотентность — повторный webhook с тем же purchase_id не должен задваивать уведомления; проверять текущий статус перед обновлением
+      ✅ Готово когда: POST /webhooks/getmytg → 200; статус в БД обновлён; Telegram-уведомление получено
+
+---
+
+## 🟠 Высокий приоритет (старые задачи)
 
 - [x] Загрузка фото чата сделки на nbox.me + ссылка на альбом — _2026-04-17_
       📂 Файлы: `integrations/nboxme/` (скопировать), `integrations/nbox_service.py` (новый), `container.py`, `handlers/menu.py`, `texts.py`

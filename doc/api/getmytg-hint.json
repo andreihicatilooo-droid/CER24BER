@@ -1,0 +1,309 @@
+{
+  "name": "getmytg",
+  "generated_at": "2026-04-18",
+  "description": "Distilled GetMyTG API reference для использования AI Copilot в этом репозитории. Скомпилировано из официальной документации https://docs.getmytg.com/sdk-reference.",
+  "source_url": "https://docs.getmytg.com/sdk-reference",
+  "project_references": {
+    "config": "src/cerber_bot/config.py",
+    "getmytg_client": "src/cerber_bot/integrations/getmytg.py",
+    "getmytg_service": "src/cerber_bot/services/tgaccounts.py",
+    "tgaccount_repository": "src/cerber_bot/db/repositories/tgaccounts.py",
+    "tgaccount_model": "src/cerber_bot/db/models.py (TgAccountPurchase)",
+    "handler": "src/cerber_bot/handlers/tgaccounts.py",
+    "keyboard": "src/cerber_bot/keyboards/tgaccounts.py",
+    "webhook_route": "src/cerber_bot/web/routes/getmytg.py",
+    "tests": "tests/test_getmytg_client.py"
+  },
+  "reference": {
+    "base_url": {
+      "production": "https://api.getmytg.com/v1",
+      "note": "Настраивается через GETMYTG_BASE_URL. Все защищённые эндпоинты требуют x-api-key."
+    },
+    "authentication": {
+      "type": "api_key_header",
+      "header": "x-api-key: {GETMYTG_API_KEY}",
+      "note": "API-ключ выдаётся через Telegram-бот GetMyTG. Публичные эндпоинты (health, server-time, countries-base) ключа НЕ требуют.",
+      "env_vars": ["GETMYTG_API_KEY", "GETMYTG_BASE_URL", "GETMYTG_WEBHOOK_SECRET"]
+    },
+    "money_format": {
+      "format": "строка decimal (USD или иная валюта)",
+      "example": "\"amount\": \"1.50\", \"currency_code\": \"USD\"",
+      "note": "GetMyTG передаёт деньги как строку decimal с currency_code рядом, а не целое число minor-units как NicePay."
+    },
+    "pagination": {
+      "type": "page-based",
+      "params": {"page": "int, default 1", "page_size": "int, default 50, max 150"},
+      "response_fields": ["current_page", "page_size", "total_items", "total_pages", "has_next", "has_previous"],
+      "note": "Результаты всегда отсортированы по created_at DESC (новые первые)."
+    },
+    "purchase_status_lifecycle": {
+      "states": ["PENDING", "SUCCESS", "ERROR", "REFUND"],
+      "transitions": "PENDING → SUCCESS (после request-code) | PENDING → ERROR (сбой провайдера) | любой → REFUND (только через admin)",
+      "immutability": "После SUCCESS, ERROR или REFUND статус неизменяем.",
+      "note": "Рефанд пользователем возможен только при PENDING + 20+ минут с момента создания."
+    },
+    "webhooks": {
+      "payloads": ["WebhookSuccessPayload", "WebhookFailedPayload", "WebhookBulkReadyPayload"],
+      "retry_policy": "3 попытки: сразу, через 10 сек, через 30 сек. Триггер повтора — любой не-200 ответ.",
+      "response_requirement": "Ваш эндпоинт обязан вернуть HTTP 200.",
+      "test_endpoint": "POST /v1/webhooks/test — проверить доставку без реальной покупки.",
+      "callback_url_field": "Передаётся в теле запроса при POST /v1/purchases и POST /v1/purchases/bulk."
+    },
+    "endpoints": {
+      "SERVICE (без авторизации)": {
+        "GET /v1/service/health": {
+          "description": "Health check сервиса",
+          "returns": {
+            "status": "enum: ok | degraded",
+            "uptimeSeconds": "integer",
+            "now": "ISO 8601 строка",
+            "checks": {"database": "boolean", "redis": "boolean"}
+          }
+        },
+        "GET /v1/service/time": {
+          "description": "Серверное время (синхронизация клиента)",
+          "returns": {
+            "iso": "ISO 8601",
+            "epochMs": "integer",
+            "timezone": "string (UTC)"
+          }
+        }
+      },
+      "ACCOUNTS": {
+        "GET /v1/accounts/countries": {
+          "auth": false,
+          "description": "Публичный каталог стран с базовыми ценами (без скидки). Для лендинга.",
+          "query_params": {
+            "country_codes": "строка фильтра, ISO 3166-1 alpha-2, разделённые запятой (US,RU,GB). Опционально.",
+            "sort": "price_asc | price_desc | name_asc | name_desc | popularity_asc | popularity_desc. Default: name_asc",
+            "page": "int, default 1",
+            "page_size": "int 1-150, default 50"
+          },
+          "returns": {
+            "items[]": {
+              "country_code": "US",
+              "emoji": "🇺🇸",
+              "display_name": {"ru": "США", "en": "United States"},
+              "price": {"amount": "1.50", "currency_code": "USD"},
+              "available": true,
+              "tags": ["HIGH_QUALITY"],
+              "available_count": 1034
+            },
+            "pagination": "стандартный объект пагинации"
+          }
+        },
+        "GET /v1/accounts": {
+          "auth": true,
+          "description": "Каталог стран с персональными ценами (скидка пользователя применена).",
+          "query_params": "аналогично /v1/accounts/countries",
+          "returns": "аналогично /v1/accounts/countries, но price отражает персональную скидку"
+        },
+        "GET /v1/accounts/{country_code}": {
+          "auth": true,
+          "description": "Детали страны: цена со скидкой + базовая цена (для страницы checkout).",
+          "path_params": {"country_code": "ISO 3166-1 alpha-2, uppercase, ^[A-Z]{2}$"},
+          "returns": {
+            "country_code": "US",
+            "emoji": "🇺🇸",
+            "display_name": {"ru": "...", "en": "..."},
+            "price": {"amount": "1.50", "currency_code": "USD"},
+            "discount": {"base_price": "2.50", "percent": 5},
+            "available": true,
+            "tags": ["HIGH_QUALITY", "HIGH_DEMAND"]
+          }
+        }
+      },
+      "PROFILE": {
+        "GET /v1/profile": {
+          "auth": true,
+          "description": "Профиль пользователя: баланс, статистика, уровень скидки, реферальная программа.",
+          "returns": {
+            "id": "integer DB ID",
+            "telegram_id": "string | null",
+            "telegram_username": "string | null",
+            "login": "string | null",
+            "balance": {"amount": "1.50", "currency_code": "USD"},
+            "statistics": {"total_purchases": 42},
+            "discount": {"level": "silver", "percent": 5},
+            "referral": {
+              "level": "platinum",
+              "percent": 10,
+              "referrals_count": 12,
+              "balance": {"amount": "1.50", "currency_code": "USD"},
+              "profit": {"amount": "1.50", "currency_code": "USD"}
+            },
+            "created_at": "ISO 8601"
+          }
+        },
+        "PATCH /v1/profile/change-password": {
+          "auth": true,
+          "body": {"new_password": "string 8-64, минимум 2 типа символов"},
+          "returns": {"success": true}
+        },
+        "PATCH /v1/profile/change-login": {
+          "auth": true,
+          "body": {"new_login": "string 3-20, ^[a-zA-Z0-9._]+$"},
+          "returns": {"success": true}
+        },
+        "PATCH /v1/profile/unbind-telegram": {
+          "auth": true,
+          "description": "Отвязать Telegram от веб-аккаунта. Данные сохраняются.",
+          "body": null,
+          "returns": {"success": true}
+        }
+      },
+      "PURCHASES": {
+        "GET /v1/purchases": {
+          "auth": true,
+          "description": "История покупок (новые первые). Фильтр по статусу.",
+          "query_params": {
+            "status": "PENDING | SUCCESS | ERROR | REFUND. Опционально.",
+            "page": "int, default 1",
+            "page_size": "int 1-50, default 50"
+          },
+          "returns": {
+            "items[]": "объекты Purchase (см. ниже)",
+            "pagination": "стандартный объект пагинации"
+          }
+        },
+        "POST /v1/purchases": {
+          "auth": true,
+          "description": "Создать покупку. Баланс списывается сразу. Возвращает PENDING-покупку.",
+          "body": {"country_code": "ISO 3166-1 alpha-2, uppercase"},
+          "returns": "объект Purchase (verification=null пока не запрошен код)",
+          "important": "Аккаунт может стать недоступным между просмотром каталога и покупкой — обрабатывать ошибку доступности."
+        },
+        "GET /v1/purchases/{purchase_id}": {
+          "auth": true,
+          "description": "Детали конкретной покупки, включая верификационные данные если доступны.",
+          "path_params": {"purchase_id": "integer"},
+          "returns": "объект Purchase"
+        },
+        "POST /v1/purchases/{purchase_id}/request-code": {
+          "auth": true,
+          "description": "Запросить код верификации от провайдера. Обновляет статус в SUCCESS. Идемпотентен.",
+          "path_params": {"purchase_id": "integer"},
+          "body": {"callback_url": "URI опционально — webhook при готовности кода"},
+          "returns": {
+            "purchase": "объект Purchase",
+            "code_request": {
+              "status": "pending | success | failed",
+              "attempt": "integer",
+              "max_attempts": 18,
+              "next_attempt_at": "ISO 8601",
+              "retry_after": "seconds integer"
+            }
+          },
+          "timing": "Код может приходить 5-30 секунд. При повторном вызове возвращает conflict — использовать GET /purchases/{id}."
+        },
+        "POST /v1/purchases/{purchase_id}/refund": {
+          "auth": true,
+          "description": "Рефанд покупки. Требования: статус PENDING + 20+ минут с создания.",
+          "path_params": {"purchase_id": "integer"},
+          "returns": {
+            "purchase": "объект Purchase",
+            "refund": {
+              "amount": {"amount": "1.50", "currency_code": "USD"},
+              "reason": "Auto-refund: code not received within 20 minutes",
+              "refunded_at": "ISO 8601"
+            }
+          }
+        },
+        "POST /v1/purchases/bulk": {
+          "auth": true,
+          "description": "Оптовая покупка (несколько аккаунтов одной страны). Баланс списывается сразу.",
+          "body": {
+            "country_code": "ISO 3166-1 alpha-2",
+            "quantity": "integer ≥1",
+            "callback_url": "URI опционально — webhook при готовности архива"
+          },
+          "returns": {
+            "bulk_purchase_id": "integer",
+            "country_code": "string",
+            "quantity": "integer",
+            "total_price": {"amount": "...", "currency_code": "USD"},
+            "price_per_account": {"amount": "...", "currency_code": "USD"},
+            "item": {
+              "export_id": "UUID",
+              "archive_url": "/v1/purchases/bulk/{id}/download",
+              "quantity": "integer",
+              "status": "PENDING",
+              "created_at": "ISO 8601"
+            },
+            "status": "PENDING",
+            "created_at": "ISO 8601",
+            "updated_at": "ISO 8601"
+          }
+        },
+        "GET /v1/purchases/bulk/{purchase_id}": {
+          "auth": true,
+          "description": "Статус оптовой покупки + ссылка на архив когда готово.",
+          "path_params": {"purchase_id": "string (bulk purchase id)"},
+          "returns": "аналогично POST /v1/purchases/bulk"
+        },
+        "GET /v1/purchases/bulk/{purchase_id}/download": {
+          "auth": true,
+          "description": "Скачать ZIP-архив с аккаунтами из оптовой покупки.",
+          "path_params": {"purchase_id": "string"},
+          "returns": "application/zip файл"
+        }
+      },
+      "WEBHOOKS": {
+        "POST /v1/webhooks/test": {
+          "auth": true,
+          "description": "Тест доставки webhook на указанный URL. Не сохраняется в истории.",
+          "body": {
+            "url": "URI — endpoint для проверки",
+            "type": "success | failed"
+          },
+          "returns": {
+            "success": "boolean",
+            "http_code": "integer",
+            "response_time_ms": "integer",
+            "response_body": "string (до 1000 символов)",
+            "error": "string | null"
+          }
+        }
+      }
+    },
+    "purchase_object_schema": {
+      "id": "integer — уникальный ID покупки",
+      "country_code": "string ISO 3166-1 alpha-2",
+      "display_name": {"ru": "string", "en": "string"},
+      "phone_number": "string E.164 (+12025550123) | null — логин Telegram-аккаунта",
+      "price": {"amount": "decimal string", "currency_code": "USD"},
+      "status": "PENDING | SUCCESS | ERROR | REFUND",
+      "purchase_type": "SINGLE | BULK | ADMIN",
+      "verification": {
+        "note": "null пока не запрошен код. После SUCCESS — постоянные данные.",
+        "code": "string — OTP код",
+        "password": "string | null — пароль 2FA если есть",
+        "received_at": "ISO 8601"
+      },
+      "created_at": "ISO 8601"
+    },
+    "error_handling": {
+      "availability_error": "Аккаунт может исчезнуть между GET /accounts и POST /purchases. Всегда обрабатывать gracefully.",
+      "conflict_on_request_code": "Повторный POST /purchases/{id}/request-code → conflict 409. Использовать GET для получения существующего кода.",
+      "refund_conditions": "Рефанд только если: статус PENDING + прошло 20+ минут. Иначе — ошибка.",
+      "webhook_secret": "Для верификации входящих webhook рекомендуется хранить GETMYTG_WEBHOOK_SECRET и проверять подпись."
+    },
+    "implementation_notes": {
+      "db_model": "TgAccountPurchase — хранить purchase_id (int), telegram_id (bigint), country_code, phone_number, status, amount, currency, verification_code, verification_password, created_at, updated_at",
+      "client_class": "GetMyTGClient в integrations/getmytg.py — async httpx, header x-api-key",
+      "service_class": "TgAccountService в services/tgaccounts.py — orchestration: list_countries, buy_account, request_code, get_purchase, refund",
+      "repository": "TgAccountRepository в db/repositories/tgaccounts.py — CRUD операции с TgAccountPurchase",
+      "handler": "handlers/tgaccounts.py — build_tgaccounts_router(container) → Router",
+      "keyboard_prefix": "tgacc — например tgacc:country, tgacc:buy, tgacc:mypurchases",
+      "container_field": "getmytg_client: GetMyTGClient | None, tgaccounts_service: TgAccountService | None",
+      "config_fields": [
+        "GETMYTG_API_KEY (опционально, без ключа — публичный каталог только)",
+        "GETMYTG_BASE_URL (default: https://api.getmytg.com/v1)",
+        "GETMYTG_WEBHOOK_PATH (default: /webhooks/getmytg)",
+        "GETMYTG_WEBHOOK_SECRET (опционально, для верификации)"
+      ],
+      "texts_class": "TGACCOUNTS_TEXT в texts.py",
+      "migration": "Новая таблица tg_account_purchases — добавить в init_database() через create_all(). Нет ALTER TABLE — таблица новая."
+    }
+  }
+}
