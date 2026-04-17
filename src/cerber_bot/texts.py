@@ -205,6 +205,7 @@ class MENU_TEXT:
     REFRESH_REPORT_CATEGORIES = "Категорий доступно: {count}"
     REFRESH_REPORT_PRODUCTS = "Товаров в витрине: {count}"
     REFRESH_REPORT_HINT = "Откройте магазин, чтобы увидеть свежие остатки и цены."
+    MAIN_MENU_TITLE = "<b>Главное меню CERBER</b>"
 
     @classmethod
     def support_contact(cls, support_url: str) -> str:

@@ -2,6 +2,7 @@
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from cerber_bot.keyboards.main_menu import MAIN_MENU_ACTION
 from cerber_bot.keyboards.storefront import STORE_HOME_ACTION, STORE_WALLET_ACTION
 from cerber_bot.services.deals import DealCard, DealView
 from cerber_bot.services.store import PageInfo, format_money
@@ -51,7 +52,7 @@ def build_deal_home_keyboard(*, open_withdrawal_request_id: int | None = None) -
                 )
             ]
         )
-    rows.append([InlineKeyboardButton(text=DEAL_KEYBOARD_TEXT.MAIN_MENU, callback_data=STORE_HOME_ACTION)])
+    rows.append([InlineKeyboardButton(text=DEAL_KEYBOARD_TEXT.MAIN_MENU, callback_data=MAIN_MENU_ACTION)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -89,7 +90,7 @@ def build_deals_keyboard(cards: tuple[DealCard, ...], page_info: PageInfo) -> In
             InlineKeyboardButton(text=DEAL_KEYBOARD_TEXT.WALLET, callback_data=STORE_WALLET_ACTION),
         ]
     )
-    rows.append([InlineKeyboardButton(text=DEAL_KEYBOARD_TEXT.MAIN_MENU, callback_data=STORE_HOME_ACTION)])
+    rows.append([InlineKeyboardButton(text=DEAL_KEYBOARD_TEXT.MAIN_MENU, callback_data=MAIN_MENU_ACTION)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -163,7 +164,7 @@ def build_deal_detail_keyboard(deal: DealView) -> InlineKeyboardMarkup:
     rows.append(
         [
             InlineKeyboardButton(text=DEAL_KEYBOARD_TEXT.WALLET, callback_data=STORE_WALLET_ACTION),
-            InlineKeyboardButton(text=DEAL_KEYBOARD_TEXT.MAIN_MENU, callback_data=STORE_HOME_ACTION),
+            InlineKeyboardButton(text=DEAL_KEYBOARD_TEXT.MAIN_MENU, callback_data=MAIN_MENU_ACTION),
         ]
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)

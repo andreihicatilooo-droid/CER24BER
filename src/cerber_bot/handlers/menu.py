@@ -45,7 +45,7 @@ from cerber_bot.keyboards.deals import (
     build_moderator_withdrawal_keyboard,
     build_withdrawal_network_keyboard,
 )
-from cerber_bot.keyboards.main_menu import PROFILE_ACTION, REFRESH_ACTION, SUPPORT_ACTION, FAQ_ACTION, FAQ_SECTION_PREFIX, build_faq_keyboard, build_faq_back_keyboard
+from cerber_bot.keyboards.main_menu import MAIN_MENU_ACTION, PROFILE_ACTION, REFRESH_ACTION, SUPPORT_ACTION, FAQ_ACTION, FAQ_SECTION_PREFIX, build_faq_keyboard, build_faq_back_keyboard, build_main_menu
 from cerber_bot.services.deals import DealCard, DealDashboard, DealMessageRelayResult, DealModerationResult, DealServiceError, DealView, WithdrawalRequestView
 from cerber_bot.services.store import PageInfo, StoreServiceError, format_money
 from cerber_bot.texts import DEAL_HANDLER_TEXT, FAQ_TEXT, MENU_TEXT
@@ -57,6 +57,20 @@ logger = logging.getLogger(__name__)
 
 def build_menu_router(container: AppContainer) -> Router:
     router = Router(name="menu")
+
+    @router.callback_query(F.data == MAIN_MENU_ACTION)
+    async def handle_main_menu(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+
+        await state.clear()
+        await message.answer(
+            MENU_TEXT.MAIN_MENU_TITLE,
+            reply_markup=build_main_menu(container.settings),
+        )
+        await callback.answer()
 
     @router.callback_query(F.data == PROFILE_ACTION)
     async def handle_profile(callback: CallbackQuery, state: FSMContext) -> None:
