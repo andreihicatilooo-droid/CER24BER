@@ -243,17 +243,25 @@ class NicePayClient:
         data_raw = response.get("data")
         payload = dict(data_raw) if isinstance(data_raw, Mapping) else response
 
-        # Толерантно к paymentId и payment_id
+        # Толерантно к paymentId и payment_id на уровне payload и верхнего response.
+        # NicePay для details_found возвращает paymentId на верхнем уровне, а не внутри data.
         payment_id = (
             self._optional_string(payload.get("payment_id"))
             or self._optional_string(payload.get("paymentId"))
+            or self._optional_string(response.get("payment_id"))
+            or self._optional_string(response.get("paymentId"))
         )
         if not payment_id:
             raise NicePayRequestError("NicePay H2H response missing payment_id/paymentId.")
 
-        status = self._optional_int(payload.get("status")) or 0
+        # status и остальные поля берём из payload, с fallback на верхний уровень
+        def _get(key: str) -> object:
+            val = payload.get(key)
+            return val if val is not None else response.get(key)
 
-        details_raw = payload.get("details")
+        status = self._optional_int(_get("status")) or 0
+
+        details_raw = _get("details")
         details: dict[str, str] = {}
         if isinstance(details_raw, Mapping):
             for k, v in details_raw.items():
@@ -261,7 +269,7 @@ class NicePayClient:
                 if s is not None:
                     details[str(k)] = s
 
-        methods_raw = payload.get("methods")
+        methods_raw = _get("methods")
         available_methods: list[str] = []
         if isinstance(methods_raw, list):
             for m in methods_raw:
@@ -272,11 +280,11 @@ class NicePayClient:
         return NicePayH2HPayment(
             payment_id=payment_id,
             status=status,
-            currency=self._optional_string(payload.get("currency")) or "",
-            amount_minor=self._optional_int(payload.get("amount")) or 0,
-            method=self._optional_string(payload.get("method")),
+            currency=self._optional_string(_get("currency")) or "",
+            amount_minor=self._optional_int(_get("amount")) or 0,
+            method=self._optional_string(_get("method")),
             details=details,
-            expire=self._optional_string(payload.get("expire")),
+            expire=self._optional_string(_get("expire")),
             available_methods=available_methods,
         )
 
