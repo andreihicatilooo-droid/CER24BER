@@ -29,6 +29,10 @@ STORE_FIELD_CANCEL_ACTION = "store:fc"
 STORE_GIFTAPI_ACTION = "store:ga"  # открыть каталог GiftAPI
 STORE_POPULAR_ACTION = "store:pop"  # раздел «Популярное»
 STORE_POPULAR_PAGE_PREFIX = "store:popp:"  # пагинация популярных товаров
+STORE_H2H_CONFIRM_PREFIX = "h2h:ok:"  # + payment_id — подтверждение перевода
+STORE_H2H_CANCEL_PREFIX = "h2h:x:"   # + payment_id — отмена H2H платежа
+STORE_H2H_PROOF_SKIP_PREFIX = "h2h:skip:"  # + payment_id — пропустить чек
+STORE_WALLET_HISTORY_ACTION = "store:whist"  # история операций кошелька
 
 
 def build_store_home_keyboard() -> InlineKeyboardMarkup:
@@ -203,17 +207,20 @@ def build_field_input_keyboard() -> InlineKeyboardMarkup:
 def build_wallet_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.top_up_amount("10"), callback_data=f"{STORE_TOP_UP_PREFIX}10"),
-                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.top_up_amount("25"), callback_data=f"{STORE_TOP_UP_PREFIX}25"),
-                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.top_up_amount("50"), callback_data=f"{STORE_TOP_UP_PREFIX}50"),
-                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.top_up_amount("100"), callback_data=f"{STORE_TOP_UP_PREFIX}100"),
-            ],
-            [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.CUSTOM_AMOUNT, callback_data=STORE_TOP_UP_CUSTOM_ACTION)],
+            [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP, callback_data=STORE_TOP_UP_CUSTOM_ACTION)],
+            [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.RECENT_OPERATIONS, callback_data=STORE_WALLET_HISTORY_ACTION)],
             [
                 InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.ORDERS, callback_data=STORE_ORDERS_ACTION),
                 InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=MAIN_MENU_ACTION),
             ],
+        ]
+    )
+
+
+def build_wallet_history_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.BACK, callback_data=STORE_WALLET_ACTION)],
         ]
     )
 
@@ -289,3 +296,35 @@ def format_card_price(product: StoreProductCard) -> str:
     if product.max_price is None or product.max_price == product.min_price:
         return format_money(product.min_price, product.currency)
     return STORE_KEYBOARD_TEXT.price_from(format_money(product.min_price, product.currency))
+
+
+def build_h2h_details_keyboard(payment_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=STORE_KEYBOARD_TEXT.H2H_I_PAID,
+                    callback_data=f"{STORE_H2H_CONFIRM_PREFIX}{payment_id}",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=STORE_KEYBOARD_TEXT.H2H_CANCEL,
+                    callback_data=f"{STORE_H2H_CANCEL_PREFIX}{payment_id}",
+                ),
+            ],
+        ]
+    )
+
+
+def build_h2h_proof_keyboard(payment_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=STORE_KEYBOARD_TEXT.H2H_SKIP_PROOF,
+                    callback_data=f"{STORE_H2H_PROOF_SKIP_PREFIX}{payment_id}",
+                ),
+            ],
+        ]
+    )

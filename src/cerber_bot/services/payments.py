@@ -340,7 +340,105 @@ class PaymentService:
             )
             return to_callback_result(completion, method=notification.method)
 
-    def _effective_limits(self) -> tuple[Decimal, Decimal]:        provider_min, provider_max = NICEPAY_LIMITS[self.payment_currency]
+    @property
+    def is_h2h_mode(self) -> bool:
+        return bool(self.method) and self.nicepay_client.is_configured
+
+    async def create_h2h_payment(self, telegram_user: TelegramUserObject, amount: Decimal) -> PaymentH2HDetails:
+        self.ensure_configured()
+        if not self.method:
+            raise PaymentConfigurationError(PAYMENT_SERVICE_TEXT.H2H_METHOD_REQUIRED)
+        normalized_amount = normalize_amount(amount)
+        min_amount, max_amount = self._effective_limits()
+        if normalized_amount < min_amount:
+            raise PaymentFlowError(PAYMENT_SERVICE_TEXT.min_top_up(format_money(min_amount, self.payment_currency)))
+        if normalized_amount > max_amount:
+            raise PaymentFlowError(PAYMENT_SERVICE_TEXT.max_top_up(format_money(max_amount, self.payment_currency)))
+
+        payload = build_payment_payload(telegram_user.id)
+        amount_minor_units = amount_to_minor_units(normalized_amount)
+
+        async with self.session_factory() as session:
+            user_repository = UserRepository(session)
+            payment_repository = WalletPaymentRepository(session)
+            user, _ = await user_repository.get_or_create(
+                telegram_id=telegram_user.id,
+                username=telegram_user.username,
+                first_name=telegram_user.first_name,
+                last_name=telegram_user.last_name,
+                language_code=telegram_user.language_code,
+                is_bot=telegram_user.is_bot,
+                balance_currency=self.wallet_currency,
+            )
+            wallet_currency = user.balance_currency or self.wallet_currency
+            if not user.balance_currency:
+                user.balance_currency = wallet_currency
+            try:
+                estimated_wallet_amount = await self.exchange_rate_service.convert(
+                    normalized_amount,
+                    self.payment_currency,
+                    wallet_currency,
+                )
+            except ExchangeRateError as error:
+                raise PaymentFlowError(str(error)) from error
+
+            description = build_payment_description(self.description, normalized_amount, self.payment_currency)
+            try:
+                h2h_payment = await self.nicepay_client.h2h_one_request_payment(
+                    order_id=payload,
+                    customer=build_customer_account(telegram_user),
+                    amount_minor=amount_minor_units,
+                    currency=self.payment_currency,
+                    method=self.method,
+                )
+            except NicePayError as error:
+                raise PaymentFlowError(str(error)) from error
+
+            payment = await payment_repository.create_pending(
+                telegram_id=telegram_user.id,
+                payload=payload,
+                provider=PAYMENT_PROVIDER_NAME,
+                amount=normalized_amount,
+                currency=self.payment_currency,
+                title=self.title,
+                description=description,
+            )
+            payment.provider_payment_charge_id = h2h_payment.payment_id
+            await session.commit()
+
+        return PaymentH2HDetails(
+            payment_id=h2h_payment.payment_id,
+            order_id=payload,
+            currency=self.payment_currency,
+            amount=normalized_amount,
+            amount_minor=amount_minor_units,
+            status=h2h_payment.status,
+            method=h2h_payment.method or self.method,
+            details=h2h_payment.details,
+            expire=h2h_payment.expire,
+            estimated_wallet_amount=estimated_wallet_amount,
+            wallet_currency=wallet_currency,
+        )
+
+    async def confirm_h2h_payment(self, *, payment_id: str) -> None:
+        try:
+            await self.nicepay_client.h2h_confirm_paid(payment_id=payment_id)
+        except NicePayError as error:
+            raise PaymentFlowError(str(error)) from error
+
+    async def upload_h2h_proof(self, *, payment_id: str, file_bytes: bytes, filename: str, content_type: str) -> None:
+        try:
+            await self.nicepay_client.h2h_upload_proof(
+                payment_id=payment_id,
+                file_bytes=file_bytes,
+                filename=filename,
+                content_type=content_type,
+            )
+        except NicePayError as error:
+            raise PaymentFlowError(str(error)) from error
+
+    def _effective_limits(self) -> tuple[Decimal, Decimal]:
+        provider_min, provider_max = NICEPAY_LIMITS[self.payment_currency]
         min_amount = max(self.min_amount, provider_min)
         max_amount = min(self.max_amount, provider_max)
         return min_amount, max_amount

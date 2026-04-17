@@ -42,17 +42,24 @@ from cerber_bot.keyboards.storefront import (
     STORE_REFRESH_ACTION,
     STORE_SEARCH_PAGE_PREFIX,
     STORE_SEARCH_PROMPT_ACTION,
+    STORE_H2H_CANCEL_PREFIX,
+    STORE_H2H_CONFIRM_PREFIX,
+    STORE_H2H_PROOF_SKIP_PREFIX,
     STORE_TOP_UP_CUSTOM_ACTION,
     STORE_TOP_UP_PREFIX,
     STORE_WALLET_ACTION,
+    STORE_WALLET_HISTORY_ACTION,
     build_categories_keyboard,
     build_field_input_keyboard,
+    build_h2h_details_keyboard,
+    build_h2h_proof_keyboard,
     build_order_detail_keyboard,
     build_orders_keyboard,
     build_popular_keyboard,
     build_product_detail_keyboard,
     build_products_keyboard,
     build_store_home_keyboard,
+    build_wallet_history_keyboard,
     build_wallet_keyboard,
 )
 from cerber_bot.services.store import (
@@ -74,7 +81,7 @@ from cerber_bot.services.store import (
     build_page_info,
     format_money,
 )
-from cerber_bot.services.payments import PaymentConfigurationError, PaymentFlowError
+from cerber_bot.services.payments import PaymentConfigurationError, PaymentFlowError, PaymentH2HDetails, PaymentH2HDetails
 from cerber_bot.texts import STORE_KEYBOARD_TEXT, STOREFRONT_TEXT
 
 
@@ -82,6 +89,8 @@ class StorefrontStates(StatesGroup):
     waiting_for_search_query = State()
     waiting_for_top_up_amount = State()
     waiting_for_field_value = State()  # сбор значений required_fields перед покупкой
+    waiting_for_h2h_proof = State()    # ожидание фото-чека после H2H-оплаты
+    waiting_for_h2h_proof = State()    # ожидание фото-чека после H2H-оплаты
 
 
 PRODUCTS_PER_PAGE = 6
@@ -377,6 +386,17 @@ def build_storefront_router(container: AppContainer) -> Router:
         await render_wallet_screen(message, state, container, callback=callback, telegram_id=callback.from_user.id)
         await callback.answer(STOREFRONT_TEXT.CALLBACK_WALLET_OPENED)
 
+    @router.callback_query(F.data == STORE_WALLET_HISTORY_ACTION)
+    async def handle_wallet_history(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None or callback.from_user is None:
+            await callback.answer()
+            return
+
+        wallet = await container.store_service.get_wallet_snapshot(callback.from_user.id)
+        await send_screen(message, render_wallet_history_text(wallet), build_wallet_history_keyboard(), callback=callback)
+        await callback.answer(STOREFRONT_TEXT.CALLBACK_WALLET_HISTORY)
+
     @router.callback_query(F.data.startswith(STORE_TOP_UP_PREFIX))
     async def handle_top_up_fixed(callback: CallbackQuery, state: FSMContext) -> None:
         message = extract_message(callback)
@@ -386,19 +406,28 @@ def build_storefront_router(container: AppContainer) -> Router:
 
         amount_text = callback.data.removeprefix(STORE_TOP_UP_PREFIX)
         amount = parse_decimal(amount_text)
-        await callback.answer(STOREFRONT_TEXT.CALLBACK_PAYMENT_CREATING)
-        try:
-            payment_link = await container.payment_service.create_top_up_link(callback.from_user, amount)
-        except (PaymentFlowError, PaymentConfigurationError, StoreServiceError) as error:
-            await send_screen(message, render_store_error(error), build_wallet_keyboard(), callback=callback)
-            return
 
-        await state.set_state(None)
-        try:
-            await send_top_up_link(message, payment_link)
-        except (TelegramBadRequest, TelegramNetworkError) as error:
-            await send_screen(message, render_store_error(error), build_wallet_keyboard(), callback=callback)
-            return
+        if container.payment_service.is_h2h_mode:
+            await callback.answer(STOREFRONT_TEXT.CALLBACK_H2H_CREATING)
+            try:
+                h2h = await container.payment_service.create_h2h_payment(callback.from_user, amount)
+            except (PaymentFlowError, PaymentConfigurationError, StoreServiceError) as error:
+                await send_screen(message, render_store_error(error), build_wallet_keyboard(), callback=callback)
+                return
+            await state.set_state(None)
+            await send_h2h_details(message, h2h, callback=callback)
+        else:
+            await callback.answer(STOREFRONT_TEXT.CALLBACK_PAYMENT_CREATING)
+            try:
+                payment_link = await container.payment_service.create_top_up_link(callback.from_user, amount)
+            except (PaymentFlowError, PaymentConfigurationError, StoreServiceError) as error:
+                await send_screen(message, render_store_error(error), build_wallet_keyboard(), callback=callback)
+                return
+            await state.set_state(None)
+            try:
+                await send_top_up_link(message, payment_link)
+            except (TelegramBadRequest, TelegramNetworkError) as error:
+                await send_screen(message, render_store_error(error), build_wallet_keyboard(), callback=callback)
 
     @router.callback_query(F.data == STORE_TOP_UP_CUSTOM_ACTION)
     async def handle_top_up_custom_prompt(callback: CallbackQuery, state: FSMContext) -> None:
@@ -419,18 +448,128 @@ def build_storefront_router(container: AppContainer) -> Router:
         if message.from_user is None:
             return
 
+        if container.payment_service.is_h2h_mode:
+            try:
+                amount = parse_decimal(message.text or "")
+                h2h = await container.payment_service.create_h2h_payment(message.from_user, amount)
+            except (PaymentFlowError, PaymentConfigurationError, StoreServiceError, ValueError) as error:
+                await message.answer(render_store_error(error), reply_markup=build_wallet_keyboard())
+                return
+            await state.set_state(None)
+            await send_h2h_details(message, h2h)
+        else:
+            try:
+                amount = parse_decimal(message.text or "")
+                payment_link = await container.payment_service.create_top_up_link(message.from_user, amount)
+            except (PaymentFlowError, PaymentConfigurationError, StoreServiceError, ValueError) as error:
+                await message.answer(render_store_error(error), reply_markup=build_wallet_keyboard())
+                return
+            await state.set_state(None)
+            try:
+                await send_top_up_link(message, payment_link)
+            except (TelegramBadRequest, TelegramNetworkError) as error:
+                await message.answer(render_store_error(error), reply_markup=build_wallet_keyboard())
+
+    @router.callback_query(F.data.startswith(STORE_H2H_CONFIRM_PREFIX))
+    async def handle_h2h_confirm(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+
+        payment_id = callback.data.removeprefix(STORE_H2H_CONFIRM_PREFIX)
         try:
-            amount = parse_decimal(message.text or "")
-            payment_link = await container.payment_service.create_top_up_link(message.from_user, amount)
-        except (PaymentFlowError, PaymentConfigurationError, StoreServiceError, ValueError) as error:
-            await message.answer(render_store_error(error), reply_markup=build_wallet_keyboard())
+            await container.payment_service.confirm_h2h_payment(payment_id=payment_id)
+        except (PaymentFlowError, PaymentConfigurationError) as error:
+            await callback.answer(str(error)[:200], show_alert=True)
+            return
+
+        await state.update_data(h2h_payment_id=payment_id)
+        await state.set_state(StorefrontStates.waiting_for_h2h_proof)
+        await message.answer(
+            "\n".join([
+                STOREFRONT_TEXT.H2H_CONFIRMED_TITLE,
+                STOREFRONT_TEXT.H2H_CONFIRMED_HINT,
+                "",
+                STOREFRONT_TEXT.H2H_PROOF_PROMPT,
+            ]),
+            reply_markup=build_h2h_proof_keyboard(payment_id),
+        )
+        await callback.answer(STOREFRONT_TEXT.CALLBACK_H2H_CONFIRMED)
+
+    @router.callback_query(F.data.startswith(STORE_H2H_CANCEL_PREFIX))
+    async def handle_h2h_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
             return
 
         await state.set_state(None)
+        await send_screen(message, render_wallet_text_simple(), build_wallet_keyboard(), callback=callback)
+        await callback.answer(STOREFRONT_TEXT.CALLBACK_H2H_CANCELED)
+
+    @router.callback_query(F.data.startswith(STORE_H2H_PROOF_SKIP_PREFIX))
+    async def handle_h2h_proof_skip(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+
+        await state.set_state(None)
+        await send_screen(message, render_wallet_text_simple(), build_wallet_keyboard(), callback=callback)
+        await callback.answer(STOREFRONT_TEXT.CALLBACK_H2H_PROOF_SKIPPED)
+
+    @router.message(StorefrontStates.waiting_for_h2h_proof)
+    async def handle_h2h_proof_photo(message: Message, state: FSMContext) -> None:
+        if not message.photo:
+            await message.answer(STOREFRONT_TEXT.H2H_PROOF_PROMPT, reply_markup=build_h2h_proof_keyboard(
+                str((await state.get_data()).get("h2h_payment_id") or "")
+            ))
+            return
+
+        data = await state.get_data()
+        payment_id = str(data.get("h2h_payment_id") or "")
+        if not payment_id:
+            await state.set_state(None)
+            await message.answer(render_wallet_text_simple(), reply_markup=build_wallet_keyboard())
+            return
+
+        # Telegram: photo[-1] — наибольший размер
+        photo = message.photo[-1]
+        if photo.file_size and photo.file_size > 1024 * 1024:
+            await message.answer(STOREFRONT_TEXT.H2H_PROOF_TOO_LARGE, reply_markup=build_h2h_proof_keyboard(payment_id))
+            return
+
         try:
-            await send_top_up_link(message, payment_link)
-        except (TelegramBadRequest, TelegramNetworkError) as error:
-            await message.answer(render_store_error(error), reply_markup=build_wallet_keyboard())
+            from aiogram import Bot
+            bot: Bot = message.bot  # type: ignore[assignment]
+            file = await bot.get_file(photo.file_id)
+            file_bytes_io = await bot.download_file(file.file_path or "")
+            file_bytes = file_bytes_io.read() if file_bytes_io else b""
+            await container.payment_service.upload_h2h_proof(
+                payment_id=payment_id,
+                file_bytes=file_bytes,
+                filename="proof.jpg",
+                content_type="image/jpeg",
+            )
+        except (PaymentFlowError, PaymentConfigurationError) as error:
+            await message.answer(
+                STOREFRONT_TEXT.H2H_PROOF_UPLOAD_ERROR.format(error=str(error)),
+                reply_markup=build_h2h_proof_keyboard(payment_id),
+            )
+            return
+        except Exception as error:
+            await message.answer(
+                STOREFRONT_TEXT.H2H_PROOF_UPLOAD_ERROR.format(error=str(error)),
+                reply_markup=build_h2h_proof_keyboard(payment_id),
+            )
+            return
+
+        await state.set_state(None)
+        await message.answer(
+            "\n".join([STOREFRONT_TEXT.H2H_CONFIRMED_TITLE, STOREFRONT_TEXT.H2H_CONFIRMED_HINT]),
+            reply_markup=build_wallet_keyboard(),
+        )
 
     @router.callback_query(F.data.startswith(STORE_BUY_SKU_PREFIX))
     async def handle_buy_sku(callback: CallbackQuery, state: FSMContext) -> None:
@@ -966,24 +1105,15 @@ def render_product_detail_screen(product: StoreProductView, offers: tuple[StoreP
 def render_wallet_text(wallet: WalletSnapshot, title: str = STOREFRONT_TEXT.WALLET_TITLE) -> str:
     lines = [f"<b>{escape(title)}</b>"]
     lines.append(STOREFRONT_TEXT.WALLET_AVAILABLE.format(amount=escape(format_money(wallet.balance, wallet.currency))))
-    lines.append(STOREFRONT_TEXT.WALLET_HELD.format(amount=escape(format_money(wallet.held_balance, wallet.currency))))
-    lines.append(STOREFRONT_TEXT.WALLET_TOTAL.format(amount=escape(format_money(wallet.total_balance, wallet.currency))))
-    lines.append(
-        STOREFRONT_TEXT.WALLET_EQUIVALENT.format(
-            usdt_amount=escape(format_money(wallet.total_quote.usdt_amount, 'USDT')),
-            rub_amount=escape(format_money(wallet.total_quote.rub_amount, 'RUB')),
-        )
-    )
-    lines.append(STOREFRONT_TEXT.WALLET_RATE.format(amount=escape(format_money(wallet.total_quote.usdt_rub_rate, 'RUB'))))
     lines.append(STOREFRONT_TEXT.WALLET_ORDER_COUNT.format(count=wallet.order_count))
-    lines.append(STOREFRONT_TEXT.WALLET_NICEPAY_INFO)
-    lines.append("")
-    lines.append(STOREFRONT_TEXT.WALLET_RECENT_TITLE)
+    return "\n".join(lines)
 
+
+def render_wallet_history_text(wallet: WalletSnapshot) -> str:
+    lines = [STOREFRONT_TEXT.WALLET_HISTORY_TITLE]
     if not wallet.recent_transactions:
         lines.append(STOREFRONT_TEXT.WALLET_RECENT_EMPTY)
         return "\n".join(lines)
-
     for transaction in wallet.recent_transactions:
         timestamp = transaction.created_at.astimezone(timezone.utc).strftime("%d.%m %H:%M UTC")
         lines.append(
@@ -1144,3 +1274,42 @@ def build_payment_link_keyboard(payment_url: str) -> InlineKeyboardMarkup:
             ],
         ]
     )
+
+
+async def send_h2h_details(
+    message: Message,
+    h2h: PaymentH2HDetails,
+    *,
+    callback: CallbackQuery | None = None,
+) -> None:
+    lines: list[str] = [STOREFRONT_TEXT.H2H_PAYMENT_TITLE]
+    if h2h.method:
+        lines.append(STOREFRONT_TEXT.H2H_PAYMENT_METHOD.format(method=escape(h2h.method)))
+    lines.append(STOREFRONT_TEXT.H2H_PAYMENT_AMOUNT.format(amount=escape(format_money(h2h.amount, h2h.currency))))
+    lines.append(STOREFRONT_TEXT.H2H_PAYMENT_ESTIMATED.format(
+        amount=escape(format_money(h2h.estimated_wallet_amount, h2h.wallet_currency))
+    ))
+    if h2h.expire:
+        lines.append(STOREFRONT_TEXT.H2H_PAYMENT_EXPIRE.format(expire=escape(h2h.expire)))
+    lines.append(STOREFRONT_TEXT.H2H_PAYMENT_ID.format(payment_id=escape(h2h.payment_id)))
+    if h2h.details:
+        lines.append("")
+        lines.append(STOREFRONT_TEXT.H2H_PAYMENT_DETAILS_TITLE)
+        for key, value in h2h.details.items():
+            lines.append(STOREFRONT_TEXT.H2H_PAYMENT_DETAIL.format(key=escape(key), value=escape(value)))
+    else:
+        lines.append("")
+        lines.append(STOREFRONT_TEXT.H2H_DETAILS_EMPTY)
+    lines.append("")
+    lines.append(STOREFRONT_TEXT.H2H_PAYMENT_HINT)
+
+    text = "\n".join(lines)
+    keyboard = build_h2h_details_keyboard(h2h.payment_id)
+    if callback is not None:
+        await send_screen(message, text, keyboard, callback=callback)
+    else:
+        await message.answer(text, reply_markup=keyboard)
+
+
+def render_wallet_text_simple() -> str:
+    return STOREFRONT_TEXT.WALLET_TITLE

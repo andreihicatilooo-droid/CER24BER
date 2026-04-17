@@ -280,7 +280,8 @@ class NicePayClient:
             available_methods=available_methods,
         )
 
-    async def _create_payment_with_payload(self, payload: JsonDict) -> NicePayCreatedPayment:        body = await self._request_json("POST", "/public/api/payment", json_body=payload)
+    async def _create_payment_with_payload(self, payload: JsonDict) -> NicePayCreatedPayment:
+        body = await self._request_json("POST", "/public/api/payment", json_body=payload)
         response = self._mapping(body, "NicePay response must be an object")
         status = self._optional_string(response.get("status"))
         data = self._mapping(response.get("data"), "NicePay response field 'data' must be an object")
