@@ -43,6 +43,18 @@ class NicePayCreatedPayment:
 
 
 @dataclass(slots=True, frozen=True)
+class NicePayH2HPayment:
+    payment_id: str
+    status: int
+    currency: str
+    amount_minor: int
+    method: str | None
+    details: dict[str, str]  # реквизиты: cardNumber, bankName, cardHolder и пр.
+    expire: str | None
+    available_methods: list[str]
+
+
+@dataclass(slots=True, frozen=True)
 class NicePayWebhookNotification:
     result: str
     payment_id: str
@@ -157,8 +169,118 @@ class NicePayClient:
         digest = hashlib.sha256("{np}".join(values).encode("utf-8")).hexdigest()
         return hmac.compare_digest(digest, provided_signature)
 
-    async def _create_payment_with_payload(self, payload: JsonDict) -> NicePayCreatedPayment:
-        body = await self._request_json("POST", "/public/api/payment", json_body=payload)
+    async def h2h_one_request_payment(
+        self,
+        *,
+        order_id: str,
+        customer: str,
+        amount_minor: int,
+        currency: str,
+        method: str,
+    ) -> NicePayH2HPayment:
+        self.ensure_configured()
+        payload: JsonDict = {
+            "merchant_id": self.merchant_id or "",
+            "secret": self.secret or "",
+            "order_id": order_id,
+            "customer": customer,
+            "amount": amount_minor,
+            "currency": currency,
+            "method": method,
+        }
+        body = await self._request_json("POST", "/public/api/h2hOneRequestPayment", json_body=payload)
+        return self._parse_h2h_response(body)
+
+    async def h2h_payment_info(self, *, payment_id: str) -> NicePayH2HPayment:
+        self.ensure_configured()
+        payload: JsonDict = {
+            "merchant_id": self.merchant_id or "",
+            "secret": self.secret or "",
+            "payment": payment_id,
+        }
+        body = await self._request_json("POST", "/public/api/h2hPaymentInfo", json_body=payload)
+        return self._parse_h2h_response(body)
+
+    async def h2h_confirm_paid(self, *, payment_id: str) -> None:
+        self.ensure_configured()
+        payload: JsonDict = {
+            "merchant_id": self.merchant_id or "",
+            "secret": self.secret or "",
+            "payment": payment_id,
+        }
+        await self._request_json("POST", "/public/api/h2hConfirmPaid", json_body=payload)
+
+    async def h2h_upload_proof(
+        self,
+        *,
+        payment_id: str,
+        file_bytes: bytes,
+        filename: str,
+        content_type: str,
+    ) -> None:
+        self.ensure_configured()
+        data = {
+            "merchant_id": self.merchant_id or "",
+            "secret": self.secret or "",
+            "payment": payment_id,
+        }
+        files = {"proof": (filename, file_bytes, content_type)}
+        response = await self.http_client.post(
+            f"{self.base_url}/public/api/h2hUploadProof",
+            data=data,
+            files=files,
+            headers={"Accept": "application/json"},
+        )
+        try:
+            body: object = response.json()
+        except ValueError:
+            body = None
+        if response.is_error:
+            raise self._request_error(response.status_code, body, response.text)
+
+    def _parse_h2h_response(self, body: object) -> NicePayH2HPayment:
+        response = self._mapping(body, "NicePay H2H response must be an object")
+        data_raw = response.get("data")
+        payload = dict(data_raw) if isinstance(data_raw, Mapping) else response
+
+        # Толерантно к paymentId и payment_id
+        payment_id = (
+            self._optional_string(payload.get("payment_id"))
+            or self._optional_string(payload.get("paymentId"))
+        )
+        if not payment_id:
+            raise NicePayRequestError("NicePay H2H response missing payment_id/paymentId.")
+
+        status = self._optional_int(payload.get("status")) or 0
+
+        details_raw = payload.get("details")
+        details: dict[str, str] = {}
+        if isinstance(details_raw, Mapping):
+            for k, v in details_raw.items():
+                s = self._optional_string(v)
+                if s is not None:
+                    details[str(k)] = s
+
+        methods_raw = payload.get("methods")
+        available_methods: list[str] = []
+        if isinstance(methods_raw, list):
+            for m in methods_raw:
+                s = self._optional_string(m)
+                if s:
+                    available_methods.append(s)
+
+        return NicePayH2HPayment(
+            payment_id=payment_id,
+            status=status,
+            currency=self._optional_string(payload.get("currency")) or "",
+            amount_minor=self._optional_int(payload.get("amount")) or 0,
+            method=self._optional_string(payload.get("method")),
+            details=details,
+            expire=self._optional_string(payload.get("expire")),
+            available_methods=available_methods,
+        )
+
+    async def _create_payment_with_payload(self, payload: JsonDict) -> NicePayCreatedPayment:        body = await self._request_json("POST", "/public/api/payment", json_body=payload)
         response = self._mapping(body, "NicePay response must be an object")
         status = self._optional_string(response.get("status"))
         data = self._mapping(response.get("data"), "NicePay response field 'data' must be an object")

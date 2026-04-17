@@ -82,6 +82,21 @@ class PaymentCompletion:
     payment_id: str
 
 
+@dataclass(slots=True, frozen=True)
+class PaymentH2HDetails:
+    payment_id: str
+    order_id: str
+    currency: str
+    amount: Decimal
+    amount_minor: int
+    status: int
+    method: str | None
+    details: dict[str, str]
+    expire: str | None
+    estimated_wallet_amount: Decimal
+    wallet_currency: str
+
+
 class PaymentService:
     def __init__(
         self,
@@ -325,8 +340,7 @@ class PaymentService:
             )
             return to_callback_result(completion, method=notification.method)
 
-    def _effective_limits(self) -> tuple[Decimal, Decimal]:
-        provider_min, provider_max = NICEPAY_LIMITS[self.payment_currency]
+    def _effective_limits(self) -> tuple[Decimal, Decimal]:        provider_min, provider_max = NICEPAY_LIMITS[self.payment_currency]
         min_amount = max(self.min_amount, provider_min)
         max_amount = min(self.max_amount, provider_max)
         return min_amount, max_amount
