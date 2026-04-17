@@ -88,7 +88,9 @@ def build_popular_keyboard(products: tuple[StoreProductCard, ...], page_info: Pa
 
 
 def build_categories_keyboard(categories: tuple[StoreCategoryCard, ...], page_info: PageInfo, *, back_callback: str = STORE_HOME_ACTION) -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = []
+    rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.POPULAR, callback_data=STORE_POPULAR_ACTION)],
+    ]
     for category in categories:
         rows.append(
             [

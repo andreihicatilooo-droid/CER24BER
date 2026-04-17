@@ -367,6 +367,8 @@ def build_storefront_router(container: AppContainer) -> Router:
         try:
             if view_type == "search":
                 await render_search_results(message, state, container, callback=callback, page=int(context.get("search_page", 1)))
+            elif view_type == "popular":
+                await render_popular(message, state, container, callback=callback, page=int(context.get("popular_page", 1)))
             elif view_type == "category":
                 await render_products(
                     message,
@@ -955,7 +957,10 @@ async def render_popular(
     page: int,
     callback: CallbackQuery | None = None,
 ) -> None:
-    all_products = await container.store_service.get_popular_products()
+    all_products = await container.store_service.get_featured_products()
+    if not all_products:
+        # Fallback: нет истории покупок — берём keyword-based популярное
+        all_products = await container.store_service.get_popular_products()
     if not all_products:
         await send_screen(message, STOREFRONT_TEXT.POPULAR_EMPTY, build_store_home_keyboard(), callback=callback)
         return
