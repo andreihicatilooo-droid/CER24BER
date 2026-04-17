@@ -2,8 +2,9 @@
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from cerber_bot.keyboards.main_menu import MAIN_MENU_ACTION
 from cerber_bot.keyboards.storefront import STORE_HOME_ACTION, STORE_WALLET_ACTION
+
+MAIN_MENU_ACTION = "menu:main"
 from cerber_bot.services.deals import DealCard, DealView
 from cerber_bot.services.store import PageInfo, format_money
 from cerber_bot.texts import DEAL_KEYBOARD_TEXT
