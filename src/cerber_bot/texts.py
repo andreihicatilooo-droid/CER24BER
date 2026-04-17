@@ -75,6 +75,7 @@ class STORE_KEYBOARD_TEXT:
     RECENT_OPERATIONS = "📋 Последние операции"
     CUSTOM_AMOUNT = "Своя сумма"
     PAY_WITH_NICEPAY = "Оплатить через NicePay"
+    PAY_WITH_RUKASSA = "Оплатить через Rukassa"
     TOP_UP_H2H = "📲 Напрямую (H2H)"
     TOP_UP_LINK = "🔗 Через ссылку"
     TOP_UP_NICEPAY = "💳 Через NicePay"
@@ -490,6 +491,8 @@ class STOREFRONT_TEXT:
     PAYMENT_LINK_ID = "NicePay ID: {payment_id}"
     PAYMENT_LINK_EXPIRES = "Действует до: {expires_at}"
     PAYMENT_LINK_AUTO_UPDATE = "После успешной оплаты NicePay пришлет callback, и баланс обновится автоматически."
+    PAYMENT_LINK_RUKASSA_ID = "Rukassa ID: {payment_id}"
+    PAYMENT_LINK_RUKASSA_AUTO_UPDATE = "После успешной оплаты Rukassa пришлёт уведомление, и баланс обновится автоматически."
     PAYMENT_LINK_EXPIRES_UNKNOWN = "не указано"
     PRODUCT_TITLE_PREFIX = "Поиск: {query}"
 

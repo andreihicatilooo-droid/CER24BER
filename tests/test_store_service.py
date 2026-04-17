@@ -1,4 +1,4 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -413,5 +413,70 @@ async def test_order_repository_top_product_ids(tmp_path: Path) -> None:
         top_one = await repo.top_product_ids(limit=1)
         assert len(top_one) == 1
         assert top_one[0] == "product-A"
+
+    await engine.dispose()
+
+@pytest.mark.asyncio
+async def test_store_service_get_featured_products(tmp_path: Path) -> None:
+    database_url = f"sqlite+aiosqlite:///{(tmp_path / 'featured.db').as_posix()}"
+    engine = create_engine(database_url)
+    session_factory = create_session_factory(engine)
+    await init_database(engine)
+
+    service = StoreService(
+        session_factory=session_factory,
+        gift_api_service=StubGiftApiService(),
+        gift_api_client=StubGiftApiClient(),
+        exchange_rate_service=StubExchangeRateService(),
+        cache_ttl_seconds=60,
+    )
+
+    # Пустая БД — пустой результат
+    featured_empty = await service.get_featured_products()
+    assert featured_empty == ()
+
+    # steam-1 — 3 покупки, apple-1 — 1, unknown-999 — 5 (нет в каталоге -> не попадает)
+    async with session_factory() as session:
+        from cerber_bot.db.models import UserOrder, utcnow
+        import uuid
+
+        def _order(product_id: str, provider: str = "giftapi") -> UserOrder:
+            now = utcnow()
+            return UserOrder(
+                telegram_id=1,
+                external_id=str(uuid.uuid4()),
+                provider_order_id=None,
+                provider=provider,
+                product_id=product_id,
+                product_name=product_id,
+                sku_id="sku-1",
+                sku_name="SKU",
+                status="completed",
+                total_amount=Decimal("10.00"),
+                currency="USD",
+                delivery_payload=None,
+                error_message=None,
+                created_at=now,
+                updated_at=now,
+            )
+
+        for _ in range(3):
+            session.add(_order("product-steam-1"))
+        session.add(_order("product-apple-1"))
+        for _ in range(2):
+            session.add(_order("product-unknown-999"))
+        await session.commit()
+
+    service._cached_snapshot = None
+    featured = await service.get_featured_products(limit=10)
+    product_ids = [p.product_id for p in featured]
+
+    assert product_ids[0] == "product-steam-1"
+    assert product_ids[1] == "product-apple-1"
+    assert "product-unknown-999" not in product_ids
+
+    featured_one = await service.get_featured_products(limit=1)
+    assert len(featured_one) == 1
+    assert featured_one[0].product_id == "product-steam-1"
 
     await engine.dispose()

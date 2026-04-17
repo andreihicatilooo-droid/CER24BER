@@ -58,6 +58,7 @@ class PaymentLink:
     wallet_currency: str
     amount_minor_units: int
     expires_at: object | None
+    provider: str = ""
 
 
 @dataclass(slots=True, frozen=True)
@@ -244,6 +245,7 @@ class PaymentService:
             wallet_currency=wallet_currency,
             amount_minor_units=amount_minor_units,
             expires_at=created_payment.expires_at,
+            provider=PAYMENT_PROVIDER_NAME,
         )
 
     async def _create_rukassa_top_up_link(
@@ -317,6 +319,7 @@ class PaymentService:
             wallet_currency=wallet_currency,
             amount_minor_units=0,
             expires_at=None,
+            provider=RUKASSA_PROVIDER_NAME,
         )
 
     async def process_callback(self, parameters: Mapping[str, object]) -> PaymentCallbackResult:

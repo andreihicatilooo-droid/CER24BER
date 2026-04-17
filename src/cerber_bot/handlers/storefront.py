@@ -1380,29 +1380,40 @@ def pretty_json(raw_payload: str) -> str:
 
 
 async def send_top_up_link(message: Message, payment_link) -> None:
+    is_rukassa = getattr(payment_link, "provider", "") == "rukassa"
     expires_at = payment_link.expires_at
     expires_text = STOREFRONT_TEXT.PAYMENT_LINK_EXPIRES_UNKNOWN
     if hasattr(expires_at, "astimezone"):
         expires_text = expires_at.astimezone(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
+
+    if is_rukassa:
+        id_line = STOREFRONT_TEXT.PAYMENT_LINK_RUKASSA_ID.format(payment_id=escape(payment_link.payment_id))
+        auto_update_line = STOREFRONT_TEXT.PAYMENT_LINK_RUKASSA_AUTO_UPDATE
+    else:
+        id_line = STOREFRONT_TEXT.PAYMENT_LINK_ID.format(payment_id=escape(payment_link.payment_id))
+        auto_update_line = STOREFRONT_TEXT.PAYMENT_LINK_AUTO_UPDATE
+
+    lines = [
+        STOREFRONT_TEXT.PAYMENT_LINK_TITLE,
+        STOREFRONT_TEXT.PAYMENT_LINK_AMOUNT.format(amount=escape(format_money(payment_link.amount, payment_link.currency))),
+        STOREFRONT_TEXT.PAYMENT_LINK_ESTIMATED.format(amount=escape(format_money(payment_link.estimated_wallet_amount, payment_link.wallet_currency))),
+        id_line,
+    ]
+    if not is_rukassa:
+        lines.append(STOREFRONT_TEXT.PAYMENT_LINK_EXPIRES.format(expires_at=escape(expires_text)))
+    lines.append(auto_update_line)
+
     await message.answer(
-        "\n".join(
-            [
-                STOREFRONT_TEXT.PAYMENT_LINK_TITLE,
-                STOREFRONT_TEXT.PAYMENT_LINK_AMOUNT.format(amount=escape(format_money(payment_link.amount, payment_link.currency))),
-                STOREFRONT_TEXT.PAYMENT_LINK_ESTIMATED.format(amount=escape(format_money(payment_link.estimated_wallet_amount, payment_link.wallet_currency))),
-                STOREFRONT_TEXT.PAYMENT_LINK_ID.format(payment_id=escape(payment_link.payment_id)),
-                STOREFRONT_TEXT.PAYMENT_LINK_EXPIRES.format(expires_at=escape(expires_text)),
-                STOREFRONT_TEXT.PAYMENT_LINK_AUTO_UPDATE,
-            ]
-        ),
-        reply_markup=build_payment_link_keyboard(payment_link.payment_url),
+        "\n".join(lines),
+        reply_markup=build_payment_link_keyboard(payment_link.payment_url, is_rukassa=is_rukassa),
     )
 
 
-def build_payment_link_keyboard(payment_url: str) -> InlineKeyboardMarkup:
+def build_payment_link_keyboard(payment_url: str, *, is_rukassa: bool = False) -> InlineKeyboardMarkup:
+    pay_text = STORE_KEYBOARD_TEXT.PAY_WITH_RUKASSA if is_rukassa else STORE_KEYBOARD_TEXT.PAY_WITH_NICEPAY
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.PAY_WITH_NICEPAY, url=payment_url)],
+            [InlineKeyboardButton(text=pay_text, url=payment_url)],
             [
                 InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.WALLET, callback_data=STORE_WALLET_ACTION),
                 InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=STORE_HOME_ACTION),

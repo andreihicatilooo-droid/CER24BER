@@ -300,6 +300,35 @@ class StoreService:
                     seen.add(item.product_id)
         return tuple(result)
 
+    async def get_featured_products(
+        self,
+        *,
+        limit: int = 10,
+        provider: str = "giftapi",
+    ) -> tuple[StoreProductCard, ...]:
+        """Возвращает топ-N продуктов по реальной истории покупок из БД.
+
+        Смотрит только в кэшированный snapshot — не делает лишних запросов.
+        Продукты, удалённые из каталога, не попадают в результат.
+
+        Args:
+            limit:    Максимальное количество продуктов.
+            provider: Фильтр по провайдеру заказов.
+        """
+        snapshot = await self.get_catalog_snapshot()
+
+        async with self.session_factory() as session:
+            order_repository = UserOrderRepository(session)
+            top_ids = await order_repository.top_product_ids(limit=limit, provider=provider)
+
+        result: list[StoreProductCard] = []
+        for product_id in top_ids:
+            card = snapshot.products_by_id.get(product_id)
+            if card is not None:
+                result.append(card)
+
+        return tuple(result)
+
     async def get_products_page(
         self,
         *,
