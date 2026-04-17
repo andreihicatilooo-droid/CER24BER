@@ -77,6 +77,7 @@ class STORE_KEYBOARD_TEXT:
     PAY_WITH_NICEPAY = "Оплатить через NicePay"
     TOP_UP_H2H = "📲 Напрямую (H2H)"
     TOP_UP_LINK = "🔗 Через ссылку"
+    TOP_UP_RUKASSA = "💰 Через Rukassa"
     H2H_I_PAID = "✅ Я перевёл"
     H2H_CANCEL = "❌ Отмена"
     H2H_UPLOAD_PROOF = "📎 Отправить чек"

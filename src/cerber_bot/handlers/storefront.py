@@ -49,6 +49,7 @@ from cerber_bot.keyboards.storefront import (
     STORE_TOP_UP_CUSTOM_ACTION,
     STORE_TOP_UP_H2H_ACTION,
     STORE_TOP_UP_LINK_ACTION,
+    STORE_TOP_UP_RUKASSA_ACTION,
     STORE_TOP_UP_PREFIX,
     STORE_WALLET_ACTION,
     STORE_WALLET_HISTORY_ACTION,
@@ -107,7 +108,11 @@ def build_storefront_router(container: AppContainer) -> Router:
 
     def _wallet_kb() -> InlineKeyboardMarkup:
         """Клавиатура кошелька с учётом активного провайдера платежей."""
-        return build_wallet_keyboard(show_h2h_row=not container.payment_service.is_rukassa_mode)
+        is_rukassa = container.payment_service.is_rukassa_mode
+        return build_wallet_keyboard(
+            show_h2h_row=not is_rukassa,
+            show_rukassa_row=is_rukassa,
+        )
 
     @router.callback_query(F.data == STORE_HOME_ACTION)
     async def handle_store_home(callback: CallbackQuery, state: FSMContext) -> None:
@@ -431,6 +436,17 @@ def build_storefront_router(container: AppContainer) -> Router:
         await message.answer(STOREFRONT_TEXT.TOP_UP_CUSTOM_PROMPT, reply_markup=_wallet_kb())
         await callback.answer(STOREFRONT_TEXT.CALLBACK_H2H_METHOD_SELECTED)
 
+    @router.callback_query(F.data == STORE_TOP_UP_RUKASSA_ACTION)
+    async def handle_top_up_method_rukassa(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+        await state.update_data(top_up_method="rukassa")
+        await state.set_state(StorefrontStates.waiting_for_top_up_amount)
+        await message.answer(STOREFRONT_TEXT.TOP_UP_CUSTOM_PROMPT, reply_markup=_wallet_kb())
+        await callback.answer(STOREFRONT_TEXT.CALLBACK_TOP_UP_AMOUNT_READY)
+
     @router.callback_query(F.data == STORE_TOP_UP_LINK_ACTION)
     async def handle_top_up_method_link(callback: CallbackQuery, state: FSMContext) -> None:
         message = extract_message(callback)
@@ -497,6 +513,7 @@ def build_storefront_router(container: AppContainer) -> Router:
         # Явный выбор метода имеет приоритет над is_h2h_mode
         chosen_method = data.get("top_up_method")
         use_h2h = chosen_method == "h2h" if chosen_method else container.payment_service.is_h2h_mode
+        use_link = chosen_method in ("link", "rukassa") or (not use_h2h and chosen_method is None)
 
         if use_h2h:
             try:
@@ -1019,7 +1036,10 @@ async def render_wallet_screen(
     await send_screen(
         message,
         render_wallet_text(wallet),
-        build_wallet_keyboard(show_h2h_row=not container.payment_service.is_rukassa_mode),
+        build_wallet_keyboard(
+            show_h2h_row=not container.payment_service.is_rukassa_mode,
+            show_rukassa_row=container.payment_service.is_rukassa_mode,
+        ),
         callback=callback,
     )
 

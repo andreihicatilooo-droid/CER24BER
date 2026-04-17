@@ -33,8 +33,9 @@ STORE_H2H_CONFIRM_PREFIX = "h2h:ok:"  # + payment_id — подтвержден�
 STORE_H2H_CANCEL_PREFIX = "h2h:x:"   # + payment_id — отмена H2H платежа
 STORE_H2H_PROOF_SKIP_PREFIX = "h2h:skip:"  # + payment_id — пропустить чек
 STORE_H2H_METHOD_PREFIX = "h2h:mt:"   # + method_code — выбор метода H2H
-STORE_TOP_UP_H2H_ACTION = "store:tph2h"   # выбор метода H2H
-STORE_TOP_UP_LINK_ACTION = "store:tplink"  # выбор метода ссылка
+STORE_TOP_UP_H2H_ACTION = "store:tph2h"      # выбор метода H2H
+STORE_TOP_UP_LINK_ACTION = "store:tplink"    # выбор метода ссылка
+STORE_TOP_UP_RUKASSA_ACTION = "store:tpruk"  # пополнение через Rukassa
 STORE_WALLET_HISTORY_ACTION = "store:whist"  # история операций кошелька
 
 
@@ -207,10 +208,14 @@ def build_field_input_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def build_wallet_keyboard(*, show_h2h_row: bool = True) -> InlineKeyboardMarkup:
+def build_wallet_keyboard(*, show_h2h_row: bool = True, show_rukassa_row: bool = False) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = [
         [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP, callback_data=STORE_TOP_UP_CUSTOM_ACTION)],
     ]
+    if show_rukassa_row:
+        rows.append([
+            InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_RUKASSA, callback_data=STORE_TOP_UP_RUKASSA_ACTION),
+        ])
     if show_h2h_row:
         rows.append([
             InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_H2H, callback_data=STORE_TOP_UP_H2H_ACTION),
