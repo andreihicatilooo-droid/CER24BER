@@ -452,10 +452,21 @@ def build_deals_router(container: AppContainer) -> Router:
             return
 
         await state.clear()
+
+        # Загружаем фото на nbox.me (только для content_type == "photo")
+        nbox_url: str | None = None
+        if content_type == "photo" and message.photo and message.bot is not None:
+            photo_size = message.photo[-1]
+            bio = await message.bot.download(photo_size)
+            if bio is not None:
+                filename = f"deal_{deal_id}_{photo_size.file_id[:8]}.jpg"
+                nbox_url = await container.nbox_service.upload_photo(bio, filename=filename)
+
+        notification_text = render_deal_message_notification(relay, nbox_url=nbox_url)
         await notify_user_safe(
             message.bot,
             relay.recipient_id,
-            render_deal_message_notification(relay),
+            notification_text,
             reply_markup=build_deal_open_keyboard(deal_id),
         )
         try:
@@ -790,7 +801,7 @@ async def send_screen(
 
 async def notify_user_safe(bot, telegram_id: int, text: str, reply_markup: InlineKeyboardMarkup) -> None:
     try:
-        await bot.send_message(telegram_id, text, reply_markup=reply_markup)
+        await bot.send_message(telegram_id, text, parse_mode="HTML", reply_markup=reply_markup)
     except AiogramError:
         return
 
@@ -958,14 +969,15 @@ def render_deal_status_notification(deal: DealView, description: str) -> str:
     )
 
 
-def render_deal_message_notification(relay: DealMessageRelayResult) -> str:
-    return "\n".join(
-        [
-            DEAL_HANDLER_TEXT.deal_message_notification_title(relay.deal.deal_id),
-            DEAL_HANDLER_TEXT.DEAL_MESSAGE_NOTIFICATION_FROM.format(sender=escape(relay.sender_display)),
-            escape(relay.preview),
-        ]
-    )
+def render_deal_message_notification(relay: DealMessageRelayResult, *, nbox_url: str | None = None) -> str:
+    lines = [
+        DEAL_HANDLER_TEXT.deal_message_notification_title(relay.deal.deal_id),
+        DEAL_HANDLER_TEXT.DEAL_MESSAGE_NOTIFICATION_FROM.format(sender=escape(relay.sender_display)),
+        escape(relay.preview),
+    ]
+    if nbox_url:
+        lines.append(DEAL_HANDLER_TEXT.nbox_photo_link(nbox_url))
+    return "\n".join(lines)
 
 
 def render_withdrawal_request(request: WithdrawalRequestView) -> str:

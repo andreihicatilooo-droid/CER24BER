@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from cerber_bot.config import Settings, load_settings
 from cerber_bot.db.session import create_engine, create_session_factory, ensure_database_parent, init_database
 from cerber_bot.integrations.giftapi import GiftApiClient
+from cerber_bot.integrations.nbox_service import NboxService
 from cerber_bot.integrations.nicepay import NicePayClient
 from cerber_bot.services.deals import DealService
 from cerber_bot.services.exchange import ExchangeRateService
@@ -39,6 +40,7 @@ class AppContainer:
     deal_service: DealService
     payment_service: PaymentService
     store_service: StoreService
+    nbox_service: NboxService
     user_bot: Bot | None = None
     admin_bot: Bot | None = None
 
@@ -122,6 +124,7 @@ class AppContainer:
             deal_service=deal_service,
             payment_service=payment_service,
             store_service=store_service,
+            nbox_service=NboxService(),
         )
 
     def build_user_service(self) -> UserService:

@@ -746,6 +746,7 @@ class DEAL_HANDLER_TEXT:
     CHAT_CANCELED = "Отправка сообщения отменена."
     DEAL_CONTEXT_LOST = "Контекст сделки потерян. Откройте сделку заново."
     ATTACHMENT_FORWARD_FAILED = "Не удалось переслать вложение автоматически. Краткое содержание: {preview}"
+    NBOX_PHOTO_LINK = '📷 <a href="{url}">Просмотр фото на nbox.me</a>'
     CALLBACK_COMPLETE_FAILED = "Не удалось завершить"
     DEAL_COMPLETED_NOTIFICATION = "Сделка подтверждена как успешная. Средства зачислены на ваш баланс."
     CALLBACK_DEAL_COMPLETED = "Сделка завершена"
@@ -886,6 +887,10 @@ class DEAL_HANDLER_TEXT:
     @classmethod
     def attachment_forward_failed(cls, preview: str) -> str:
         return cls.ATTACHMENT_FORWARD_FAILED.format(preview=preview)
+
+    @classmethod
+    def nbox_photo_link(cls, url: str) -> str:
+        return cls.NBOX_PHOTO_LINK.format(url=url)
 
     @classmethod
     def withdraw_address_prompt(cls, network: str) -> str:
