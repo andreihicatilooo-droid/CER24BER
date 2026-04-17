@@ -278,6 +278,28 @@ class StoreService:
         snapshot = await self.get_catalog_snapshot()
         return paginate_items(snapshot.categories, page=page, per_page=per_page)
 
+    # Группы ключевых слов для раздела «Популярное»:
+    # каждая группа — AND-условие, между группами — OR.
+    POPULAR_KEYWORD_GROUPS: tuple[tuple[str, ...], ...] = (
+        ("telegram", "premium"),
+        ("telegram", "star"),
+        ("mts",),
+        ("visa",),
+        ("steam",),
+    )
+
+    async def get_popular_products(self) -> tuple[StoreProductCard, ...]:
+        """Возвращает «популярные» товары по хардкодному списку ключевых слов."""
+        snapshot = await self.get_catalog_snapshot()
+        result: list[StoreProductCard] = []
+        seen: set[str] = set()
+        for group in self.POPULAR_KEYWORD_GROUPS:
+            for item in snapshot.products:
+                if item.product_id not in seen and all(token in item.searchable_text for token in group):
+                    result.append(item)
+                    seen.add(item.product_id)
+        return tuple(result)
+
     async def get_products_page(
         self,
         *,

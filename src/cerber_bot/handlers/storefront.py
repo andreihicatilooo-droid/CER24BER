@@ -35,6 +35,8 @@ from cerber_bot.keyboards.storefront import (
     STORE_ORDER_ACTION_PREFIX,
     STORE_ORDERS_ACTION,
     STORE_ORDERS_PAGE_PREFIX,
+    STORE_POPULAR_ACTION,
+    STORE_POPULAR_PAGE_PREFIX,
     STORE_PRODUCT_ACTION_PREFIX,
     STORE_PRODUCTS_PAGE_PREFIX,
     STORE_REFRESH_ACTION,
@@ -47,6 +49,7 @@ from cerber_bot.keyboards.storefront import (
     build_field_input_keyboard,
     build_order_detail_keyboard,
     build_orders_keyboard,
+    build_popular_keyboard,
     build_product_detail_keyboard,
     build_products_keyboard,
     build_store_home_keyboard,
@@ -132,12 +135,45 @@ def build_storefront_router(container: AppContainer) -> Router:
 
         await state.set_state(None)
         try:
-            await render_categories(message, state, container, callback=callback, page=1, back_callback=STORE_GIFTAPI_ACTION)
+            await render_categories(message, state, container, callback=callback, page=1, back_callback=STORE_HOME_ACTION)
         except (StoreServiceError, GiftApiError) as error:
             await send_screen(message, render_store_error(error), build_store_home_keyboard(), callback=callback)
             await callback.answer(STOREFRONT_TEXT.CALLBACK_CATEGORIES_UNAVAILABLE)
             return
         await callback.answer(STOREFRONT_TEXT.CALLBACK_GIFTAPI_OPENED)
+
+    @router.callback_query(F.data == STORE_POPULAR_ACTION)
+    async def handle_popular(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+
+        await state.set_state(None)
+        try:
+            await render_popular(message, state, container, page=1, callback=callback)
+        except (StoreServiceError, GiftApiError) as error:
+            await send_screen(message, render_store_error(error), build_store_home_keyboard(), callback=callback)
+            await callback.answer(STOREFRONT_TEXT.CALLBACK_POPULAR_UNAVAILABLE)
+            return
+        await callback.answer(STOREFRONT_TEXT.CALLBACK_POPULAR_OPENED)
+
+    @router.callback_query(F.data.startswith(STORE_POPULAR_PAGE_PREFIX))
+    async def handle_popular_page(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+
+        page = parse_int_suffix(callback.data, STORE_POPULAR_PAGE_PREFIX, 1)
+        await state.set_state(None)
+        try:
+            await render_popular(message, state, container, page=page, callback=callback)
+        except (StoreServiceError, GiftApiError) as error:
+            await send_screen(message, render_store_error(error), build_store_home_keyboard(), callback=callback)
+            await callback.answer(STOREFRONT_TEXT.CALLBACK_POPULAR_UNAVAILABLE)
+            return
+        await callback.answer()
 
     @router.callback_query(F.data.startswith(STORE_CATEGORIES_PAGE_PREFIX))
     async def handle_categories_page(callback: CallbackQuery, state: FSMContext) -> None:
@@ -652,6 +688,26 @@ async def render_categories(
     categories, page_info = await container.store_service.get_categories_page(page, per_page=CATEGORIES_PER_PAGE)
     await state.update_data(current_view_type="categories", categories_page=page_info.page, categories_back=back_callback)
     await send_screen(message, render_categories_screen(categories, page_info), build_categories_keyboard(categories, page_info, back_callback=back_callback), callback=callback)
+
+
+async def render_popular(
+    message: Message,
+    state: FSMContext,
+    container: AppContainer,
+    *,
+    page: int,
+    callback: CallbackQuery | None = None,
+) -> None:
+    all_products = await container.store_service.get_popular_products()
+    if not all_products:
+        await send_screen(message, STOREFRONT_TEXT.POPULAR_EMPTY, build_store_home_keyboard(), callback=callback)
+        return
+    page_info = build_page_info(total_items=len(all_products), page=page, per_page=PRODUCTS_PER_PAGE)
+    start = (page - 1) * PRODUCTS_PER_PAGE
+    products = all_products[start: start + PRODUCTS_PER_PAGE]
+    await state.update_data(current_view_type="popular", popular_page=page_info.page)
+    text = render_products_screen(products, page_info, title=STOREFRONT_TEXT.POPULAR_TITLE)
+    await send_screen(message, text, build_popular_keyboard(products, page_info), callback=callback)
 
 
 async def render_products(

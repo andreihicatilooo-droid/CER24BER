@@ -27,12 +27,15 @@ STORE_BUY_SKU_PREFIX = "store:buy:"
 STORE_FIELD_FILL_PREFIX = "store:ff:"  # суффикс — sku_id
 STORE_FIELD_CANCEL_ACTION = "store:fc"
 STORE_GIFTAPI_ACTION = "store:ga"  # открыть каталог GiftAPI
+STORE_POPULAR_ACTION = "store:pop"  # раздел «Популярное»
+STORE_POPULAR_PAGE_PREFIX = "store:popp:"  # пагинация популярных товаров
 
 
 def build_store_home_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
+                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.POPULAR, callback_data=STORE_POPULAR_ACTION),
                 InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.GIFTAPI_PROVIDER, callback_data=STORE_GIFTAPI_ACTION),
             ],
             [
@@ -44,6 +47,34 @@ def build_store_home_keyboard() -> InlineKeyboardMarkup:
             ],
         ]
     )
+
+
+def build_popular_keyboard(products: tuple[StoreProductCard, ...], page_info: PageInfo) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for product in products:
+        price_label = format_card_price(product)
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=truncate_text(STORE_KEYBOARD_TEXT.product_card(product.name, price_label), 38),
+                    callback_data=f"{STORE_PRODUCT_ACTION_PREFIX}{product.product_id}",
+                )
+            ]
+        )
+    nav_row = build_pagination_row(
+        previous_callback=f"{STORE_POPULAR_PAGE_PREFIX}{page_info.page - 1}" if page_info.has_previous else None,
+        next_callback=f"{STORE_POPULAR_PAGE_PREFIX}{page_info.page + 1}" if page_info.has_next else None,
+        page_info=page_info,
+    )
+    if nav_row:
+        rows.append(nav_row)
+    rows.append(
+        [
+            InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.BACK, callback_data=STORE_HOME_ACTION),
+            InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=MAIN_MENU_ACTION),
+        ]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def build_categories_keyboard(categories: tuple[StoreCategoryCard, ...], page_info: PageInfo, *, back_callback: str = STORE_HOME_ACTION) -> InlineKeyboardMarkup:
@@ -68,7 +99,7 @@ def build_categories_keyboard(categories: tuple[StoreCategoryCard, ...], page_in
 
     rows.append([
         InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.BACK, callback_data=back_callback),
-        InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=STORE_HOME_ACTION),
+        InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=MAIN_MENU_ACTION),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -100,7 +131,7 @@ def build_products_keyboard(
     rows.append(
         [
             InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.BACK, callback_data=back_callback),
-            InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=STORE_HOME_ACTION),
+            InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=MAIN_MENU_ACTION),
         ]
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)

@@ -62,7 +62,8 @@ class GIFTAPI_MENU_TEXT:
 
 class STORE_KEYBOARD_TEXT:
     CATEGORIES = "Категории"
-    GIFTAPI_PROVIDER = "🎁 GiftAPI"
+    GIFTAPI_PROVIDER = "🎁 Провайдер 1"
+    POPULAR = "⭐ Популярное"
     SEARCH = "🔍 Поиск"
     REFRESH = "🔄 Обновить каталог"
     WALLET = "Кошелек"
@@ -366,6 +367,8 @@ class STOREFRONT_TEXT:
     CALLBACK_ORDERS_HISTORY = "История заказов"
     CALLBACK_ORDER_NOT_FOUND = "Заказ не найден"
     CALLBACK_ORDER_DETAILS = "Детали заказа"
+    CALLBACK_POPULAR_OPENED = "Популярные товары"
+    CALLBACK_POPULAR_UNAVAILABLE = "Популярные товары недоступны"
     SEARCH_PROMPT = "Введите название товара, бренда или часть категории для поиска по каталогу."
     SEARCH_EMPTY = "Запрос пустой. Введите хотя бы 2 символа."
     TOP_UP_CUSTOM_PROMPT = (
@@ -389,6 +392,8 @@ class STOREFRONT_TEXT:
     CATEGORIES_EMPTY = "Категории пока не найдены."
     CATEGORY_ROW = "• {name} — {count} товаров"
     PRODUCTS_EMPTY = "Ничего не найдено по текущему фильтру."
+    POPULAR_TITLE = "⭐ Популярное"
+    POPULAR_EMPTY = "Популярные товары временно недоступны. Попробуйте позже или откройте полный каталог."
     PRODUCT_CATEGORY = "Категория: {value}"
     PRODUCT_TYPE = "Тип: {value}"
     PRODUCT_PRICE = "Цена: {value}"
