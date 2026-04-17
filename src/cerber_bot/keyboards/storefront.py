@@ -36,6 +36,7 @@ STORE_H2H_METHOD_PREFIX = "h2h:mt:"   # + method_code — выбор метод�
 STORE_TOP_UP_H2H_ACTION = "store:tph2h"      # выбор метода H2H
 STORE_TOP_UP_LINK_ACTION = "store:tplink"    # выбор метода ссылка
 STORE_TOP_UP_RUKASSA_ACTION = "store:tpruk"  # пополнение через Rukassa
+STORE_TOP_UP_CATALOG_ACTION = "store:tpcat"  # каталог провайдеров пополнения
 STORE_WALLET_HISTORY_ACTION = "store:whist"  # история операций кошелька
 
 
@@ -208,24 +209,34 @@ def build_field_input_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def build_wallet_keyboard(*, show_h2h_row: bool = True, show_rukassa_row: bool = False) -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = [
-        [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP, callback_data=STORE_TOP_UP_CUSTOM_ACTION)],
-    ]
-    if show_rukassa_row:
-        rows.append([
-            InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_RUKASSA, callback_data=STORE_TOP_UP_RUKASSA_ACTION),
-        ])
-    if show_h2h_row:
-        rows.append([
-            InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_H2H, callback_data=STORE_TOP_UP_H2H_ACTION),
-            InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_LINK, callback_data=STORE_TOP_UP_LINK_ACTION),
-        ])
-    rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.RECENT_OPERATIONS, callback_data=STORE_WALLET_HISTORY_ACTION)])
-    rows.append([
-        InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.ORDERS, callback_data=STORE_ORDERS_ACTION),
-        InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=MAIN_MENU_ACTION),
-    ])
+def build_wallet_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP, callback_data=STORE_TOP_UP_CATALOG_ACTION)],
+            [InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.RECENT_OPERATIONS, callback_data=STORE_WALLET_HISTORY_ACTION)],
+            [
+                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.ORDERS, callback_data=STORE_ORDERS_ACTION),
+                InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.HOME, callback_data=MAIN_MENU_ACTION),
+            ],
+        ]
+    )
+
+
+def build_top_up_catalog_keyboard(
+    *,
+    show_h2h: bool = False,
+    show_link: bool = False,
+    show_rukassa: bool = False,
+) -> InlineKeyboardMarkup:
+    """Каталог доступных способов пополнения баланса."""
+    rows: list[list[InlineKeyboardButton]] = []
+    if show_h2h:
+        rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_H2H, callback_data=STORE_TOP_UP_H2H_ACTION)])
+    if show_link:
+        rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_LINK, callback_data=STORE_TOP_UP_LINK_ACTION)])
+    if show_rukassa:
+        rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_RUKASSA, callback_data=STORE_TOP_UP_RUKASSA_ACTION)])
+    rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.BACK, callback_data=STORE_WALLET_ACTION)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

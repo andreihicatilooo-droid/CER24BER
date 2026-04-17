@@ -50,6 +50,7 @@ from cerber_bot.keyboards.storefront import (
     STORE_TOP_UP_H2H_ACTION,
     STORE_TOP_UP_LINK_ACTION,
     STORE_TOP_UP_RUKASSA_ACTION,
+    STORE_TOP_UP_CATALOG_ACTION,
     STORE_TOP_UP_PREFIX,
     STORE_WALLET_ACTION,
     STORE_WALLET_HISTORY_ACTION,
@@ -64,6 +65,7 @@ from cerber_bot.keyboards.storefront import (
     build_product_detail_keyboard,
     build_products_keyboard,
     build_store_home_keyboard,
+    build_top_up_catalog_keyboard,
     build_wallet_history_keyboard,
     build_wallet_keyboard,
 )
@@ -107,12 +109,8 @@ def build_storefront_router(container: AppContainer) -> Router:
     router = Router(name="storefront")
 
     def _wallet_kb() -> InlineKeyboardMarkup:
-        """Клавиатура кошелька с учётом активного провайдера платежей."""
-        is_rukassa = container.payment_service.is_rukassa_mode
-        return build_wallet_keyboard(
-            show_h2h_row=not is_rukassa,
-            show_rukassa_row=is_rukassa,
-        )
+        """Клавиатура кошелька."""
+        return build_wallet_keyboard()
 
     @router.callback_query(F.data == STORE_HOME_ACTION)
     async def handle_store_home(callback: CallbackQuery, state: FSMContext) -> None:
@@ -408,6 +406,25 @@ def build_storefront_router(container: AppContainer) -> Router:
         wallet = await container.store_service.get_wallet_snapshot(callback.from_user.id)
         await send_screen(message, render_wallet_history_text(wallet), build_wallet_history_keyboard(), callback=callback)
         await callback.answer(STOREFRONT_TEXT.CALLBACK_WALLET_HISTORY)
+
+    @router.callback_query(F.data == STORE_TOP_UP_CATALOG_ACTION)
+    async def handle_top_up_catalog(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+        is_rukassa = container.payment_service.is_rukassa_mode
+        is_h2h = container.payment_service.is_h2h_mode
+        is_link = container.payment_service.is_configured and not is_h2h
+        await message.answer(
+            STOREFRONT_TEXT.TOP_UP_CATALOG_PROMPT,
+            reply_markup=build_top_up_catalog_keyboard(
+                show_h2h=is_h2h,
+                show_link=is_link and not is_rukassa,
+                show_rukassa=is_rukassa,
+            ),
+        )
+        await callback.answer(STOREFRONT_TEXT.CALLBACK_TOP_UP_CATALOG)
 
     @router.callback_query(F.data == STORE_TOP_UP_H2H_ACTION)
     async def handle_top_up_method_h2h(callback: CallbackQuery, state: FSMContext) -> None:
@@ -1036,10 +1053,7 @@ async def render_wallet_screen(
     await send_screen(
         message,
         render_wallet_text(wallet),
-        build_wallet_keyboard(
-            show_h2h_row=not container.payment_service.is_rukassa_mode,
-            show_rukassa_row=container.payment_service.is_rukassa_mode,
-        ),
+        build_wallet_keyboard(),
         callback=callback,
     )
 
@@ -1181,8 +1195,20 @@ def render_product_detail_screen(product: StoreProductView, offers: tuple[StoreP
 
 
 def render_wallet_text(wallet: WalletSnapshot, title: str = STOREFRONT_TEXT.WALLET_TITLE) -> str:
-    lines = [f"<b>{escape(title)}</b>"]
+    lines = [f"<b>{escape(title)}</b>", ""]
     lines.append(STOREFRONT_TEXT.WALLET_AVAILABLE.format(amount=escape(format_money(wallet.balance, wallet.currency))))
+    if wallet.held_balance > 0:
+        lines.append(STOREFRONT_TEXT.WALLET_HELD.format(amount=escape(format_money(wallet.held_balance, wallet.currency))))
+        lines.append(STOREFRONT_TEXT.WALLET_TOTAL.format(amount=escape(format_money(wallet.total_balance, wallet.currency))))
+    lines.append("")
+    q = wallet.balance_quote
+    if q.usdt_amount > 0 or q.rub_amount > 0:
+        lines.append(STOREFRONT_TEXT.WALLET_EQUIVALENT.format(
+            usdt_amount=escape(format_money(q.usdt_amount, "USDT")),
+            rub_amount=escape(format_money(q.rub_amount, "RUB")),
+        ))
+        lines.append(STOREFRONT_TEXT.WALLET_RATE.format(amount=escape(format_money(q.usdt_rub_rate, "RUB"))))
+    lines.append("")
     lines.append(STOREFRONT_TEXT.WALLET_ORDER_COUNT.format(count=wallet.order_count))
     return "\n".join(lines)
 
