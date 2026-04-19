@@ -20,6 +20,8 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramNetworkError
 from aiogram.fsm.storage.memory import MemoryStorage
 
+import uvicorn
+
 from ceer_bot.config import load_settings
 from ceer_bot.container import AppContainer
 from ceer_bot.handlers.chat_events import build_chat_events_router
@@ -76,10 +78,30 @@ async def run() -> None:
     dp.include_router(build_blackjack_router(container))
     dp.include_router(build_durak_router(container))
 
+    # Web-сервер Mini App (если задан URL туннеля)
+    if settings.ceer_web_url:
+        from ceer_bot.keyboards.game_menu import set_ttt_web_url
+        set_ttt_web_url(settings.ceer_web_url)
+        logger.info("TTT Mini App URL: %s", settings.ceer_web_url)
+
     logger.info("CEER Bot запущен.")
     try:
         await _reset_webhook(bot)
-        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        if settings.ceer_web_url:
+            from ceer_bot.web.app import create_web_app
+            web_app = create_web_app(container)
+            web_config = uvicorn.Config(
+                web_app,
+                host="0.0.0.0",
+                port=settings.ceer_web_port,
+                log_level="warning",
+            )
+            web_server = uvicorn.Server(web_config)
+            async with asyncio.TaskGroup() as tg:
+                tg.create_task(dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types()))
+                tg.create_task(web_server.serve())
+        else:
+            await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
         await container.close()
         await bot.session.close()

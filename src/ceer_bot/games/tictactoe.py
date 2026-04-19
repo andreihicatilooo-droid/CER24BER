@@ -98,6 +98,14 @@ def is_draw(board: list[str]) -> bool:
 def finish_game(game: TicTacToeGame, winner_symbol: str | None) -> None:
     """Фиксирует конец игры."""
     game.finished = True
+
+
+def get_winning_cells(board: list[str]) -> list[int] | None:
+    """Возвращает индексы трёх клеток победной комбинации или None."""
+    for a, b, c in WINNING_COMBOS:
+        if board[a] != EMPTY and board[a] == board[b] == board[c]:
+            return [a, b, c]
+    return None
     if winner_symbol is None:
         game.winner_id = None
     elif winner_symbol == X:

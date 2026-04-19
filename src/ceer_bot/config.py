@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     game_min_bet: str = Field(default="1.00", alias="GAME_MIN_BET")
     # Максимальная ставка в играх (0 = без ограничения)
     game_max_bet: str = Field(default="100.00", alias="GAME_MAX_BET")
+    # Публичный HTTPS URL веб-сервера (без слэша на конце), нужен для Mini App
+    # Пример: https://xxx.trycloudflare.com
+    ceer_web_url: str = Field(default="", alias="CEER_WEB_URL")
+    # Порт внутреннего веб-сервера (FastAPI + uvicorn)
+    ceer_web_port: int = Field(default=8089, alias="CEER_WEB_PORT")
 
 
 def load_settings() -> Settings:
