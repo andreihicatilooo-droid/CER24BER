@@ -739,6 +739,12 @@ class CerberGUI:
         self._btn(inner, "■   Стоп CEER",    self._stop_ceer,   fg=ACCENT_B)
         self._sep(inner)
 
+        # ── CEER MINI APP ─────────────────────────────────────
+        self._section_hdr(inner, "CEER MINI APP")
+        self._btn(inner, "🎮  Туннель Mini App",     self._start_ceer_tunnel, fg=ACCENT_C)
+        self._btn(inner, "✕   Стоп туннель Mini App", self._stop_ceer_tunnel,  fg=ACCENT_B)
+        self._sep(inner)
+
         # ── ТУННЕЛЬ ───────────────────────────────────────────
         self._section_hdr(inner, "ТУННЕЛЬ")
         self._btn(inner, "🌐  Туннель вкл",  self._start_tunnel, fg=ACCENT_C)
