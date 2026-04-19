@@ -82,73 +82,20 @@ def build_durak_invite(
     return InlineKeyboardMarkup(inline_keyboard=btns)
 
 
-def _card_btn_label(card: str, trump: str) -> str:
-    from ceer_bot.games.durak import SUITS
-    s = SUITS.get(card[-1], "?")
-    v = card[:-1]
-    label = f"{v}{s}"
-    return f"{label}★" if card[-1] == trump else label
-
-
-def build_durak_attack(
+def build_durak_board(
     game_id: str,
-    hand: list[str],
-    table: list,
-    trump: str,
+    phase: str,
+    table_non_empty: bool,
 ) -> InlineKeyboardMarkup:
-    """Клавиатура атаки: карты для хода + кнопка завершить."""
-    from ceer_bot.games.durak import can_add_to_table
-    valid = hand if not table else [c for c in hand if can_add_to_table(c, table)]
-
-    btns: list[list[InlineKeyboardButton]] = []
-    row: list[InlineKeyboardButton] = []
-    for card in valid:
-        row.append(InlineKeyboardButton(
-            text=_card_btn_label(card, trump),
-            callback_data=f"durak:atk:{game_id}:{card}",
-        ))
-        if len(row) == 4:
-            btns.append(row)
-            row = []
-    if row:
-        btns.append(row)
-
-    if table:  # можно пасовать только если стол не пуст
-        btns.append([InlineKeyboardButton(
-            text="✅ Закончить атаку",
-            callback_data=f"durak:pass:{game_id}",
-        )])
-
-    return InlineKeyboardMarkup(inline_keyboard=btns) if btns else InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Закончить атаку", callback_data=f"durak:pass:{game_id}")]
-    ])
-
-
-def build_durak_defend(
-    game_id: str,
-    hand: list[str],
-    trump: str,
-) -> InlineKeyboardMarkup:
-    """Клавиатура защиты: карты + кнопка взять."""
-    btns: list[list[InlineKeyboardButton]] = []
-    row: list[InlineKeyboardButton] = []
-    for card in hand:
-        row.append(InlineKeyboardButton(
-            text=_card_btn_label(card, trump),
-            callback_data=f"durak:def:{game_id}:{card}",
-        ))
-        if len(row) == 4:
-            btns.append(row)
-            row = []
-    if row:
-        btns.append(row)
-
-    btns.append([InlineKeyboardButton(
-        text="🤚 Взять карты",
-        callback_data=f"durak:take:{game_id}",
-    )])
+    """Клавиатура игровой доски: просмотр карт + ситуационные кнопки."""
+    btns: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text="👁 Посмотреть карты", callback_data=f"durak:hand:{game_id}")],
+    ]
+    if phase == "attacking" and table_non_empty:
+        btns.append([InlineKeyboardButton(text="✅ Закончить атаку", callback_data=f"durak:pass:{game_id}")])
+    elif phase == "defending":
+        btns.append([InlineKeyboardButton(text="🤚 Взять карты", callback_data=f"durak:take:{game_id}")])
     return InlineKeyboardMarkup(inline_keyboard=btns)
-
 
 
 def build_cancel_game() -> InlineKeyboardMarkup:

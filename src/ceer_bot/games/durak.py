@@ -29,6 +29,21 @@ HAND_SIZE = 6
 MAX_PLAYERS = 3
 
 _registry: dict[str, "DurakGame"] = {}
+_chat_games: dict[int, str] = {}   # chat_id → game_id (одна игра на чат)
+
+# Карточный ввод: русские обозначения → внутренние ключи
+_SUIT_MAP: dict[str, str] = {
+    "п": "s", "ч": "h", "б": "d", "к": "c", "т": "c",
+    "♠": "s", "♥": "h", "♦": "d", "♣": "c",
+    "s": "s", "h": "h", "d": "d", "c": "c",
+}
+_VALUE_MAP: dict[str, str] = {
+    "6": "6", "7": "7", "8": "8", "9": "9", "10": "10",
+    "в": "J", "j": "J",
+    "д": "Q", "q": "Q",
+    "к": "K", "k": "K",
+    "т": "A", "a": "A", "а": "A",
+}
 
 
 # ─── Вспомогательные функции ──────────────────────────────────────────────────
@@ -124,11 +139,40 @@ def create_game(
     g.player_ids.append(creator_id)
     g.player_names[creator_id] = creator_name
     _registry[g.game_id] = g
+    _chat_games[chat_id] = g.game_id
     return g
 
 
 def get_game(game_id: str) -> DurakGame | None:
     return _registry.get(game_id)
+
+
+def find_active_game_in_chat(chat_id: int) -> "DurakGame | None":
+    """Возвращает активную игру в чате (не в фазе 'joining' и не завершённую)."""
+    gid = _chat_games.get(chat_id)
+    if gid:
+        return _registry.get(gid)
+    return None
+
+
+def parse_card(text: str) -> str | None:
+    """Парсит строку в код карты (напр. «6п» → «6s», «Кч» → «Kh»).
+
+    Формат: значение + масть (последний символ).
+    Масти: п=♠, ч=♥, б=♦, к=♣, т=♣
+    Значения: 6-10, В/J=валет, Д/Q=дама, К/K=король, Т/A/А=туз
+    """
+    text = text.strip().lower()
+    if len(text) < 2:
+        return None
+    suit_key = _SUIT_MAP.get(text[-1])
+    if suit_key is None:
+        return None
+    val_raw = text[:-1]
+    val = _VALUE_MAP.get(val_raw)
+    if val is None:
+        return None
+    return f"{val}{suit_key}"
 
 
 def add_player(game: DurakGame, pid: int, name: str) -> bool:
@@ -299,6 +343,7 @@ def check_finished(game: DurakGame) -> bool:
         game.phase = "finished"
         game.loser_id = active[0] if active else None
         _registry.pop(game.game_id, None)
+        _chat_games.pop(game.chat_id, None)
         return True
     return False
 
@@ -308,13 +353,17 @@ def finish_game_force(game: DurakGame) -> None:
     game.phase = "finished"
     game.loser_id = None
     _registry.pop(game.game_id, None)
+    _chat_games.pop(game.chat_id, None)
 
 
 # ─── Форматирование доски ────────────────────────────────────────────────────
 
 def format_board(game: DurakGame) -> str:
-    """Возвращает HTML-текст текущего состояния игры."""
-    trump_sym = SUITS.get(game.trump, "?")
+    """Публичная доска: козырь, колода, стол, количество карт у игроков.
+
+    Сами карты НЕ показываются — игрок смотрит свою руку кнопкой «👁 Карты».
+    """
+    trump_sym  = SUITS.get(game.trump, "?")
     deck_count = len(game.deck)
 
     # Стол
@@ -322,53 +371,64 @@ def format_board(game: DurakGame) -> str:
         parts = []
         for atk, dfn in game.table:
             if dfn:
-                parts.append(f"⚔{card_display(atk)}→🛡{card_display(dfn)}")
+                parts.append(f"{card_display(atk)}→{card_display(dfn)}")
             else:
-                parts.append(f"⚔{card_display(atk)}→❓")
+                parts.append(f"{card_display(atk)}→❓")
         table_str = "  ".join(parts)
     else:
         table_str = "(пусто)"
 
-    # Руки игроков
+    # Игроки (только количество карт)
     lines = []
     for i, pid in enumerate(game.player_ids):
         name = game.player_names[pid]
         if pid in game.winners:
-            lines.append(f"✅ <b>{name}</b>: вышел из игры")
+            lines.append(f"✅ {name}: вышел")
             continue
-        hand = game.hands.get(pid, [])
-        hd = hand_display(hand, game.trump)
-        cnt = len(hand)
+        cnt = len(game.hands.get(pid, []))
         if i == game.attacker_idx and game.phase in ("attacking", "defending"):
-            icon = "⚔"
+            icon = "⚔️"
         elif i == game.defender_idx and game.phase in ("attacking", "defending"):
             icon = "🛡"
         else:
             icon = "👤"
-        lines.append(f"{icon} <b>{name}</b> ({cnt}к): {hd}")
+        lines.append(f"{icon} <b>{name}</b>: {cnt} карт")
 
     players_str = "\n".join(lines)
 
-    # Подсказка хода
+    # Подсказка хода и формат ввода
     if game.phase == "attacking":
         att_name = game.player_names.get(game.player_ids[game.attacker_idx], "?")
-        hint = (
-            f"<i>Ход: {att_name} — добавить карту или закончить атаку</i>"
-            if game.table else
-            f"<i>Ход: {att_name} атакует</i>"
-        )
+        action = "добавить карту или нажмите ✅ Закончить" if game.table else "введите карту в чат"
+        hint = f"🎯 <b>{att_name}</b> атакует — {action}"
     elif game.phase == "defending":
         def_name = game.player_names.get(game.player_ids[game.defender_idx], "?")
-        hint = f"<i>Ход: {def_name} защищается или берёт карты</i>"
+        hint = f"🎯 <b>{def_name}</b> защищается — введите карту или нажмите 🤚 Взять"
     else:
         hint = ""
 
+    fmt_hint = "<i>Формат карты: 6п, 10ч, Кб, Тк</i>  <i>(п♠ ч♥ б♦ к♣ | К=король Т=туз)</i>"
+
     return (
-        f"🃏 <b>Дурак</b>  Козырь: {trump_sym}  Колода: {deck_count}\n"
-        f"──────────────────\n"
+        f"🃏 <b>Дурак</b>   Козырь: {trump_sym}   Колода: {deck_count}\n"
+        f"───────────────────\n"
         f"<b>Стол:</b> {table_str}\n"
-        f"──────────────────\n"
+        f"───────────────────\n"
         f"{players_str}\n"
-        f"──────────────────\n"
-        f"{hint}"
+        f"───────────────────\n"
+        f"{hint}\n"
+        f"{fmt_hint}"
     )
+
+
+def format_hand_private(game: DurakGame, pid: int) -> str:
+    """Строка для всплывающего уведомления: карты конкретного игрока."""
+    hand  = game.hands.get(pid, [])
+    trump = SUITS.get(game.trump, "?")
+    if not hand:
+        return f"Ваши карты (козырь {trump}):\nНет карт — вы вышли из игры!"
+    cards = "  ".join(
+        f"[{card_display(c)}]" if c[-1] == game.trump else card_display(c)
+        for c in hand
+    )
+    return f"Ваши карты (козырь {trump}, [козыри]):\n{cards}"
