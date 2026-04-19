@@ -47,8 +47,6 @@ def build_ttt_invite(game_id: str) -> InlineKeyboardMarkup:
 def build_ttt_board(board: list[str], game_id: str, finished: bool) -> InlineKeyboardMarkup:
     """Inline-клавиатура 3×3 + кнопка Mini App (если настроен URL)."""
     from ceer_bot.games.tictactoe import EMPTY
-    from aiogram.types import WebAppInfo
-
     buttons: list[list[InlineKeyboardButton]] = []
     for row in range(3):
         row_btns: list[InlineKeyboardButton] = []
@@ -59,11 +57,11 @@ def build_ttt_board(board: list[str], game_id: str, finished: bool) -> InlineKey
             row_btns.append(InlineKeyboardButton(text=cell, callback_data=cb))
         buttons.append(row_btns)
 
-    # Кнопка «Открыть приложение» появляется когда задан URL и игра не завершена
+    # WebAppInfo работает только в личных чатах — используем url-кнопку (работает везде)
     if _ttt_web_url and game_id and not finished:
         buttons.append([InlineKeyboardButton(
             text="🎮 Открыть приложение",
-            web_app=WebAppInfo(url=f"{_ttt_web_url}/ttt/{game_id}"),
+            url=f"{_ttt_web_url}/ttt/{game_id}",
         )])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
