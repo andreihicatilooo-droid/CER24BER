@@ -1038,12 +1038,17 @@ class CerberGUI:
             if not self._tunnel_url and LOGS["tunnel"].exists():
                 try:
                     content = LOGS["tunnel"].read_text(encoding="utf-8", errors="replace")
-                    m = re.search(r"(https://[a-zA-Z0-9\-]+\.trycloudflare\.com)", content)
-                    if m:
-                        self._tunnel_url = m.group(1)
+                    matches = re.findall(r"(https://[a-zA-Z0-9\-]+\.trycloudflare\.com)", content)
+                    if matches:
+                        self._tunnel_url = matches[-1]  # берём самый свежий URL
                         self._add_log("launcher", f"Tunnel URL: {self._tunnel_url}", "info")
                         set_env("WEB_BASE_URL", self._tunnel_url)
                         self._add_log("launcher", "WEB_BASE_URL обновлён в .env", "gray")
+                        # Перезапускаем бота чтобы он подхватил новый URL
+                        if self._bot_proc and self._bot_proc.poll() is None:
+                            self._add_log("launcher",
+                                          "Перезапуск бота (новый Tunnel URL)...", "warn")
+                            self.root.after(500, self._restart_bot)
                 except OSError:
                     pass
 
@@ -1258,7 +1263,8 @@ class CerberGUI:
             return
         try:
             web_port = get_env("WEB_PORT", "8088")
-            out = open(LOGS["tunnel"], "a", encoding="utf-8")
+            # Перезаписываем лог туннеля — чтобы не накапливались старые URL
+            out = open(LOGS["tunnel"], "w", encoding="utf-8")
             self._tunnel_proc = subprocess.Popen(
                 [cf, "tunnel", "--url", f"http://localhost:{web_port}"],
                 cwd=str(ROOT), stdout=out, stderr=out,
