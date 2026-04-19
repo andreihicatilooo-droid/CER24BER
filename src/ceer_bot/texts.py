@@ -106,6 +106,84 @@ class TTT_TEXT:
     CANNOT_ACCEPT_OWN = "Нельзя принять свой собственный вызов."
 
 
+class BJ_TEXT:
+    ASK_BET = (
+        "<b>🃏 Блэкджек</b>\n\n"
+        "Игра для двоих. Карты открытые. Ближе к 21 — побеждает!\n"
+        "Туз = 11 (или 1 при перебое). J/Q/K = 10.\n\n"
+        "Введите ставку (0 — без ставки):\n"
+        "<i>Мин: {min_bet}, Макс: {max_bet} {currency}</i>"
+    )
+    INVALID_BET    = "❌ Некорректная ставка. Введите число ≥ 0."
+    BET_TOO_LOW    = "❌ Минимальная ставка: <b>{min_bet} {currency}</b>"
+    BET_TOO_HIGH   = "❌ Максимальная ставка: <b>{max_bet} {currency}</b>"
+    INSUFFICIENT   = "❌ Недостаточно средств. Баланс: <b>{balance:.2f} {currency}</b>"
+    CANCEL         = "Игра отменена."
+    NOT_YOUR_TURN  = "Сейчас не ваш ход!"
+    NOT_A_PLAYER   = "Вы не участник этой игры."
+    GAME_NOT_FOUND = "Игра не найдена или уже завершена."
+    ALREADY_ACCEPTED  = "Игра уже принята."
+    CANNOT_ACCEPT_OWN = "Нельзя принять свой собственный вызов."
+
+    @staticmethod
+    def invite(creator_name: str, bet: Decimal, currency: str) -> str:
+        bet_str = f" — ставка <b>{bet:.2f} {currency}</b>" if bet > 0 else " — без ставки"
+        return (
+            f"🃏 <b>{creator_name}</b> вызывает на <b>Блэкджек</b>{bet_str}!\n"
+            "Нажми кнопку чтобы принять вызов."
+        )
+
+    @staticmethod
+    def board(
+        p1_name: str, hand1: list, score1: int,
+        p2_name: str, hand2: list, score2: int,
+        active_player: int,
+        bet: Decimal, currency: str,
+    ) -> str:
+        from ceer_bot.games.blackjack import hand_display
+        bet_str  = f"Ставка: <b>{bet:.2f} {currency}</b>\n" if bet > 0 else ""
+        bust1    = " 💥" if score1 > 21 else ""
+        bust2    = " 💥" if score2 > 21 else ""
+        arrow1   = " ← ход" if active_player == 1 else ""
+        arrow2   = " ← ход" if active_player == 2 else ""
+        turn_name = p1_name if active_player == 1 else p2_name
+        return (
+            f"🃏 <b>Блэкджек</b>\n{bet_str}"
+            f"──────────────────\n"
+            f"✕ {p1_name}: {hand_display(hand1)}  [{score1}{bust1}]{arrow1}\n"
+            f"◯ {p2_name}: {hand_display(hand2)}  [{score2}{bust2}]{arrow2}\n"
+            f"──────────────────\n"
+            f"Ход: <b>{turn_name}</b>"
+        )
+
+    @staticmethod
+    def result(
+        winner_name: str | None,
+        p1_name: str, hand1: list, score1: int,
+        p2_name: str, hand2: list, score2: int,
+        bet: Decimal, currency: str, new_balance: Decimal,
+    ) -> str:
+        from ceer_bot.games.blackjack import hand_display
+        bust1 = " 💥" if score1 > 21 else ""
+        bust2 = " 💥" if score2 > 21 else ""
+        if winner_name:
+            reward = (
+                f"\n🏆 +<b>{bet * 2:.2f} {currency}</b> → баланс: <b>{new_balance:.2f}</b>"
+                if bet > 0 else ""
+            )
+            outcome = f"🎉 Победил <b>{winner_name}</b>!{reward}"
+        else:
+            outcome = "🤝 <b>Ничья!</b> Ставки возвращены."
+        return (
+            f"🃏 <b>Блэкджек — конец игры</b>\n"
+            f"──────────────────\n"
+            f"✕ {p1_name}: {hand_display(hand1)}  [{score1}{bust1}]\n"
+            f"◯ {p2_name}: {hand_display(hand2)}  [{score2}{bust2}]\n"
+            f"──────────────────\n"
+            f"{outcome}"
+        )
+
+
 class POKER_TEXT:
     RULES = (
         "<b>♠️ Покер-дуэль</b>\n\n"

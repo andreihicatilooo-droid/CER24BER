@@ -26,6 +26,7 @@ from ceer_bot.handlers.chat_events import build_chat_events_router
 from ceer_bot.handlers.game import build_game_router
 from ceer_bot.handlers.start import build_start_router
 from ceer_bot.handlers.tictactoe import build_tictactoe_router
+from ceer_bot.handlers.blackjack import build_blackjack_router
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,7 @@ async def run() -> None:
     dp.include_router(build_chat_events_router(container))
     dp.include_router(build_game_router(container))
     dp.include_router(build_tictactoe_router(container))
+    dp.include_router(build_blackjack_router(container))
 
     logger.info("CEER Bot запущен.")
     try:
