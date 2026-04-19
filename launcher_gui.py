@@ -45,6 +45,8 @@ LOG_DIR.mkdir(exist_ok=True)
 LOGS: dict[str, Path] = {
     "bot":      LOG_DIR / "bot.log",
     "bot_err":  LOG_DIR / "bot_error.log",
+    "ceer":     LOG_DIR / "ceer.log",
+    "ceer_err": LOG_DIR / "ceer_error.log",
     "tunnel":   LOG_DIR / "tunnel.log",
     "launcher": LOG_DIR / "launcher.log",
 }
@@ -219,6 +221,13 @@ ENV_SECTIONS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
          "socks5://user:pass@host:port / пусто", ""),
         ("TELEGRAM_API_URL", "Кастомный URL Telegram Bot API (локальный сервер).",
          "http://localhost:8081 / пусто", ""),
+    ]),
+    ("CEER Bot (игровой)", [
+        ("CEER_BOT_TOKEN",
+         "Токен игрового бота CEER. Пусто — CEER не запускается. Баланс из CERBER БД.",
+         "123456789:ABCdefGHI... (или пусто)", ""),
+        ("GAME_MIN_BET",  "Минимальная ставка в играх CEER.", "1.00",   "1.00"),
+        ("GAME_MAX_BET",  "Максимальная ставка (0 = без ограничения).", "100.00", "100.00"),
     ]),
     ("Дополнительно", [
         ("MODERATOR_IDS",           "Telegram ID модераторов через запятую.",
@@ -542,12 +551,14 @@ class CerberGUI:
 
         # ── Состояние процессов ────────────────────────────────
         self._bot_proc:    Optional[subprocess.Popen] = None
+        self._ceer_proc:   Optional[subprocess.Popen] = None
         self._tunnel_proc: Optional[subprocess.Popen] = None
         self._tunnel_url   = ""
 
         # ── Логи: per-key буферы + общая очередь ─────────────
         self._log_q: "queue.Queue[tuple[str, str]]" = queue.Queue()
         self._log_buffers: dict[str, deque] = {k: deque(maxlen=600) for k in LOGS}
+        self._ceer_enabled = tk.BooleanVar(value=bool(get_env("CEER_BOT_TOKEN")))
         self._active_log = "bot"
         self._tailers: list[LogTailer] = []
 
@@ -608,6 +619,11 @@ class CerberGUI:
         self._hdr_bot_lbl = tk.Label(status_fr, textvariable=self._hdr_bot_var,
                                       fg=TEXT_M, bg=BG_HDR, font=self._f_mono_s)
         self._hdr_bot_lbl.pack(side=tk.RIGHT, padx=10)
+
+        self._hdr_ceer_var = tk.StringVar(value="○  CEER")
+        self._hdr_ceer_lbl = tk.Label(status_fr, textvariable=self._hdr_ceer_var,
+                                       fg=TEXT_M, bg=BG_HDR, font=self._f_mono_s)
+        self._hdr_ceer_lbl.pack(side=tk.RIGHT, padx=10)
 
         tk.Frame(self.root, bg=ACCENT, height=1).pack(fill=tk.X)
 
@@ -699,10 +715,16 @@ class CerberGUI:
         inner.bind("<Leave>", _unbind_sb_wheel)
 
         # ── ПРОЦЕССЫ ──────────────────────────────────────────
-        self._section_hdr(inner, "ПРОЦЕССЫ")
+        self._section_hdr(inner, "CERBER BOT")
         self._btn(inner, "▶   Запуск бота",  self._start_bot,   fg=ACCENT_G)
         self._btn(inner, "■   Стоп бота",    self._stop_bot,    fg=ACCENT_B)
         self._btn(inner, "↺   Перезапуск",   self._restart_bot, fg=ACCENT_W)
+        self._sep(inner)
+
+        # ── CEER BOT ──────────────────────────────────────────
+        self._section_hdr(inner, "CEER BOT (игровой)")
+        self._btn(inner, "▶   Запуск CEER",  self._start_ceer,  fg=ACCENT_G)
+        self._btn(inner, "■   Стоп CEER",    self._stop_ceer,   fg=ACCENT_B)
         self._sep(inner)
 
         # ── ТУННЕЛЬ ───────────────────────────────────────────
@@ -725,14 +747,20 @@ class CerberGUI:
         status_fr = tk.Frame(inner, bg=BG_PANEL)
         status_fr.pack(fill=tk.X, padx=10, pady=(4, 8))
 
-        self._sb_bot_var = tk.StringVar(value="○  Бот: Остановлен")
-        self._sb_tun_var = tk.StringVar(value="○  Туннель: Выкл")
-        self._sb_url_var = tk.StringVar(value="")
+        self._sb_bot_var  = tk.StringVar(value="○  Бот: Остановлен")
+        self._sb_ceer_var = tk.StringVar(value="○  CEER: Остановлен")
+        self._sb_tun_var  = tk.StringVar(value="○  Туннель: Выкл")
+        self._sb_url_var  = tk.StringVar(value="")
 
         self._sb_bot_lbl = tk.Label(status_fr, textvariable=self._sb_bot_var,
                                      fg=ACCENT_B, bg=BG_PANEL,
                                      font=self._f_mono_s, anchor="w")
         self._sb_bot_lbl.pack(fill=tk.X, pady=1)
+
+        self._sb_ceer_lbl = tk.Label(status_fr, textvariable=self._sb_ceer_var,
+                                      fg=TEXT_M, bg=BG_PANEL,
+                                      font=self._f_mono_s, anchor="w")
+        self._sb_ceer_lbl.pack(fill=tk.X, pady=1)
 
         self._sb_tun_lbl = tk.Label(status_fr, textvariable=self._sb_tun_var,
                                      fg=TEXT_M, bg=BG_PANEL,
@@ -760,6 +788,8 @@ class CerberGUI:
         tabs: list[tuple[str, str]] = [
             ("bot",      "Bot Output"),
             ("bot_err",  "Bot Errors"),
+            ("ceer",     "CEER Output"),
+            ("ceer_err", "CEER Errors"),
             ("tunnel",   "Tunnel"),
             ("launcher", "Launcher"),
         ]
@@ -944,6 +974,8 @@ class CerberGUI:
         self._tailers = [
             LogTailer(LOGS["bot"],      self._log_q, "bot"),
             LogTailer(LOGS["bot_err"],  self._log_q, "bot_err"),
+            LogTailer(LOGS["ceer"],     self._log_q, "ceer"),
+            LogTailer(LOGS["ceer_err"], self._log_q, "ceer_err"),
             LogTailer(LOGS["tunnel"],   self._log_q, "tunnel"),
             LogTailer(LOGS["launcher"], self._log_q, "launcher"),
         ]
@@ -983,6 +1015,23 @@ class CerberGUI:
             self._sb_bot_lbl.configure(fg=ACCENT_B)
             self._hdr_bot_var.set("○  Bot")
             self._hdr_bot_lbl.configure(fg=TEXT_M)
+
+        # CEER Bot
+        if self._ceer_proc and self._ceer_proc.poll() is None:
+            self._sb_ceer_var.set("●  CEER: Запущен")
+            self._sb_ceer_lbl.configure(fg=ACCENT_G)
+            self._hdr_ceer_var.set("●  CEER")
+            self._hdr_ceer_lbl.configure(fg=ACCENT_G)
+        else:
+            if self._ceer_proc and self._ceer_proc.poll() is not None:
+                code = self._ceer_proc.returncode
+                if code != 0:
+                    self._add_log("launcher", f"[!] CEER завершился (код {code})", "err")
+                self._ceer_proc = None
+            self._sb_ceer_var.set("○  CEER: Остановлен")
+            self._sb_ceer_lbl.configure(fg=TEXT_M)
+            self._hdr_ceer_var.set("○  CEER")
+            self._hdr_ceer_lbl.configure(fg=TEXT_M)
 
         # Туннель
         if self._tunnel_proc and self._tunnel_proc.poll() is None:
@@ -1145,6 +1194,51 @@ class CerberGUI:
         self.root.after(1500, self._start_bot)
 
     # ──────────────────────────────────────────────────────────
+    # ACTIONS: CEER BOT
+    # ──────────────────────────────────────────────────────────
+
+    def _start_ceer(self) -> None:
+        if self._ceer_proc and self._ceer_proc.poll() is None:
+            self._add_log("launcher", "CEER уже запущен", "warn")
+            return
+        if not VENV_PY.exists():
+            self._add_log("launcher", f"[!] .venv не найден: {VENV_PY}", "err")
+            return
+        token = get_env("CEER_BOT_TOKEN", "")
+        if not token or token == "your_ceer_bot_token_from_botfather":
+            self._add_log("launcher",
+                          "[!] CEER_BOT_TOKEN не задан в .env — укажите через ⚙ Настройки",
+                          "err")
+            return
+        try:
+            out = open(LOGS["ceer"],     "a", encoding="utf-8")
+            err = open(LOGS["ceer_err"], "a", encoding="utf-8")
+            self._ceer_proc = subprocess.Popen(
+                [str(VENV_PY), "-m", "ceer_bot"],
+                cwd=str(ROOT), stdout=out, stderr=err,
+            )
+            self._add_log("launcher", f"CEER Bot запущен  PID {self._ceer_proc.pid}", "ok")
+            launcher_log(f"CEER Bot started PID {self._ceer_proc.pid}")
+            self._switch_tab("ceer")
+        except Exception as e:
+            self._add_log("launcher", f"Ошибка запуска CEER: {e}", "err")
+
+    def _stop_ceer(self) -> None:
+        if not self._ceer_proc or self._ceer_proc.poll() is not None:
+            self._add_log("launcher", "CEER не запущен", "gray")
+            self._ceer_proc = None
+            return
+        pid = self._ceer_proc.pid
+        self._ceer_proc.terminate()
+        try:
+            self._ceer_proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self._ceer_proc.kill()
+        self._add_log("launcher", f"CEER Bot остановлен  PID {pid}", "warn")
+        launcher_log(f"CEER Bot stopped PID {pid}")
+        self._ceer_proc = None
+
+    # ──────────────────────────────────────────────────────────
     # ACTIONS: ТУННЕЛЬ
     # ──────────────────────────────────────────────────────────
 
@@ -1250,7 +1344,7 @@ class CerberGUI:
     def _on_close(self) -> None:
         for t in self._tailers:
             t.stop()
-        for proc in (self._bot_proc, self._tunnel_proc):
+        for proc in (self._bot_proc, self._ceer_proc, self._tunnel_proc):
             if proc and proc.poll() is None:
                 proc.terminate()
                 try:
