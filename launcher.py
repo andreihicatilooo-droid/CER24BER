@@ -38,6 +38,8 @@ ENV_FILE = ROOT / ".env"
 LOGS = {
     "bot": LOG_DIR / "bot.log",
     "bot_err": LOG_DIR / "bot_error.log",
+    "ceer": LOG_DIR / "ceer.log",
+    "ceer_err": LOG_DIR / "ceer_error.log",
     "tunnel": LOG_DIR / "tunnel.log",
     "launcher": LOG_DIR / "launcher.log",
 }
@@ -766,6 +768,28 @@ ENV_SECTIONS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
             "",
         ),
     ]),
+    ("CEER Bot (игровой бот для чатов)", [
+        (
+            "CEER_BOT_TOKEN",
+            "Токен игрового бота CEER от @BotFather.\n"
+            "    Пусто — CEER бот не запускается.\n"
+            "    Баланс пользователей берётся из CERBER (единая БД).",
+            "Формат: 123456789:ABCdefGHIjklMNOpqrSTUvwxYZ (или пусто)",
+            "",
+        ),
+        (
+            "GAME_MIN_BET",
+            "Минимальная ставка в играх CEER (в валюте WALLET_CURRENCY).",
+            "Число, например: 1.00",
+            "1.00",
+        ),
+        (
+            "GAME_MAX_BET",
+            "Максимальная ставка в играх CEER. 0 — без ограничения.",
+            "Число, например: 100.00",
+            "100.00",
+        ),
+    ]),
     ("Дополнительно", [
         (
             "MODERATOR_IDS",
@@ -1048,7 +1072,7 @@ def kill_old_launchers() -> None:
     current_pid = os.getpid()
     killed: list[int] = []
 
-    for pattern in ("launcher.py", "cerber_bot"):
+    for pattern in ("launcher.py", "cerber_bot", "ceer_bot"):
         for pid in _find_pids_by_cmdline(pattern):
             if pid == current_pid:
                 continue
@@ -1108,6 +1132,27 @@ def _start_bot(
     time.sleep(2)
     log(f"Bot started (PID {bot_proc.pid})")
 
+    # ── CEER Bot (опционально) ─────────────────────────────────
+    ceer_token = get_env("CEER_BOT_TOKEN")
+    if ceer_token and ceer_token != "your_ceer_bot_token_from_botfather":
+        cprint("[*] Starting CEER bot...", "cyan")
+        log("Starting CEER bot")
+        cf = open(LOGS["ceer"], "w", encoding="utf-8")
+        cef = open(LOGS["ceer_err"], "w", encoding="utf-8")
+        open_files.extend([cf, cef])
+        ceer_proc = subprocess.Popen(
+            [str(VENV_PY), "-m", "ceer_bot"],
+            cwd=str(ROOT),
+            stdout=cf,
+            stderr=cef,
+        )
+        components.append(("CEER", ceer_proc))
+        time.sleep(1)
+        log(f"CEER bot started (PID {ceer_proc.pid})")
+        cprint(f"    CEER bot PID {ceer_proc.pid}", "green")
+    else:
+        cprint("    CEER bot: пропуск (CEER_BOT_TOKEN не задан)", "dark_gray")
+
 
 def _restart_bot(
     components: list[tuple[str, subprocess.Popen[bytes]]],
@@ -1116,11 +1161,11 @@ def _restart_bot(
     web_enabled: str,
     tunnel_url: str | None,
 ) -> None:
-    """Останавливает текущий процесс бота и запускает новый."""
-    bot_log_paths = {LOGS["bot"], LOGS["bot_err"]}
+    """Останавливает текущие процессы ботов и запускает новые."""
+    bot_log_paths = {LOGS["bot"], LOGS["bot_err"], LOGS["ceer"], LOGS["ceer_err"]}
 
-    # Остановить старый процесс бота
-    bot_entries = [(name, proc) for name, proc in components if name == "Bot"]
+    # Остановить старые процессы ботов (Bot и CEER)
+    bot_entries = [(name, proc) for name, proc in components if name in ("Bot", "CEER")]
     for name, proc in bot_entries:
         if proc.poll() is None:
             proc.terminate()
