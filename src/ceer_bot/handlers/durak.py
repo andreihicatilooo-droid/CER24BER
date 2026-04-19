@@ -425,10 +425,6 @@ def build_durak_router(container: AppContainer) -> Router:
 
     return router
 
-
-
-def build_durak_router(container: AppContainer) -> Router:
-    router   = Router(name="ceer_durak")
     currency = container.user_service.wallet_currency
 
     # ── Кнопка «Дурак» в меню ─────────────────────────────────────────────
