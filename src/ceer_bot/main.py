@@ -80,9 +80,10 @@ async def run() -> None:
 
     # Web-сервер Mini App (если задан URL туннеля)
     if settings.ceer_web_url:
-        from ceer_bot.keyboards.game_menu import set_ttt_web_url
+        from ceer_bot.keyboards.game_menu import set_ttt_web_url, set_durak_web_url
         set_ttt_web_url(settings.ceer_web_url)
-        logger.info("TTT Mini App URL: %s", settings.ceer_web_url)
+        set_durak_web_url(settings.ceer_web_url)
+        logger.info("Mini App URL: %s", settings.ceer_web_url)
 
     logger.info("CEER Bot запущен.")
     try:

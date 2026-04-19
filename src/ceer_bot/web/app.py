@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 def create_web_app(container: "AppContainer") -> FastAPI:
     """Создаёт FastAPI приложение с подключёнными роутерами Mini App."""
     from ceer_bot.web.ttt_api import build_ttt_router
+    from ceer_bot.web.durak_api import build_durak_router
 
     app = FastAPI(docs_url=None, redoc_url=None, title="CEER Mini App")
 
@@ -26,4 +27,5 @@ def create_web_app(container: "AppContainer") -> FastAPI:
     )
 
     app.include_router(build_ttt_router(container))
+    app.include_router(build_durak_router(container))
     return app

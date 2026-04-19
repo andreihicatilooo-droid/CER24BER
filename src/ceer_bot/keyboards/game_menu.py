@@ -1,4 +1,4 @@
-﻿"""Клавиатура выбора игры, доска крестиков-ноликов, блэкджека и дурака."""
+"""Клавиатура выбора игры, доска крестиков-ноликов, блэкджека и дурака."""
 
 from __future__ import annotations
 
@@ -11,13 +11,20 @@ GAME_BJ_ACTION    = "game:bj"
 GAME_DURAK_ACTION = "game:durak"
 
 # Публичный базовый URL веб-сервера (устанавливается из main.py при старте)
-_ttt_web_url: str = ""
+_ttt_web_url:   str = ""
+_durak_web_url: str = ""
 
 
 def set_ttt_web_url(url: str) -> None:
-    """Задаёт базовый URL Mini App (напр. https://xxx.trycloudflare.com)."""
+    """Задаёт базовый URL Mini App TTT."""
     global _ttt_web_url
     _ttt_web_url = url.rstrip("/")
+
+
+def set_durak_web_url(url: str) -> None:
+    """Задаёт базовый URL Mini App Durak."""
+    global _durak_web_url
+    _durak_web_url = url.rstrip("/")
 
 
 def build_game_menu() -> InlineKeyboardMarkup:
@@ -113,4 +120,10 @@ def build_durak_board(
         btns.append([InlineKeyboardButton(text="✅ Закончить атаку", callback_data=f"durak:pass:{game_id}")])
     elif phase == "defending":
         btns.append([InlineKeyboardButton(text="🤚 Взять карты", callback_data=f"durak:take:{game_id}")])
+    # Кнопка Mini App (url работает в групповых чатах)
+    if _durak_web_url and game_id and phase not in ("joining", "finished"):
+        btns.append([InlineKeyboardButton(
+            text="🎮 Открыть приложение",
+            url=f"{_durak_web_url}/durak/{game_id}",
+        )])
     return InlineKeyboardMarkup(inline_keyboard=btns)
