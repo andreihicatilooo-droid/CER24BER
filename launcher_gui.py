@@ -43,12 +43,13 @@ ENV_FILE = ROOT / ".env"
 LOG_DIR.mkdir(exist_ok=True)
 
 LOGS: dict[str, Path] = {
-    "bot":      LOG_DIR / "bot.log",
-    "bot_err":  LOG_DIR / "bot_error.log",
-    "ceer":     LOG_DIR / "ceer.log",
-    "ceer_err": LOG_DIR / "ceer_error.log",
-    "tunnel":   LOG_DIR / "tunnel.log",
-    "launcher": LOG_DIR / "launcher.log",
+    "bot":         LOG_DIR / "bot.log",
+    "bot_err":     LOG_DIR / "bot_error.log",
+    "ceer":        LOG_DIR / "ceer.log",
+    "ceer_err":    LOG_DIR / "ceer_error.log",
+    "tunnel":      LOG_DIR / "tunnel.log",
+    "ceer_tunnel": LOG_DIR / "ceer_tunnel.log",
+    "launcher":    LOG_DIR / "launcher.log",
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -228,6 +229,10 @@ ENV_SECTIONS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
          "123456789:ABCdefGHI... (или пусто)", ""),
         ("GAME_MIN_BET",  "Минимальная ставка в играх CEER.", "1.00",   "1.00"),
         ("GAME_MAX_BET",  "Максимальная ставка (0 = без ограничения).", "100.00", "100.00"),
+        ("CEER_WEB_PORT", "Порт внутреннего веб-сервера Mini App (FastAPI/uvicorn).",
+         "8089", "8089"),
+        ("CEER_WEB_URL",  "Публичный HTTPS URL Mini App (заполняется при запуске CEER-туннеля).",
+         "https://xxx.trycloudflare.com / пусто", ""),
     ]),
     ("Дополнительно", [
         ("MODERATOR_IDS",           "Telegram ID модераторов через запятую.",
@@ -550,10 +555,12 @@ class CerberGUI:
         self._f_sec    = tkfont.Font(family="Consolas", size=8)
 
         # ── Состояние процессов ────────────────────────────────
-        self._bot_proc:    Optional[subprocess.Popen] = None
-        self._ceer_proc:   Optional[subprocess.Popen] = None
-        self._tunnel_proc: Optional[subprocess.Popen] = None
-        self._tunnel_url   = ""
+        self._bot_proc:         Optional[subprocess.Popen] = None
+        self._ceer_proc:        Optional[subprocess.Popen] = None
+        self._tunnel_proc:      Optional[subprocess.Popen] = None
+        self._ceer_tunnel_proc: Optional[subprocess.Popen] = None
+        self._tunnel_url      = ""
+        self._ceer_tunnel_url = ""
 
         # ── Логи: per-key буферы + общая очередь ─────────────
         self._log_q: "queue.Queue[tuple[str, str]]" = queue.Queue()
@@ -624,6 +631,11 @@ class CerberGUI:
         self._hdr_ceer_lbl = tk.Label(status_fr, textvariable=self._hdr_ceer_var,
                                        fg=TEXT_M, bg=BG_HDR, font=self._f_mono_s)
         self._hdr_ceer_lbl.pack(side=tk.RIGHT, padx=10)
+
+        self._hdr_miniapp_var = tk.StringVar(value="")
+        self._hdr_miniapp_lbl = tk.Label(status_fr, textvariable=self._hdr_miniapp_var,
+                                          fg=ACCENT_C, bg=BG_HDR, font=self._f_mono_s)
+        self._hdr_miniapp_lbl.pack(side=tk.RIGHT, padx=10)
 
         tk.Frame(self.root, bg=ACCENT, height=1).pack(fill=tk.X)
 
@@ -750,7 +762,9 @@ class CerberGUI:
         self._sb_bot_var  = tk.StringVar(value="○  Бот: Остановлен")
         self._sb_ceer_var = tk.StringVar(value="○  CEER: Остановлен")
         self._sb_tun_var  = tk.StringVar(value="○  Туннель: Выкл")
+        self._sb_ctun_var = tk.StringVar(value="○  Mini App: Выкл")
         self._sb_url_var  = tk.StringVar(value="")
+        self._sb_curl_var = tk.StringVar(value="")
 
         self._sb_bot_lbl = tk.Label(status_fr, textvariable=self._sb_bot_var,
                                      fg=ACCENT_B, bg=BG_PANEL,
@@ -772,6 +786,16 @@ class CerberGUI:
                  font=self._f_mono_s, anchor="w",
                  wraplength=218, justify=tk.LEFT).pack(fill=tk.X, pady=1)
 
+        self._sb_ctun_lbl = tk.Label(status_fr, textvariable=self._sb_ctun_var,
+                                      fg=TEXT_M, bg=BG_PANEL,
+                                      font=self._f_mono_s, anchor="w")
+        self._sb_ctun_lbl.pack(fill=tk.X, pady=1)
+
+        tk.Label(status_fr, textvariable=self._sb_curl_var,
+                 fg=ACCENT_C, bg=BG_PANEL,
+                 font=self._f_mono_s, anchor="w",
+                 wraplength=218, justify=tk.LEFT).pack(fill=tk.X, pady=1)
+
     # ──────────────────────────────────────────────────────────
     # BUILD: LOG PANEL
     # ──────────────────────────────────────────────────────────
@@ -786,12 +810,13 @@ class CerberGUI:
         tab_bar.pack_propagate(False)
 
         tabs: list[tuple[str, str]] = [
-            ("bot",      "Bot Output"),
-            ("bot_err",  "Bot Errors"),
-            ("ceer",     "CEER Output"),
-            ("ceer_err", "CEER Errors"),
-            ("tunnel",   "Tunnel"),
-            ("launcher", "Launcher"),
+            ("bot",         "Bot Output"),
+            ("bot_err",     "Bot Errors"),
+            ("ceer",        "CEER Output"),
+            ("ceer_err",    "CEER Errors"),
+            ("tunnel",      "Tunnel"),
+            ("ceer_tunnel", "Mini App"),
+            ("launcher",    "Launcher"),
         ]
         self._tab_btns: dict[str, tk.Button] = {}
         for key, label in tabs:
@@ -972,12 +997,13 @@ class CerberGUI:
         for t in self._tailers:
             t.stop()
         self._tailers = [
-            LogTailer(LOGS["bot"],      self._log_q, "bot"),
-            LogTailer(LOGS["bot_err"],  self._log_q, "bot_err"),
-            LogTailer(LOGS["ceer"],     self._log_q, "ceer"),
-            LogTailer(LOGS["ceer_err"], self._log_q, "ceer_err"),
-            LogTailer(LOGS["tunnel"],   self._log_q, "tunnel"),
-            LogTailer(LOGS["launcher"], self._log_q, "launcher"),
+            LogTailer(LOGS["bot"],         self._log_q, "bot"),
+            LogTailer(LOGS["bot_err"],     self._log_q, "bot_err"),
+            LogTailer(LOGS["ceer"],        self._log_q, "ceer"),
+            LogTailer(LOGS["ceer_err"],    self._log_q, "ceer_err"),
+            LogTailer(LOGS["tunnel"],      self._log_q, "tunnel"),
+            LogTailer(LOGS["ceer_tunnel"], self._log_q, "ceer_tunnel"),
+            LogTailer(LOGS["launcher"],    self._log_q, "launcher"),
         ]
         for t in self._tailers:
             t.start()
@@ -1074,6 +1100,43 @@ class CerberGUI:
             self._hdr_tun_lbl.configure(fg=TEXT_M)
             self._sb_url_var.set("")
             self._foot_url_var.set("")
+
+        # CEER Mini App туннель
+        if self._ceer_tunnel_proc and self._ceer_tunnel_proc.poll() is None:
+            if not self._ceer_tunnel_url and LOGS["ceer_tunnel"].exists():
+                try:
+                    content = LOGS["ceer_tunnel"].read_text(encoding="utf-8", errors="replace")
+                    matches = re.findall(r"(https://[a-zA-Z0-9\-]+\.trycloudflare\.com)", content)
+                    if matches:
+                        self._ceer_tunnel_url = matches[-1]
+                        self._add_log("launcher", f"Mini App URL: {self._ceer_tunnel_url}", "info")
+                        set_env("CEER_WEB_URL", self._ceer_tunnel_url)
+                        self._add_log("launcher", "CEER_WEB_URL обновлён в .env", "gray")
+                        if self._ceer_proc and self._ceer_proc.poll() is None:
+                            self._add_log("launcher",
+                                          "Перезапуск CEER (новый Mini App URL)...", "warn")
+                            self.root.after(500, self._restart_ceer)
+                except OSError:
+                    pass
+
+            self._sb_ctun_var.set("●  Mini App: Активен")
+            self._sb_ctun_lbl.configure(fg=ACCENT_C)
+            if self._ceer_tunnel_url:
+                short = self._ceer_tunnel_url.replace("https://", "")
+                self._sb_curl_var.set(short)
+                self._hdr_miniapp_var.set(f"🎮 {short[:28]}…" if len(short) > 30 else f"🎮 {short}")
+            else:
+                self._sb_curl_var.set("⏳ Ожидание URL...")
+                self._hdr_miniapp_var.set("🎮 ⏳")
+        else:
+            if self._ceer_tunnel_proc and self._ceer_tunnel_proc.poll() is not None:
+                self._add_log("launcher", "[!] CEER Mini App туннель завершился", "warn")
+                self._ceer_tunnel_proc = None
+                self._ceer_tunnel_url  = ""
+            self._sb_ctun_var.set("○  Mini App: Выкл")
+            self._sb_ctun_lbl.configure(fg=TEXT_M)
+            self._hdr_miniapp_var.set("")
+            self._sb_curl_var.set("")
 
     # ──────────────────────────────────────────────────────────
     # ANIMATION: BANNER
@@ -1243,8 +1306,61 @@ class CerberGUI:
         launcher_log(f"CEER Bot stopped PID {pid}")
         self._ceer_proc = None
 
+    def _restart_ceer(self) -> None:
+        self._add_log("launcher", "Перезапуск CEER...", "warn")
+        self._stop_ceer()
+        self.root.after(1500, self._start_ceer)
+
     # ──────────────────────────────────────────────────────────
-    # ACTIONS: ТУННЕЛЬ
+    # ACTIONS: CEER MINI APP ТУННЕЛЬ
+    # ──────────────────────────────────────────────────────────
+
+    def _start_ceer_tunnel(self) -> None:
+        if self._ceer_tunnel_proc and self._ceer_tunnel_proc.poll() is None:
+            self._add_log("launcher", "CEER Mini App туннель уже запущен", "warn")
+            return
+        import shutil as _sh
+        cf = _sh.which("cloudflared") or _sh.which("cloudflared.exe")
+        if not cf:
+            self._add_log("launcher", "[!] cloudflared не найден в PATH", "err")
+            self._add_log("launcher",
+                          "    https://github.com/cloudflare/cloudflared/releases", "info")
+            return
+        ceer_port = get_env("CEER_WEB_PORT", "8089")
+        try:
+            out = open(LOGS["ceer_tunnel"], "w", encoding="utf-8")
+            self._ceer_tunnel_proc = subprocess.Popen(
+                [cf, "tunnel", "--url", f"http://localhost:{ceer_port}"],
+                cwd=str(ROOT), stdout=out, stderr=out,
+            )
+            self._ceer_tunnel_url = ""
+            self._add_log("launcher",
+                          f"CEER Mini App туннель запущен  PID {self._ceer_tunnel_proc.pid}", "info")
+            self._add_log("launcher",
+                          f"Порт: {ceer_port}  — ожидаю trycloudflare URL...", "gray")
+            launcher_log(f"CEER Mini App tunnel started PID {self._ceer_tunnel_proc.pid}")
+            self._switch_tab("ceer_tunnel")
+        except Exception as e:
+            self._add_log("launcher", f"Ошибка запуска CEER туннеля: {e}", "err")
+
+    def _stop_ceer_tunnel(self) -> None:
+        if not self._ceer_tunnel_proc or self._ceer_tunnel_proc.poll() is not None:
+            self._add_log("launcher", "CEER Mini App туннель не запущен", "gray")
+            self._ceer_tunnel_proc = None
+            return
+        pid = self._ceer_tunnel_proc.pid
+        self._ceer_tunnel_proc.terminate()
+        try:
+            self._ceer_tunnel_proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self._ceer_tunnel_proc.kill()
+        self._add_log("launcher", f"CEER Mini App туннель остановлен  PID {pid}", "warn")
+        launcher_log(f"CEER Mini App tunnel stopped PID {pid}")
+        self._ceer_tunnel_proc = None
+        self._ceer_tunnel_url  = ""
+
+    # ──────────────────────────────────────────────────────────
+    # ACTIONS: ТУННЕЛЬ (CERBER)
     # ──────────────────────────────────────────────────────────
 
     def _start_tunnel(self) -> None:
@@ -1350,7 +1466,7 @@ class CerberGUI:
     def _on_close(self) -> None:
         for t in self._tailers:
             t.stop()
-        for proc in (self._bot_proc, self._ceer_proc, self._tunnel_proc):
+        for proc in (self._bot_proc, self._ceer_proc, self._tunnel_proc, self._ceer_tunnel_proc):
             if proc and proc.poll() is None:
                 proc.terminate()
                 try:
