@@ -19,12 +19,17 @@ def build_chat_events_router(container: AppContainer) -> Router:
 
     @router.my_chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
     async def bot_added_to_chat(event: ChatMemberUpdated) -> None:
-        """Бот добавлен в чат — приветствие."""
+        """Бот добавлен в чат — приветствие и запрос прав."""
         try:
-            await event.answer(
-                CHAT_EVENTS_TEXT.HELLO,
-                parse_mode="HTML",
-            )
+            # Проверяем, есть ли у бота права администратора
+            chat_member = await event.bot.get_chat_member(event.chat.id, event.bot.id)  # type: ignore[union-attr]
+            is_admin = chat_member.status in ("administrator", "creator")
+
+            text = CHAT_EVENTS_TEXT.HELLO
+            if not is_admin:
+                text += "\n\n" + CHAT_EVENTS_TEXT.NO_RIGHTS
+
+            await event.answer(text, parse_mode="HTML")
         except Exception as exc:
             logger.warning("Не удалось отправить приветствие в чат %s: %s", event.chat.id, exc)
 

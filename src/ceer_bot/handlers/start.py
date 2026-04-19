@@ -36,7 +36,10 @@ def build_start_router(container: AppContainer) -> Router:
         caption = START_TEXT.welcome_caption(created)
         await message.answer(
             caption,
-            reply_markup=build_main_menu(container.settings.support_url),
+            reply_markup=build_main_menu(
+                container.settings.support_url,
+                container.bot_username,
+            ),
             parse_mode="HTML",
         )
 
@@ -49,7 +52,10 @@ def build_start_router(container: AppContainer) -> Router:
         await callback.answer()
         await callback.message.edit_text(  # type: ignore[union-attr]
             text=START_TEXT.BASE_CAPTION,
-            reply_markup=build_main_menu(container.settings.support_url),
+            reply_markup=build_main_menu(
+                container.settings.support_url,
+                container.bot_username,
+            ),
             parse_mode="HTML",
         )
 

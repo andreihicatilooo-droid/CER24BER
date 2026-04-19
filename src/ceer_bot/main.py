@@ -25,6 +25,7 @@ from ceer_bot.container import AppContainer
 from ceer_bot.handlers.chat_events import build_chat_events_router
 from ceer_bot.handlers.game import build_game_router
 from ceer_bot.handlers.start import build_start_router
+from ceer_bot.handlers.tictactoe import build_tictactoe_router
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +63,14 @@ async def run() -> None:
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     container.bot = bot
+    bot_info = await bot.get_me()
+    container.bot_username = bot_info.username or ""
 
     dp = Dispatcher(storage=MemoryStorage())
     dp.include_router(build_start_router(container))
     dp.include_router(build_chat_events_router(container))
     dp.include_router(build_game_router(container))
+    dp.include_router(build_tictactoe_router(container))
 
     logger.info("CEER Bot запущен.")
     try:

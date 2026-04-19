@@ -26,6 +26,7 @@ class AppContainer:
     session_factory: async_sessionmaker[AsyncSession]
     user_service: CeerUserService
     bot: Bot | None = None
+    bot_username: str = ""
 
     @classmethod
     async def build(cls, settings: Settings | None = None) -> "AppContainer":

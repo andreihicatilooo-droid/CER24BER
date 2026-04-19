@@ -63,6 +63,49 @@ class GAME_TEXT:
     PRIVATE_ONLY = "Эта команда доступна только в чатах (не в ЛС)."
 
 
+class TTT_TEXT:
+    ASK_BET = (
+        "<b>❌⭕ Крестики-нолики</b>\n\n"
+        "Игра один на один. Введите ставку (или 0 чтобы играть без ставки):\n"
+        "<i>Минимальная: {min_bet}, Максимальная: {max_bet} {currency}</i>"
+    )
+    INVALID_BET = "❌ Некорректная ставка. Введите число ≥ 0."
+    BET_TOO_LOW = "❌ Минимальная ставка: <b>{min_bet} {currency}</b>"
+    BET_TOO_HIGH = "❌ Максимальная ставка: <b>{max_bet} {currency}</b>"
+    INSUFFICIENT = "❌ Недостаточно средств. Баланс: <b>{balance:.2f} {currency}</b>"
+    CANCEL = "Игра отменена."
+
+    @staticmethod
+    def invite(creator_name: str, bet: Decimal, currency: str) -> str:
+        bet_str = f" — ставка <b>{bet:.2f} {currency}</b>" if bet > 0 else " — без ставки"
+        return (
+            f"⚔️ <b>{creator_name}</b> вызывает на <b>крестики-нолики</b>{bet_str}!\n"
+            "Нажми кнопку ниже чтобы принять вызов."
+        )
+
+    @staticmethod
+    def board(game_x: str, game_o: str, turn_name: str, bet: Decimal, currency: str) -> str:
+        bet_str = f"Ставка: <b>{bet:.2f} {currency}</b>\n" if bet > 0 else ""
+        return (
+            f"❌⭕ <b>Крестики-нолики</b>\n"
+            f"{bet_str}"
+            f"✕ {game_x}  |  ◯ {game_o}\n\n"
+            f"Ход: <b>{turn_name}</b>"
+        )
+
+    @staticmethod
+    def win(winner_name: str, bet: Decimal, currency: str, new_balance: Decimal) -> str:
+        reward = f"\n🏆 +<b>{bet * 2:.2f} {currency}</b> → баланс: <b>{new_balance:.2f}</b>" if bet > 0 else ""
+        return f"🎉 Победил <b>{winner_name}</b>!{reward}"
+
+    DRAW = "🤝 <b>Ничья!</b> Ставки возвращены."
+    NOT_YOUR_TURN = "Сейчас не ваш ход!"
+    NOT_A_PLAYER = "Вы не участник этой игры."
+    GAME_NOT_FOUND = "Игра не найдена или уже завершена."
+    ALREADY_ACCEPTED = "Игра уже принята."
+    CANNOT_ACCEPT_OWN = "Нельзя принять свой собственный вызов."
+
+
 class POKER_TEXT:
     RULES = (
         "<b>♠️ Покер-дуэль</b>\n\n"
