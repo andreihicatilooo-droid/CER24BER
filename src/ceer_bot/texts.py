@@ -63,6 +63,46 @@ class GAME_TEXT:
     PRIVATE_ONLY = "Эта команда доступна только в чатах (не в ЛС)."
 
 
+class DURAK_TEXT:
+    ASK_BET = (
+        "<b>🃏 Дурак</b>\n\n"
+        "Игра для 2–3 игроков. Карты открытые. Козырная масть определяется случайно.\n"
+        "Проигрывает тот, кто останется с картами последним.\n\n"
+        "Введите ставку (0 — без ставки):\n"
+        "<i>Мин: {min_bet}, Макс: {max_bet} {currency}</i>"
+    )
+    INVALID_BET     = "❌ Некорректная ставка. Введите число ≥ 0."
+    BET_TOO_LOW     = "❌ Минимальная ставка: <b>{min_bet} {currency}</b>"
+    BET_TOO_HIGH    = "❌ Максимальная ставка: <b>{max_bet} {currency}</b>"
+    INSUFFICIENT    = "❌ Недостаточно средств. Баланс: <b>{balance:.2f} {currency}</b>"
+    CANCEL          = "🃏 Игра в дурак отменена."
+    NOT_YOUR_TURN   = "Сейчас не ваш ход!"
+    NOT_A_PLAYER    = "Вы не участник этой игры."
+    GAME_NOT_FOUND  = "Игра не найдена или уже завершена."
+    GAME_FULL       = "Игра уже заполнена (3 игрока)."
+    ALREADY_IN_GAME = "Вы уже в этой игре."
+    NOT_ENOUGH      = "Нужно минимум 2 игрока для старта."
+    NOT_CREATOR     = "Только создатель игры может её запустить."
+    CARD_INVALID    = "Этой картой нельзя ходить."
+
+    @staticmethod
+    def invite(creator_name: str, bet: Decimal, currency: str, players: list[str], max_p: int) -> str:
+        bet_str = f" — ставка <b>{bet:.2f} {currency}</b>" if bet > 0 else " — без ставки"
+        joined = "\n".join(f"  {i+1}. {n}" for i, n in enumerate(players))
+        return (
+            f"🃏 <b>{creator_name}</b> начинает <b>Дурак</b>{bet_str}!\n\n"
+            f"Игроки ({len(players)}/{max_p}):\n{joined}\n\n"
+            f"Нажми «Присоединиться» или создатель нажмёт «Начать»."
+        )
+
+    @staticmethod
+    def result(loser_name: str | None, bet: Decimal, currency: str) -> str:
+        if loser_name is None:
+            return "🃏 <b>Игра завершена.</b> Победитель не определён."
+        money = f"\n💸 {loser_name} платит ставку каждому победителю: <b>{bet:.2f} {currency}</b>" if bet > 0 else ""
+        return f"🤡 <b>ДУРАК: {loser_name}!</b>{money}"
+
+
 class TTT_TEXT:
     ASK_BET = (
         "<b>❌⭕ Крестики-нолики</b>\n\n"
