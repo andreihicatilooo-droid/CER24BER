@@ -7,15 +7,6 @@ _Обновлено: 2026-04-22_
 
 #### 🔗 Цепочка «Аккаунты Telegram — GetMyTG» — строго по порядку
 
-- [ ] [1/8] Конфиг и ENV: добавить GetMyTG-переменные
-      📂 Файлы: `config.py`, `.env.example`, `launcher.py`
-      **Что делать:**
-      - Добавить в `Settings`: `getmytg_api_key: str | None`, `getmytg_base_url: str` (default: `https://api.getmytg.com/v1`), `getmytg_webhook_path: str` (default: `/webhooks/getmytg`), `getmytg_webhook_secret: str | None`
-      - Добавить в `.env.example` с плейсхолдерами
-      - Добавить в соответствующую секцию `ENV_SECTIONS` в `launcher.py`
-      ⚠️ Риск: `.env.example` и `launcher.py` должны быть синхронизированы — см. инструкцию `env-launcher-sync`
-      ✅ Готово когда: `Settings` валидируется без ошибок; новые поля видны в GUI лаунчера
-
 - [ ] [2/8] DB: модель TgAccountPurchase + репозиторий
       📂 Файлы: `db/models.py`, `db/repositories/tgaccounts.py` (новый)
       🔗 После: [1/8]
@@ -342,6 +333,7 @@ _Обновлено: 2026-04-22_
 
 ## ✅ Выполнено
 
+- [x] [1/8] Конфиг и ENV: добавить GetMyTG-переменные — _2026-04-22_
 - [x] [8/8] Обновить тесты для core/admin split — _2026-04-22_
 - [x] [7/8] Разделить ENV и launcher под два приложения — _2026-04-22_
 - [x] [6/8] Добавить DB-модель админ-событий и миграцию — _2026-04-22_

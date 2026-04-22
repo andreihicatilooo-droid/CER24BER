@@ -727,6 +727,33 @@ ENV_SECTIONS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
             "",
         ),
     ]),
+    ("GetMyTG (аккаунты Telegram)", [
+        (
+            "GETMYTG_API_KEY",
+            "API-ключ GetMyTG для защищённых запросов (покупка, код, возврат).\n"
+            "    Пусто — доступен только публичный каталог стран.",
+            "Строка из личного кабинета GetMyTG (или пусто)",
+            "",
+        ),
+        (
+            "GETMYTG_BASE_URL",
+            "Базовый URL API GetMyTG.",
+            "По умолчанию: https://api.getmytg.com/v1",
+            "https://api.getmytg.com/v1",
+        ),
+        (
+            "GETMYTG_WEBHOOK_PATH",
+            "Путь webhook для уведомлений от GetMyTG в web-приложении.",
+            "Например: /webhooks/getmytg",
+            "/webhooks/getmytg",
+        ),
+        (
+            "GETMYTG_WEBHOOK_SECRET",
+            "Секрет подписи webhook от GetMyTG для проверки подлинности запросов.",
+            "Строка из личного кабинета GetMyTG (или пусто)",
+            "",
+        ),
+    ]),
     ("Web-панель и Mini App", [
         (
             "WEB_ENABLED",
