@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from cerber_bot.config import Settings, load_settings
 from cerber_bot.db.session import create_engine, create_session_factory, ensure_database_parent, init_database
 from cerber_bot.integrations.giftapi import GiftApiClient
+from cerber_bot.integrations.getmytg import GetMyTGClient
 from cerber_bot.integrations.nbox_service import NboxService
 from cerber_bot.integrations.nicepay import NicePayClient
 from cerber_bot.integrations.rukassa import RukassaClient
@@ -23,6 +24,7 @@ from cerber_bot.services.exchange import ExchangeRateService
 from cerber_bot.services.giftapi import GiftApiService
 from cerber_bot.services.payments import PaymentService
 from cerber_bot.services.store import StoreService
+from cerber_bot.services.tgaccounts import TgAccountService
 from cerber_bot.services.users import UserService
 
 
@@ -36,6 +38,8 @@ class AppContainer:
     exchange_rate_service: ExchangeRateService
     admin_event_service: AdminEventService
     gift_api_service: GiftApiService
+    getmytg_client: GetMyTGClient | None
+    tgaccounts_service: TgAccountService | None
     deal_service: DealService
     payment_service: PaymentService
     store_service: StoreService
@@ -67,6 +71,21 @@ class AppContainer:
             locale=resolved_settings.giftapi_locale,
         )
         gift_api_service = GiftApiService(giftapi_client)
+        getmytg_client: GetMyTGClient | None = None
+        if resolved_settings.getmytg_api_key:
+            getmytg_client = GetMyTGClient(
+                base_url=resolved_settings.getmytg_base_url,
+                http_client=http_client,
+                api_key=resolved_settings.getmytg_api_key,
+            )
+        tgaccounts_service = TgAccountService(
+            client=getmytg_client or GetMyTGClient(
+                base_url=resolved_settings.getmytg_base_url,
+                http_client=http_client,
+                api_key=None,
+            ),
+            session_factory=session_factory,
+        )
         exchange_rate_service = ExchangeRateService(
             http_client=http_client,
             api_url=resolved_settings.exchange_rate_api_url,
@@ -131,6 +150,8 @@ class AppContainer:
                 moderator_ids=resolved_settings.moderator_ids,
             ),
             gift_api_service=gift_api_service,
+            getmytg_client=getmytg_client,
+            tgaccounts_service=tgaccounts_service,
             deal_service=deal_service,
             payment_service=payment_service,
             store_service=store_service,

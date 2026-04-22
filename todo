@@ -7,17 +7,6 @@ _Обновлено: 2026-04-22_
 
 #### 🔗 Цепочка «Аккаунты Telegram — GetMyTG» — строго по порядку
 
-- [ ] [3/8] HTTP-клиент GetMyTGClient
-- [ ] [4/8] Сервис TgAccountService
-- [ ] [5/8] Контейнер: регистрация клиента и сервиса
-      📂 Файлы: `container.py`
-      🔗 После: [3/8], [4/8]
-      **Что делать:**
-      - Добавить поля `getmytg_client: GetMyTGClient | None` и `tgaccounts_service: TgAccountService | None` в `AppContainer`
-      - В `AppContainer.build()`: инициализировать `GetMyTGClient` если `settings.getmytg_api_key` задан, создать `TgAccountService`
-      ⚠️ Риск: `TgAccountService` нужен даже без ключа (для публичного каталога); `getmytg_client` может быть `None` — сервис должен проверять `client.is_configured` перед защищёнными вызовами
-      ✅ Готово когда: `AppContainer.build()` не падает ни с ключом, ни без него
-
 - [ ] [6/8] Клавиатуры раздела «Аккаунты Telegram»
       📂 Файлы: `keyboards/tgaccounts.py` (новый), `keyboards/main_menu.py`
       🔗 После: [5/8]
@@ -301,7 +290,7 @@ _Обновлено: 2026-04-22_
 
 ## ✅ Выполнено
 
-- [x] [CEER] Вынести mini app игр в отдельные webapp-проекты (ttt/durak) — _2026-04-22_
+- [x] [5/8] Контейнер: регистрация клиента и сервиса — _2026-04-22_
 - [x] [4/8] Сервис TgAccountService — _2026-04-22_
 - [x] [3/8] HTTP-клиент GetMyTGClient — _2026-04-22_
 - [x] [2/8] DB: модель TgAccountPurchase + репозиторий — _2026-04-22_
