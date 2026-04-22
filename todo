@@ -7,16 +7,6 @@ _Обновлено: 2026-04-22_
 
 #### 🔗 Цепочка «Аккаунты Telegram — GetMyTG» — строго по порядку
 
-- [ ] [2/8] DB: модель TgAccountPurchase + репозиторий
-      📂 Файлы: `db/models.py`, `db/repositories/tgaccounts.py` (новый)
-      🔗 После: [1/8]
-      **Что делать:**
-      - Добавить `TgAccountPurchase` в `models.py`: поля `id`, `telegram_id` (BigInteger), `getmytg_purchase_id` (Integer, unique), `country_code` (String 2), `phone_number` (String 20, nullable), `status` (String 16), `amount` (Numeric 12,2), `currency` (String 8), `verification_code` (String 32, nullable), `verification_password` (String 128, nullable), `purchase_type` (String 16), `created_at`, `updated_at`
-      - Создать `TgAccountRepository`: методы `create`, `get_by_id`, `get_by_getmytg_id`, `list_by_telegram_id`, `update_status`, `update_verification`
-      - Новая таблица — `create_all()` создаст её без ALTER TABLE
-      ⚠️ Риск: поле `getmytg_purchase_id` должно быть `unique=True` и `index=True` чтобы избежать дублей при webhook-ретраях
-      ✅ Готово когда: таблица создаётся при старте; репозиторий проходит mypy без ошибок
-
 - [ ] [3/8] HTTP-клиент GetMyTGClient
       📂 Файлы: `integrations/getmytg.py` (новый), `doc/api/getmytg-hint.json` (уже создан ✅)
       🔗 После: [1/8]
@@ -333,6 +323,7 @@ _Обновлено: 2026-04-22_
 
 ## ✅ Выполнено
 
+- [x] [2/8] DB: модель TgAccountPurchase + репозиторий — _2026-04-22_
 - [x] [1/8] Конфиг и ENV: добавить GetMyTG-переменные — _2026-04-22_
 - [x] [8/8] Обновить тесты для core/admin split — _2026-04-22_
 - [x] [7/8] Разделить ENV и launcher под два приложения — _2026-04-22_

@@ -157,6 +157,29 @@ class AdminNotificationEvent(Base):
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class TgAccountPurchase(Base):
+    __tablename__ = "tg_account_purchases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    getmytg_purchase_id: Mapped[int] = mapped_column(Integer, nullable=False, unique=True, index=True)
+    country_code: Mapped[str] = mapped_column(String(2), nullable=False)
+    phone_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False)
+    verification_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    verification_password: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    purchase_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        nullable=False,
+    )
+
+
 class UserOrder(Base):
     __tablename__ = "user_orders"
 
