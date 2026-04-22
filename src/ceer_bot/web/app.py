@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 if TYPE_CHECKING:
     from ceer_bot.container import AppContainer
@@ -25,6 +27,9 @@ def create_web_app(container: "AppContainer") -> FastAPI:
         allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )
+
+    webapps_dir = Path(__file__).resolve().parents[1] / "webapps"
+    app.mount("/mini", StaticFiles(directory=str(webapps_dir), html=True), name="mini-webapps")
 
     app.include_router(build_ttt_router(container))
     app.include_router(build_durak_router(container))

@@ -68,7 +68,7 @@ def build_ttt_board(board: list[str], game_id: str, finished: bool) -> InlineKey
     if _ttt_web_url and game_id and not finished:
         buttons.append([InlineKeyboardButton(
             text="🎮 Открыть приложение",
-            url=f"{_ttt_web_url}/ttt/{game_id}",
+            url=f"{_ttt_web_url}/mini/ttt/?game_id={game_id}",
         )])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -124,6 +124,6 @@ def build_durak_board(
     if _durak_web_url and game_id and phase not in ("joining", "finished"):
         btns.append([InlineKeyboardButton(
             text="🎮 Открыть приложение",
-            url=f"{_durak_web_url}/durak/{game_id}",
+            url=f"{_durak_web_url}/mini/durak/?game_id={game_id}",
         )])
     return InlineKeyboardMarkup(inline_keyboard=btns)

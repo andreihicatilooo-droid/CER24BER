@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Дурак</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="/mini/durak/styles.css">
+</head>
+<body>
+  <div class="hdr">
+    <span class="gtitle">🃏 Дурак</span>
+    <div class="chips" id="chips"></div>
+  </div>
+  <div class="sbar" id="sbar">Загрузка...</div>
+  <div class="pbar" id="pbar"></div>
+  <div class="tarea" id="tarea">
+    <div class="tempty" id="tempty">Стол пуст</div>
+  </div>
+  <div class="harea" id="harea" style="display:none">
+    <div class="hlbl">Ваши карты</div>
+    <div class="hcards" id="hcards"></div>
+  </div>
+  <div class="acthint" id="acthint" style="display:none"></div>
+  <div class="acts" id="acts" style="display:none">
+    <button class="abtn play" id="btn-play" onclick="onPlaySelected()">🃏 Сходить</button>
+    <button class="abtn pass" id="btn-pass" onclick="onPass()">✅ Закончить атаку</button>
+    <button class="abtn take" id="btn-take" onclick="onTake()">🤚 Взять карты</button>
+  </div>
+  <div class="notice" id="notice"></div>
+
+  <script src="/mini/durak/app.js"></script>
+</body>
+</html>

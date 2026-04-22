@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import unquote
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from ceer_bot.games.durak import (
@@ -644,9 +644,9 @@ def build_durak_router(container: "AppContainer") -> APIRouter:
     router   = APIRouter()
     currency = container.user_service.wallet_currency
 
-    @router.get("/durak/{game_id}", response_class=HTMLResponse, include_in_schema=False)
-    async def durak_page(game_id: str) -> HTMLResponse:
-        return HTMLResponse(content=_DURAK_HTML)
+    @router.get("/durak/{game_id}", include_in_schema=False)
+    async def durak_page(game_id: str) -> RedirectResponse:
+      return RedirectResponse(url=f"/mini/durak/?game_id={game_id}", status_code=307)
 
     @router.get("/api/durak/{game_id}")
     async def get_durak_state(game_id: str, request: Request, player_id: int | None = Query(default=None)) -> dict:

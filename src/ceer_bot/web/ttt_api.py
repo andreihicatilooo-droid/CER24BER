@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import unquote
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from ceer_bot.games.tictactoe import (
@@ -323,9 +323,9 @@ def build_ttt_router(container: "AppContainer") -> APIRouter:
 
     # ── HTML страница Mini App ─────────────────────────────────────────────
 
-    @router.get("/ttt/{game_id}", response_class=HTMLResponse, include_in_schema=False)
-    async def ttt_page(game_id: str) -> HTMLResponse:
-        return HTMLResponse(content=_TTT_HTML)
+    @router.get("/ttt/{game_id}", include_in_schema=False)
+    async def ttt_page(game_id: str) -> RedirectResponse:
+      return RedirectResponse(url=f"/mini/ttt/?game_id={game_id}", status_code=307)
 
     # ── Состояние игры ────────────────────────────────────────────────────
 
