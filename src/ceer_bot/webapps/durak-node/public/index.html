@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Durak Node Mini App</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #020617;
+      --panel: #111827;
+      --panel-2: #0f172a;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --primary: #3b82f6;
+      --success: #10b981;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 20% 20%, #0f172a 0, #020617 50%, #000 100%);
+      color: var(--text);
+      font-family: "Segoe UI", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(180deg, rgba(15,23,42,0.95), rgba(2,6,23,0.85));
+      border-bottom: 1px solid #1e293b;
+    }
+    h1 { margin: 0; font-size: 16px; }
+    #status { color: var(--muted); font-size: 13px; }
+    #durak-canvas {
+      width: 100%;
+      flex: 1;
+      min-height: 420px;
+      display: block;
+    }
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      padding: 10px;
+      background: rgba(2, 6, 23, 0.9);
+      border-top: 1px solid #1e293b;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 10px;
+      font-weight: 700;
+      color: white;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.4; cursor: default; }
+    #btn-play { background: var(--primary); }
+    #btn-pass { background: var(--success); }
+    #btn-take { background: var(--danger); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🃏 Дурак (Node.js)</h1>
+    <div id="status">Загрузка...</div>
+  </header>
+
+  <canvas id="durak-canvas"></canvas>
+
+  <div class="actions">
+    <button id="btn-play">Сходить</button>
+    <button id="btn-pass">Пас</button>
+    <button id="btn-take">Взять</button>
+  </div>
+
+  <script type="module" src="/game.js"></script>
+</body>
+</html>
