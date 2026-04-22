@@ -8,17 +8,6 @@ _Обновлено: 2026-04-22_
 #### 🔗 Цепочка «Аккаунты Telegram — GetMyTG» — строго по порядку
 
 - [ ] [3/8] HTTP-клиент GetMyTGClient
-      📂 Файлы: `integrations/getmytg.py` (новый), `doc/api/getmytg-hint.json` (уже создан ✅)
-      🔗 После: [1/8]
-      **Что делать:**
-      - Класс `GetMyTGClient(is_configured: bool)`, async httpx, заголовок `x-api-key`
-      - Методы: `health_check()`, `list_countries(auth=False)`, `list_countries_personal()`, `get_country(country_code)`, `get_profile()`, `create_purchase(country_code)`, `get_purchase(purchase_id)`, `request_code(purchase_id, callback_url=None)`, `refund_purchase(purchase_id)`
-      - `GetMyTGError(RuntimeError)`, `GetMyTGConfigError`, `GetMyTGRequestError(status_code, error)`
-      - Обернуть `httpx.ConnectError` и `httpx.TimeoutException` в `GetMyTGError`
-      ⚠️ Риск: публичные эндпоинты (`/accounts/countries`, `/service/health`) — без заголовка `x-api-key`; не слать ключ туда; `is_configured = api_key is not None`
-      ⚠️ Риск: деньги — строка decimal + currency_code (НЕ integer minor units как NicePay)
-      ✅ Готово когда: тест `test_getmytg_client.py` проходит со stub-ответами
-
 - [ ] [4/8] Сервис TgAccountService
       📂 Файлы: `services/tgaccounts.py` (новый)
       🔗 После: [2/8], [3/8]
@@ -323,6 +312,7 @@ _Обновлено: 2026-04-22_
 
 ## ✅ Выполнено
 
+- [x] [3/8] HTTP-клиент GetMyTGClient — _2026-04-22_
 - [x] [2/8] DB: модель TgAccountPurchase + репозиторий — _2026-04-22_
 - [x] [1/8] Конфиг и ENV: добавить GetMyTG-переменные — _2026-04-22_
 - [x] [8/8] Обновить тесты для core/admin split — _2026-04-22_
