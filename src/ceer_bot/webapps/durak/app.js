@@ -4,14 +4,8 @@ if (tg) {
   tg.expand();
 }
 
-function getGameId() {
-  const params = new URLSearchParams(window.location.search);
-  const fromQuery = params.get("game_id");
-  if (fromQuery) return fromQuery;
-  return window.location.pathname.split("/").filter(Boolean).pop();
-}
-
-const gameId = getGameId();
+const params = new URLSearchParams(window.location.search);
+const gameId = params.get("game_id") || window.location.pathname.split("/").filter(Boolean).pop();
 const myId = tg?.initDataUnsafe?.user?.id ?? null;
 const initData = tg?.initData ?? "";
 
@@ -75,7 +69,7 @@ function render(s) {
   const canTake = !!actions.take;
   const canPass = !!actions.pass;
   const canTransfer = !!actions.transfer;
-  const amI = myId && s.player_ids.includes(myId);
+  const amI = !!(myId && s.player_ids.includes(myId));
 
   let wov = document.getElementById("woverlay");
   if (s.phase === "joining") {
@@ -91,21 +85,22 @@ function render(s) {
     }
     wov.innerHTML = `<div class="spin"></div><div class="wtitle">🃏 Дурак</div><div class="wsub">Ожидаем игроков…</div><div class="wplayers">${rows}</div>`;
     return;
+  } else if (wov) {
+    wov.remove();
   }
-  if (wov) wov.remove();
 
   const sb = document.getElementById("sbar");
   sb.className = "sbar";
   if (s.finished) {
     sb.textContent = s.loser_id ? `ДУРАК: ${s.player_names[s.loser_id]}!` : "Игра завершена";
   } else if (canDefend) {
-    sb.textContent = canTransfer ? "Ваш ход: отбейте или переведите" : "Ваш ход: отбейте или возьмите";
+    sb.textContent = canTransfer ? "Ваш ход: отбить или перевести" : "Ваш ход: отбить или взять";
     sb.classList.add("myturn");
   } else if (canAttack && s.table.length) {
     sb.textContent = canPass ? "Можно подкинуть или завершить" : "Можно подкинуть карту";
     sb.classList.add("myturn");
   } else if (canAttack) {
-    sb.textContent = "Ваш ход: атакуйте";
+    sb.textContent = "Ваш ход: выберите карту для атаки";
     sb.classList.add("myturn");
   } else {
     const tid = s.phase === "attacking" ? s.attacker_id : s.defender_id;
@@ -142,7 +137,7 @@ function render(s) {
   const ta = document.getElementById("tarea");
   const te = document.getElementById("tempty");
   ta.querySelectorAll(".tpair").forEach((e) => e.remove());
-  if (!s.table || !s.table.length) {
+  if (!s.table?.length) {
     te.style.display = "flex";
   } else {
     te.style.display = "none";
@@ -174,7 +169,6 @@ function render(s) {
   const bplay = document.getElementById("btn-play");
   const bp = document.getElementById("btn-pass");
   const bt = document.getElementById("btn-take");
-
   if (!s.finished && amI) {
     acts.style.display = "flex";
     hint.style.display = "block";
@@ -216,30 +210,38 @@ function render(s) {
 }
 
 function showResult(s) {
-  let emoji = "🏁";
-  let title = "Игра завершена";
+  const bet = parseFloat(s.bet || "0");
+  let emoji;
+  let title;
   let sub = "";
-  const bet = parseFloat(s.bet || 0);
-  if (s.loser_id) {
-    if (s.loser_id === myId) {
-      emoji = "🤡";
-      title = "Вы — ДУРАК";
-      if (bet > 0) sub = `Списано: -${(bet * (s.player_ids.length - 1)).toFixed(2)} ${s.currency ?? ""}`;
-    } else {
-      emoji = "🏆";
-      title = `ДУРАК: ${s.player_names[s.loser_id]}`;
-    }
+  if (!s.loser_id) {
+    emoji = "🏁";
+    title = "Игра завершена";
+  } else if (s.loser_id === myId) {
+    emoji = "🤡";
+    title = "Вы — дурак";
+    if (bet > 0) sub = `Списано: -${(bet * (s.player_ids.length - 1)).toFixed(2)} ${s.currency ?? ""}`;
+  } else {
+    emoji = "🏆";
+    title = `Дурак: ${s.player_names[s.loser_id]}`;
+    if (bet > 0 && myId && s.winners.includes(myId)) sub = `+${bet.toFixed(2)} ${s.currency ?? ""}`;
   }
 
   const ov = document.createElement("div");
   ov.className = "overlay";
   ov.innerHTML = `<div class="rbox"><span class="remi">${emoji}</span><div class="rtit">${title}</div><div class="rsub">${sub}</div></div>`;
-  ov.addEventListener("click", () => tg?.close());
+  ov.addEventListener("click", () => tg?.close?.());
   document.body.appendChild(ov);
-  setTimeout(() => tg?.close(), 7000);
+  setTimeout(() => tg?.close?.(), 7000);
+}
+
+function schedule(ms) {
+  clearTimeout(poll);
+  poll = setTimeout(fetchState, ms);
 }
 
 async function fetchState() {
+  if (!gameId) return;
   try {
     const query = myId ? `?player_id=${encodeURIComponent(myId)}` : "";
     const r = await fetch(`/api/durak/${gameId}${query}`, {
@@ -259,11 +261,6 @@ async function fetchState() {
   } catch {
     schedule(3000);
   }
-}
-
-function schedule(ms) {
-  clearTimeout(poll);
-  poll = setTimeout(fetchState, ms);
 }
 
 function onCard(card) {
@@ -318,7 +315,6 @@ async function sendMove(body) {
         const err = await r.json();
         detail = err?.detail || detail;
       } catch {
-        // ignore parse error
       }
       showNotice(detail);
       if (state) render(state);
@@ -334,8 +330,4 @@ async function sendMove(body) {
   }
 }
 
-if (!gameId) {
-  document.getElementById("sbar").textContent = "Ошибка: не передан game_id";
-} else {
-  fetchState();
-}
+fetchState();

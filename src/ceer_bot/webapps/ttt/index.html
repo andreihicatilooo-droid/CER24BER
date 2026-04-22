@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Крестики-нолики</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="/mini/ttt/styles.css">
+</head>
+<body>
+  <h1>❌⭕ Крестики-нолики</h1>
+
+  <div class="players">
+    <div class="pcard" id="cx">
+      <div class="psym sx">✕</div>
+      <div class="pname" id="nx">—</div>
+      <div class="pbadge bx">X</div>
+    </div>
+    <div class="pcard" id="co">
+      <div class="psym so">◯</div>
+      <div class="pname" id="no">Ожидание...</div>
+      <div class="pbadge bo">O</div>
+    </div>
+  </div>
+
+  <div class="status" id="st">Загрузка...</div>
+  <div class="bet-line" id="bl"></div>
+  <div class="grid" id="gr"></div>
+
+  <script src="/mini/ttt/app.js" defer></script>
+</body>
+</html>
