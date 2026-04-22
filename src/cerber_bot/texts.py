@@ -45,6 +45,7 @@ class MAIN_MENU_TEXT:
     SUPPORT = "🆘 Поддержка"
     WEB_APP = "🌐 Веб-магазин"
     FAQ = "❓ FAQ"
+    TG_ACCOUNTS = "📱 Аккаунты TG"
 
 
 class GIFTAPI_MENU_TEXT:
@@ -1269,3 +1270,35 @@ class FAQ_TEXT:
         "Бот хранит Telegram ID, имя и историю транзакций. "
         "Данные не передаются третьим лицам. Пароли и приватные ключи не запрашиваются и не хранятся."
     )
+
+
+class TG_ACCOUNTS_KEYBOARD_TEXT:
+    """Текст кнопок и элементов UI для раздела Telegram-аккаунтов."""
+    HOME = "Домой"
+    BACK = "Назад"
+    MY_PURCHASES = "📱 Мои аккаунты"
+    COUNTRIES = "Каталог стран"
+    BUY = "Купить"
+    GET_CODE = "✅ Получить код"
+    REFUND = "↩️ Возврат"
+    PAGINATION_PREVIOUS = "◀"
+    PAGINATION_PLACEHOLDER = "·"
+    PAGINATION_NEXT = "▶"
+    
+    @staticmethod
+    def country_card(emoji: str | None, name: str, price: str, available: bool) -> str:
+        """Формат кнопки страны в каталоге."""
+        status = "✅" if available else "❌"
+        emoji_str = emoji if emoji else "🌍"
+        return f"{emoji_str} {name} • {price} {status}"
+    
+    @staticmethod
+    def page_info(page: int, total_pages: int) -> str:
+        """Формат номера страницы."""
+        return f"{page}/{total_pages}"
+    
+    @staticmethod
+    def purchase_card(phone: str | None, country: str, status: str) -> str:
+        """Формат кнопки покупки в списке."""
+        phone_str = phone if phone else "?"
+        return f"#{phone_str} {country} • {status}"
