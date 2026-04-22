@@ -38,12 +38,13 @@ ENV_FILE = ROOT / ".env"
 LOGS = {
     "bot": LOG_DIR / "bot.log",
     "bot_err": LOG_DIR / "bot_error.log",
+    "admin": LOG_DIR / "admin.log",
+    "admin_err": LOG_DIR / "admin_error.log",
     "ceer": LOG_DIR / "ceer.log",
     "ceer_err": LOG_DIR / "ceer_error.log",
     "tunnel": LOG_DIR / "tunnel.log",
     "launcher": LOG_DIR / "launcher.log",
 }
-
 # ── ANSI-утилиты ─────────────────────────────────────────────
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -1109,9 +1110,9 @@ def _start_bot(
     web_enabled: str,
     tunnel_url: str | None,
 ) -> None:
-    """Запускает процесс бота и добавляет его в components/open_files."""
-    cprint("[*] Starting bot...", "cyan")
-    log("Starting bot")
+    """Запускает CERBER Core и, при наличии токена, CERBER Admin."""
+    cprint("[*] Starting CERBER Core...", "cyan")
+    log("Starting CERBER Core")
 
     if web_enabled == "true":
         cprint(f"    Web: http://localhost:{web_port}", "dark_cyan")
@@ -1123,14 +1124,35 @@ def _start_bot(
     open_files.extend([bf, ef])
 
     bot_proc = subprocess.Popen(
-        [str(VENV_PY), "-m", "cerber_bot"],
+        [str(VENV_PY), "-m", "cerber_core"],
         cwd=str(ROOT),
         stdout=bf,
         stderr=ef,
     )
-    components.append(("Bot", bot_proc))
+    components.append(("Core", bot_proc))
     time.sleep(2)
-    log(f"Bot started (PID {bot_proc.pid})")
+    log(f"CERBER Core started (PID {bot_proc.pid})")
+    cprint(f"    CERBER Core PID {bot_proc.pid}", "green")
+
+    admin_token = get_env("ADMIN_BOT_TOKEN")
+    if admin_token:
+        cprint("[*] Starting CERBER Admin...", "cyan")
+        log("Starting CERBER Admin")
+        af = open(LOGS["admin"], "w", encoding="utf-8")
+        aef = open(LOGS["admin_err"], "w", encoding="utf-8")
+        open_files.extend([af, aef])
+        admin_proc = subprocess.Popen(
+            [str(VENV_PY), "-m", "cerber_admin"],
+            cwd=str(ROOT),
+            stdout=af,
+            stderr=aef,
+        )
+        components.append(("Admin", admin_proc))
+        time.sleep(1)
+        log(f"CERBER Admin started (PID {admin_proc.pid})")
+        cprint(f"    CERBER Admin PID {admin_proc.pid}", "green")
+    else:
+        cprint("    CERBER Admin: пропуск (ADMIN_BOT_TOKEN не задан)", "dark_gray")
 
     # ── CEER Bot (опционально) ─────────────────────────────────
     ceer_token = get_env("CEER_BOT_TOKEN")
@@ -1161,11 +1183,11 @@ def _restart_bot(
     web_enabled: str,
     tunnel_url: str | None,
 ) -> None:
-    """Останавливает текущие процессы ботов и запускает новые."""
-    bot_log_paths = {LOGS["bot"], LOGS["bot_err"], LOGS["ceer"], LOGS["ceer_err"]}
+    """Останавливает текущие процессы CERBER/CEER и запускает новые."""
+    bot_log_paths = {LOGS["bot"], LOGS["bot_err"], LOGS["admin"], LOGS["admin_err"], LOGS["ceer"], LOGS["ceer_err"]}
 
-    # Остановить старые процессы ботов (Bot и CEER)
-    bot_entries = [(name, proc) for name, proc in components if name in ("Bot", "CEER")]
+    # Остановить старые процессы приложений (Core, Admin и CEER)
+    bot_entries = [(name, proc) for name, proc in components if name in ("Core", "Admin", "CEER")]
     for name, proc in bot_entries:
         if proc.poll() is None:
             proc.terminate()
@@ -1174,7 +1196,7 @@ def _restart_bot(
             except subprocess.TimeoutExpired:
                 proc.kill()
         components.remove((name, proc))
-        log(f"Bot PID {proc.pid} остановлен для перезапуска")
+        log(f"{name} PID {proc.pid} остановлен для перезапуска")
 
     # Закрыть только лог-файлы бота (не трогать лог туннеля)
     to_close = [

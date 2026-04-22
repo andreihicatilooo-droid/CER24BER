@@ -45,6 +45,8 @@ LOG_DIR.mkdir(exist_ok=True)
 LOGS: dict[str, Path] = {
     "bot":         LOG_DIR / "bot.log",
     "bot_err":     LOG_DIR / "bot_error.log",
+    "admin":       LOG_DIR / "admin.log",
+    "admin_err":   LOG_DIR / "admin_error.log",
     "ceer":        LOG_DIR / "ceer.log",
     "ceer_err":    LOG_DIR / "ceer_error.log",
     "tunnel":      LOG_DIR / "tunnel.log",
@@ -556,6 +558,7 @@ class CerberGUI:
 
         # ── Состояние процессов ────────────────────────────────
         self._bot_proc:         Optional[subprocess.Popen] = None
+        self._admin_proc:       Optional[subprocess.Popen] = None
         self._ceer_proc:        Optional[subprocess.Popen] = None
         self._tunnel_proc:      Optional[subprocess.Popen] = None
         self._ceer_tunnel_proc: Optional[subprocess.Popen] = None
@@ -616,12 +619,17 @@ class CerberGUI:
         status_fr = tk.Frame(hdr, bg=BG_HDR)
         status_fr.pack(side=tk.RIGHT, padx=14)
 
-        self._hdr_bot_var = tk.StringVar(value="○  Bot")
+        self._hdr_bot_var = tk.StringVar(value="○  Core")
+        self._hdr_admin_var = tk.StringVar(value="○  Admin")
         self._hdr_tun_var = tk.StringVar(value="○  Tunnel")
 
         self._hdr_tun_lbl = tk.Label(status_fr, textvariable=self._hdr_tun_var,
                                       fg=TEXT_M, bg=BG_HDR, font=self._f_mono_s)
         self._hdr_tun_lbl.pack(side=tk.RIGHT, padx=10)
+
+        self._hdr_admin_lbl = tk.Label(status_fr, textvariable=self._hdr_admin_var,
+                        fg=TEXT_M, bg=BG_HDR, font=self._f_mono_s)
+        self._hdr_admin_lbl.pack(side=tk.RIGHT, padx=10)
 
         self._hdr_bot_lbl = tk.Label(status_fr, textvariable=self._hdr_bot_var,
                                       fg=TEXT_M, bg=BG_HDR, font=self._f_mono_s)
@@ -765,7 +773,8 @@ class CerberGUI:
         status_fr = tk.Frame(inner, bg=BG_PANEL)
         status_fr.pack(fill=tk.X, padx=10, pady=(4, 8))
 
-        self._sb_bot_var  = tk.StringVar(value="○  Бот: Остановлен")
+        self._sb_bot_var  = tk.StringVar(value="○  Core: Остановлен")
+        self._sb_admin_var = tk.StringVar(value="○  Admin: Остановлен")
         self._sb_ceer_var = tk.StringVar(value="○  CEER: Остановлен")
         self._sb_tun_var  = tk.StringVar(value="○  Туннель: Выкл")
         self._sb_ctun_var = tk.StringVar(value="○  Mini App: Выкл")
@@ -776,6 +785,11 @@ class CerberGUI:
                                      fg=ACCENT_B, bg=BG_PANEL,
                                      font=self._f_mono_s, anchor="w")
         self._sb_bot_lbl.pack(fill=tk.X, pady=1)
+
+        self._sb_admin_lbl = tk.Label(status_fr, textvariable=self._sb_admin_var,
+                           fg=TEXT_M, bg=BG_PANEL,
+                           font=self._f_mono_s, anchor="w")
+        self._sb_admin_lbl.pack(fill=tk.X, pady=1)
 
         self._sb_ceer_lbl = tk.Label(status_fr, textvariable=self._sb_ceer_var,
                                       fg=TEXT_M, bg=BG_PANEL,
@@ -818,6 +832,8 @@ class CerberGUI:
         tabs: list[tuple[str, str]] = [
             ("bot",         "Bot Output"),
             ("bot_err",     "Bot Errors"),
+            ("admin",       "Admin Output"),
+            ("admin_err",   "Admin Errors"),
             ("ceer",        "CEER Output"),
             ("ceer_err",    "CEER Errors"),
             ("tunnel",      "Tunnel"),
@@ -1005,6 +1021,8 @@ class CerberGUI:
         self._tailers = [
             LogTailer(LOGS["bot"],         self._log_q, "bot"),
             LogTailer(LOGS["bot_err"],     self._log_q, "bot_err"),
+            LogTailer(LOGS["admin"],       self._log_q, "admin"),
+            LogTailer(LOGS["admin_err"],   self._log_q, "admin_err"),
             LogTailer(LOGS["ceer"],        self._log_q, "ceer"),
             LogTailer(LOGS["ceer_err"],    self._log_q, "ceer_err"),
             LogTailer(LOGS["tunnel"],      self._log_q, "tunnel"),
@@ -1033,20 +1051,37 @@ class CerberGUI:
     def _update_status(self) -> None:
         # Бот
         if self._bot_proc and self._bot_proc.poll() is None:
-            self._sb_bot_var.set("●  Бот: Запущен")
+            self._sb_bot_var.set("●  Core: Запущен")
             self._sb_bot_lbl.configure(fg=ACCENT_G)
-            self._hdr_bot_var.set("●  Bot")
+            self._hdr_bot_var.set("●  Core")
             self._hdr_bot_lbl.configure(fg=ACCENT_G)
         else:
             if self._bot_proc and self._bot_proc.poll() is not None:
                 code = self._bot_proc.returncode
                 if code != 0:
-                    self._add_log("launcher", f"[!] Бот завершился (код {code})", "err")
+                    self._add_log("launcher", f"[!] CERBER Core завершился (код {code})", "err")
                 self._bot_proc = None
-            self._sb_bot_var.set("○  Бот: Остановлен")
+            self._sb_bot_var.set("○  Core: Остановлен")
             self._sb_bot_lbl.configure(fg=ACCENT_B)
-            self._hdr_bot_var.set("○  Bot")
+            self._hdr_bot_var.set("○  Core")
             self._hdr_bot_lbl.configure(fg=TEXT_M)
+
+        # Admin Bot
+        if self._admin_proc and self._admin_proc.poll() is None:
+            self._sb_admin_var.set("●  Admin: Запущен")
+            self._sb_admin_lbl.configure(fg=ACCENT_G)
+            self._hdr_admin_var.set("●  Admin")
+            self._hdr_admin_lbl.configure(fg=ACCENT_G)
+        else:
+            if self._admin_proc and self._admin_proc.poll() is not None:
+                code = self._admin_proc.returncode
+                if code != 0:
+                    self._add_log("launcher", f"[!] CERBER Admin завершился (код {code})", "err")
+                self._admin_proc = None
+            self._sb_admin_var.set("○  Admin: Остановлен")
+            self._sb_admin_lbl.configure(fg=TEXT_M)
+            self._hdr_admin_var.set("○  Admin")
+            self._hdr_admin_lbl.configure(fg=TEXT_M)
 
         # CEER Bot
         if self._ceer_proc and self._ceer_proc.poll() is None:
@@ -1221,7 +1256,7 @@ class CerberGUI:
 
     def _start_bot(self) -> None:
         if self._bot_proc and self._bot_proc.poll() is None:
-            self._add_log("launcher", "Бот уже запущен", "warn")
+            self._add_log("launcher", "CERBER Core уже запущен", "warn")
             return
         if not VENV_PY.exists():
             self._add_log("launcher", f"[!] .venv не найден: {VENV_PY}", "err")
@@ -1238,29 +1273,54 @@ class CerberGUI:
             out = open(LOGS["bot"],     "a", encoding="utf-8")
             err = open(LOGS["bot_err"], "a", encoding="utf-8")
             self._bot_proc = subprocess.Popen(
-                [str(VENV_PY), "-m", "cerber_bot"],
+                [str(VENV_PY), "-m", "cerber_core"],
                 cwd=str(ROOT), stdout=out, stderr=err,
             )
-            self._add_log("launcher", f"Бот запущен  PID {self._bot_proc.pid}", "ok")
-            launcher_log(f"Bot started PID {self._bot_proc.pid}")
+            self._add_log("launcher", f"CERBER Core запущен  PID {self._bot_proc.pid}", "ok")
+            launcher_log(f"CERBER Core started PID {self._bot_proc.pid}")
+
+            admin_token = get_env("ADMIN_BOT_TOKEN", "")
+            if admin_token:
+                admin_out = open(LOGS["admin"],     "a", encoding="utf-8")
+                admin_err = open(LOGS["admin_err"], "a", encoding="utf-8")
+                self._admin_proc = subprocess.Popen(
+                    [str(VENV_PY), "-m", "cerber_admin"],
+                    cwd=str(ROOT), stdout=admin_out, stderr=admin_err,
+                )
+                self._add_log("launcher", f"CERBER Admin запущен  PID {self._admin_proc.pid}", "ok")
+                launcher_log(f"CERBER Admin started PID {self._admin_proc.pid}")
+            else:
+                self._add_log("launcher", "CERBER Admin: пропуск (ADMIN_BOT_TOKEN не задан)", "gray")
             self._switch_tab("bot")
         except Exception as e:
             self._add_log("launcher", f"Ошибка запуска бота: {e}", "err")
 
     def _stop_bot(self) -> None:
-        if not self._bot_proc or self._bot_proc.poll() is not None:
-            self._add_log("launcher", "Бот не запущен", "gray")
+        if (not self._bot_proc or self._bot_proc.poll() is not None) and (not self._admin_proc or self._admin_proc.poll() is not None):
+            self._add_log("launcher", "CERBER Core/Admin не запущены", "gray")
             self._bot_proc = None
+            self._admin_proc = None
             return
-        pid = self._bot_proc.pid
-        self._bot_proc.terminate()
-        try:
-            self._bot_proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            self._bot_proc.kill()
-        self._add_log("launcher", f"Бот остановлен  PID {pid}", "warn")
-        launcher_log(f"Bot stopped PID {pid}")
-        self._bot_proc = None
+        if self._bot_proc and self._bot_proc.poll() is None:
+            pid = self._bot_proc.pid
+            self._bot_proc.terminate()
+            try:
+                self._bot_proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._bot_proc.kill()
+            self._add_log("launcher", f"CERBER Core остановлен  PID {pid}", "warn")
+            launcher_log(f"CERBER Core stopped PID {pid}")
+            self._bot_proc = None
+        if self._admin_proc and self._admin_proc.poll() is None:
+            admin_pid = self._admin_proc.pid
+            self._admin_proc.terminate()
+            try:
+                self._admin_proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._admin_proc.kill()
+            self._add_log("launcher", f"CERBER Admin остановлен  PID {admin_pid}", "warn")
+            launcher_log(f"CERBER Admin stopped PID {admin_pid}")
+            self._admin_proc = None
 
     def _restart_bot(self) -> None:
         self._add_log("launcher", "Перезапуск бота...", "warn")
@@ -1472,7 +1532,7 @@ class CerberGUI:
     def _on_close(self) -> None:
         for t in self._tailers:
             t.stop()
-        for proc in (self._bot_proc, self._ceer_proc, self._tunnel_proc, self._ceer_tunnel_proc):
+        for proc in (self._bot_proc, self._admin_proc, self._ceer_proc, self._tunnel_proc, self._ceer_tunnel_proc):
             if proc and proc.poll() is None:
                 proc.terminate()
                 try:

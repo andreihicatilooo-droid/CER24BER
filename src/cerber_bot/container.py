@@ -7,12 +7,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import httpx
-
-if TYPE_CHECKING:
-    from aiogram import Bot
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from cerber_bot.config import Settings, load_settings
@@ -22,6 +18,7 @@ from cerber_bot.integrations.nbox_service import NboxService
 from cerber_bot.integrations.nicepay import NicePayClient
 from cerber_bot.integrations.rukassa import RukassaClient
 from cerber_bot.services.deals import DealService
+from cerber_bot.services.admin_events import AdminEventService
 from cerber_bot.services.exchange import ExchangeRateService
 from cerber_bot.services.giftapi import GiftApiService
 from cerber_bot.services.payments import PaymentService
@@ -37,13 +34,12 @@ class AppContainer:
     http_client: httpx.AsyncClient
     nicepay_http_client: httpx.AsyncClient
     exchange_rate_service: ExchangeRateService
+    admin_event_service: AdminEventService
     gift_api_service: GiftApiService
     deal_service: DealService
     payment_service: PaymentService
     store_service: StoreService
     nbox_service: NboxService
-    user_bot: Bot | None = None
-    admin_bot: Bot | None = None
 
     @classmethod
     async def build(cls, settings: Settings | None = None) -> "AppContainer":
@@ -130,6 +126,10 @@ class AppContainer:
             http_client=http_client,
             nicepay_http_client=nicepay_http_client,
             exchange_rate_service=exchange_rate_service,
+            admin_event_service=AdminEventService(
+                session_factory,
+                moderator_ids=resolved_settings.moderator_ids,
+            ),
             gift_api_service=gift_api_service,
             deal_service=deal_service,
             payment_service=payment_service,

@@ -28,12 +28,14 @@ from ceer_bot.games.durak import (
     DurakGame,
     MAX_PLAYERS,
     add_player,
+    can_player_attack,
     check_finished,
     create_game,
     do_attack,
     do_defend,
     do_pass,
     do_take,
+    do_transfer,
     find_active_game_in_chat,
     finish_game_force,
     format_board,
@@ -351,11 +353,7 @@ def build_durak_router(container: AppContainer) -> Router:
         if uid not in game.player_ids:
             await callback.answer(DURAK_TEXT.NOT_A_PLAYER, show_alert=True)
             return
-        if uid != game.player_ids[game.attacker_idx]:
-            await callback.answer(DURAK_TEXT.NOT_YOUR_TURN, show_alert=True)
-            return
-
-        if not do_pass(game):
+        if not do_pass(game, uid):
             await callback.answer(DURAK_TEXT.CARD_INVALID, show_alert=True)
             return
 
@@ -388,18 +386,12 @@ def build_durak_router(container: AppContainer) -> Router:
         if uid not in game.player_ids:
             return   # Не участник — молча игнорируем
 
-        att_pid = game.player_ids[game.attacker_idx]
-        def_pid = game.player_ids[game.defender_idx]
-
-        if game.phase == "attacking" and uid != att_pid:
-            return
-        if game.phase == "defending" and uid != def_pid:
-            return
-
-        if game.phase == "attacking":
-            ok = do_attack(game, card)
+        if can_player_attack(game, uid, card):
+            ok = do_attack(game, uid, card)
+        elif uid == game.player_ids[game.defender_idx]:
+            ok = do_defend(game, card) or do_transfer(game, card)
         else:
-            ok = do_defend(game, card)
+            return
 
         if not ok:
             try:
@@ -614,12 +606,7 @@ def build_durak_router(container: AppContainer) -> Router:
             await callback.answer(DURAK_TEXT.NOT_A_PLAYER, show_alert=True)
             return
 
-        att_pid = game.player_ids[game.attacker_idx]
-        if uid != att_pid:
-            await callback.answer(DURAK_TEXT.NOT_YOUR_TURN, show_alert=True)
-            return
-
-        if not do_attack(game, card):
+        if not do_attack(game, uid, card):
             await callback.answer(DURAK_TEXT.CARD_INVALID, show_alert=True)
             return
 
@@ -669,7 +656,7 @@ def build_durak_router(container: AppContainer) -> Router:
             await callback.answer(DURAK_TEXT.NOT_YOUR_TURN, show_alert=True)
             return
 
-        if not do_defend(game, card):
+        if not (do_defend(game, card) or do_transfer(game, card)):
             await callback.answer(DURAK_TEXT.CARD_INVALID, show_alert=True)
             return
 
@@ -750,12 +737,7 @@ def build_durak_router(container: AppContainer) -> Router:
             await callback.answer(DURAK_TEXT.NOT_A_PLAYER, show_alert=True)
             return
 
-        att_pid = game.player_ids[game.attacker_idx]
-        if uid != att_pid:
-            await callback.answer(DURAK_TEXT.NOT_YOUR_TURN, show_alert=True)
-            return
-
-        if not do_pass(game):
+        if not do_pass(game, uid):
             await callback.answer(DURAK_TEXT.CARD_INVALID, show_alert=True)
             return
 

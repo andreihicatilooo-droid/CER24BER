@@ -830,16 +830,15 @@ async def notify_user_safe(bot, telegram_id: int, text: str, reply_markup: Inlin
 async def notify_moderators_about_deal(bot, container: AppContainer, deal: DealView, *, reason: str) -> None:
     if not container.deal_service.has_moderators:
         return
-    # Если настроен админ-бот — отправляем оповещения через него с админ-клавиатурой
-    if container.admin_bot is not None:
-        from cerber_bot.keyboards.admin import build_admin_deal_keyboard, build_admin_home_keyboard as admin_home
-        admin_markup = build_admin_deal_keyboard(deal.deal_id) if deal.status == "disputed" else admin_home()
-        text = render_moderator_deal_alert(deal, reason)
-        for moderator_id in container.deal_service.moderator_ids:
-            await notify_user_safe(container.admin_bot, moderator_id, text, reply_markup=admin_markup)
+    text = render_moderator_deal_alert(deal, reason)
+    if container.settings.admin_bot_token:
+        await container.admin_event_service.enqueue_deal_alert(
+            text=text,
+            deal_id=deal.deal_id,
+            disputed=deal.status == "disputed",
+        )
         return
     markup = build_moderator_deal_keyboard(deal.deal_id) if deal.status == "disputed" else build_deal_home_keyboard()
-    text = render_moderator_deal_alert(deal, reason)
     for moderator_id in container.deal_service.moderator_ids:
         await notify_user_safe(bot, moderator_id, text, reply_markup=markup)
 
@@ -847,15 +846,13 @@ async def notify_moderators_about_deal(bot, container: AppContainer, deal: DealV
 async def notify_moderators_about_withdrawal(*, bot, container: AppContainer, request: WithdrawalRequestView) -> None:
     if not container.deal_service.has_moderators:
         return
-    # Если настроен админ-бот — отправляем оповещения через него с админ-клавиатурой
-    if container.admin_bot is not None:
-        from cerber_bot.keyboards.admin import build_withdrawals_list_keyboard
-        text = render_moderator_withdrawal_alert(request)
-        markup = build_withdrawals_list_keyboard([request.request_id])
-        for moderator_id in container.deal_service.moderator_ids:
-            await notify_user_safe(container.admin_bot, moderator_id, text, reply_markup=markup)
-        return
     text = render_moderator_withdrawal_alert(request)
+    if container.settings.admin_bot_token:
+        await container.admin_event_service.enqueue_withdrawal_alert(
+            text=text,
+            request_id=request.request_id,
+        )
+        return
     for moderator_id in container.deal_service.moderator_ids:
         await notify_user_safe(bot, moderator_id, text, reply_markup=build_moderator_withdrawal_keyboard(request.request_id))
 

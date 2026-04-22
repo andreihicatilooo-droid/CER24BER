@@ -16,7 +16,7 @@ from decimal import Decimal
 from html import escape
 from pathlib import Path
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.exceptions import AiogramError
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
@@ -247,7 +247,7 @@ async def _broadcast_task(
         logger.warning("Broadcast: не удалось отправить отчёт: %s", exc)
 
 
-def build_admin_router(container: AppContainer) -> Router:
+def build_admin_router(container: AppContainer, *, user_bot: Bot | None = None) -> Router:
     """Фабрика роутера для административного бота."""
     router = Router(name="admin")
 
@@ -349,7 +349,6 @@ def build_admin_router(container: AppContainer) -> Router:
         from cerber_bot.keyboards.deals import build_deal_open_keyboard
         from cerber_bot.handlers.menu import render_moderation_result_notification
 
-        user_bot = container.user_bot
         if user_bot is not None:
             notification = render_moderation_result_notification(result)
             for tid in (result.buyer_telegram_id, result.seller_telegram_id):
@@ -408,7 +407,6 @@ def build_admin_router(container: AppContainer) -> Router:
         from cerber_bot.handlers.menu import render_withdrawal_status_notification
         from cerber_bot.keyboards.deals import build_deal_home_keyboard
 
-        user_bot = container.user_bot
         if user_bot is not None:
             try:
                 await user_bot.send_message(
@@ -524,7 +522,6 @@ def build_admin_router(container: AppContainer) -> Router:
 
         # Ретранслируем через основной бот покупателю и продавцу
         from cerber_bot.keyboards.deals import build_deal_open_keyboard
-        user_bot = container.user_bot
         if user_bot is not None:
             notification = ADMIN_TEXT.CHAT_RELAY_NOTIFICATION.format(deal_id=deal_id, body=escape(body))
             for tid in (buyer_id, seller_id):
@@ -809,14 +806,13 @@ def build_admin_router(container: AppContainer) -> Router:
 
         # Рассылка идёт через основного (пользовательского) бота, т.к.
         # именно с ним у пользователей открыт чат. Admin-бот использовать нельзя.
-        bot = container.user_bot
-        if bot is None:
+        if user_bot is None:
             await callback.answer(ADMIN_TEXT.ACCESS_DENIED, show_alert=True)
             return
 
         reporter_chat_id = callback.from_user.id
         asyncio.create_task(
-            _broadcast_task(bot, telegram_ids, text, reporter_chat_id, reporter_bot=container.admin_bot),
+            _broadcast_task(user_bot, telegram_ids, text, reporter_chat_id, reporter_bot=callback.bot),
             name=f"broadcast_{reporter_chat_id}",
         )
 

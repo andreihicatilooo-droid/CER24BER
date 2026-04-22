@@ -1,16 +1,16 @@
 """Логика карточной игры «Дурак» для 2–3 игроков (CEER Bot).
 
-Правила (упрощённые для чат-игры):
-  - Колода 36 карт (6–Туз × 4 масти).
-  - Козырь = масть нижней карты колоды.
-  - Атакует владелец наименьшего козыря (если нет козырей — первый по порядку).
-  - Карты открытые (все видят руки всех игроков).
-  - За одну атаку кладётся ОДНА карта; после защиты атакующий может добавить
-    ещё карту с совпадающим значением или закончить атаку.
-  - После удачной защиты: защитник становится атакующим.
-  - После взятия: атакует следующий за защитником по кругу.
-  - Игроки добирают карты до 6 после каждого раунда.
-  - Игра заканчивается когда остаётся один игрок с картами — это Дурак.
+Правила:
+    - Колода 36 карт (6–Туз × 4 масти).
+    - Козырь = масть нижней карты колоды.
+    - Атакует владелец наименьшего козыря (если нет козырей — первый по порядку).
+    - Карты открытые (все видят руки всех игроков).
+    - Подкидывать могут все активные игроки кроме текущего защитника.
+    - Переводной режим разрешён до первого успешного отбоя в раунде.
+    - После удачной защиты: защитник становится атакующим.
+    - После взятия: атакует следующий за защитником по кругу.
+    - Игроки добирают карты до 6 после каждого раунда.
+    - Игра заканчивается когда остаётся один игрок с картами — это Дурак.
 """
 
 from __future__ import annotations
@@ -114,6 +114,7 @@ class DurakGame:
 
     attacker_idx: int  = 0
     defender_idx: int  = 1
+    round_limit: int   = HAND_SIZE
 
     # joining / attacking / defending / finished
     phase:        str  = "joining"
@@ -206,12 +207,84 @@ def start_game(game: DurakGame) -> None:
     game.attacker_idx = best_idx
     game.defender_idx = (best_idx + 1) % len(game.player_ids)
     game.phase = "attacking"
+    _set_round_limit(game)
 
 
 # ─── Внутренние утилиты ───────────────────────────────────────────────────────
 
 def _active(game: DurakGame) -> list[int]:
     return [pid for pid in game.player_ids if pid not in game.winners]
+
+
+def _set_round_limit(game: DurakGame) -> None:
+    if len(game.player_ids) < 2:
+        game.round_limit = 0
+        return
+    defender_id = game.player_ids[game.defender_idx]
+    game.round_limit = min(HAND_SIZE, len(game.hands.get(defender_id, [])))
+
+
+def _all_beaten(game: DurakGame) -> bool:
+    return bool(game.table) and all(dfn is not None for _, dfn in game.table)
+
+
+def _uncovered_count(game: DurakGame) -> int:
+    return sum(1 for _, dfn in game.table if dfn is None)
+
+
+def _is_attacker(game: DurakGame, pid: int) -> bool:
+    return pid in game.player_ids and pid not in game.winners and pid != game.player_ids[game.defender_idx]
+
+
+def can_player_attack(game: DurakGame, pid: int, card: str | None = None) -> bool:
+    if game.finished or game.phase not in ("attacking", "defending"):
+        return False
+    if not _is_attacker(game, pid):
+        return False
+    if len(game.table) >= game.round_limit:
+        return False
+    if not game.table:
+        return pid == game.player_ids[game.attacker_idx]
+    if card is None:
+        return True
+    return can_add_to_table(card, game.table)
+
+
+def can_player_pass(game: DurakGame, pid: int) -> bool:
+    return _is_attacker(game, pid) and _all_beaten(game)
+
+
+def can_player_take(game: DurakGame, pid: int) -> bool:
+    if game.finished or not game.table or len(game.player_ids) < 2:
+        return False
+    return pid == game.player_ids[game.defender_idx]
+
+
+def can_player_defend(game: DurakGame, pid: int) -> bool:
+    if game.finished or game.phase != "defending" or not game.table or len(game.player_ids) < 2:
+        return False
+    return pid == game.player_ids[game.defender_idx] and _uncovered_count(game) > 0
+
+
+def can_transfer(game: DurakGame, card: str) -> bool:
+    if game.finished or game.phase != "defending" or not game.table:
+        return False
+    defender_id = game.player_ids[game.defender_idx]
+    if card not in game.hands.get(defender_id, []):
+        return False
+    if any(dfn is not None for _, dfn in game.table):
+        return False
+    first_value = game.table[0][0][:-1]
+    if any(atk[:-1] != first_value for atk, _ in game.table):
+        return False
+    if card[:-1] != first_value:
+        return False
+    next_defender_idx = _next_after(game, game.defender_idx)
+    if next_defender_idx == game.defender_idx:
+        return False
+    next_defender_id = game.player_ids[next_defender_idx]
+    next_limit = min(HAND_SIZE, len(game.hands.get(next_defender_id, [])))
+    return len(game.table) + 1 <= next_limit
 
 
 def _draw_cards(game: DurakGame, skip_pid: int | None = None) -> None:
@@ -260,6 +333,7 @@ def _advance_after_defense(game: DurakGame) -> None:
     new_att = game.player_ids.index(def_id)
     game.attacker_idx = new_att
     game.defender_idx = _next_after(game, new_att)
+    _set_round_limit(game)
 
 
 def _advance_after_take(game: DurakGame) -> None:
@@ -267,17 +341,15 @@ def _advance_after_take(game: DurakGame) -> None:
     new_att = _next_after(game, game.defender_idx)
     game.attacker_idx = new_att
     game.defender_idx = _next_after(game, new_att)
+    _set_round_limit(game)
 
 
 # ─── Игровые действия ────────────────────────────────────────────────────────
 
-def do_attack(game: DurakGame, card: str) -> bool:
-    if game.phase != "attacking":
+def do_attack(game: DurakGame, pid: int, card: str) -> bool:
+    if not can_player_attack(game, pid, card):
         return False
-    pid = game.player_ids[game.attacker_idx]
     if card not in game.hands[pid]:
-        return False
-    if game.table and not can_add_to_table(card, game.table):
         return False
     game.hands[pid].remove(card)
     game.table.append((card, None))
@@ -285,8 +357,21 @@ def do_attack(game: DurakGame, card: str) -> bool:
     return True
 
 
+def do_transfer(game: DurakGame, card: str) -> bool:
+    if not can_transfer(game, card):
+        return False
+    defender_id = game.player_ids[game.defender_idx]
+    game.hands[defender_id].remove(card)
+    game.table.append((card, None))
+    game.attacker_idx = game.defender_idx
+    game.defender_idx = _next_after(game, game.defender_idx)
+    _set_round_limit(game)
+    game.phase = "defending"
+    return True
+
+
 def do_defend(game: DurakGame, card: str) -> bool:
-    if game.phase != "defending":
+    if not can_player_defend(game, game.player_ids[game.defender_idx]):
         return False
     pid = game.player_ids[game.defender_idx]
     if card not in game.hands[pid]:
@@ -298,7 +383,7 @@ def do_defend(game: DurakGame, card: str) -> bool:
             game.hands[pid].remove(card)
             game.table[i] = (atk, card)
             # Если все карты побиты — атакующий может добавить ещё или пасовать
-            if all(d is not None for _, d in game.table):
+            if _all_beaten(game):
                 game.phase = "attacking"
             return True
     return False
@@ -317,12 +402,12 @@ def do_take(game: DurakGame) -> None:
     game.phase = "attacking"
 
 
-def do_pass(game: DurakGame) -> bool:
-    """Атакующий заканчивает атаку — все карты в отбой."""
-    if game.phase != "attacking" or not game.table:
+def do_pass(game: DurakGame, pid: int | None = None) -> bool:
+    """Любой атакующий заканчивает раунд, если все карты отбиты."""
+    if pid is not None and not can_player_pass(game, pid):
         return False
-    if any(dfn is None for _, dfn in game.table):
-        return False    # Ещё есть незащищённые карты
+    if not _all_beaten(game):
+        return False
     for atk, dfn in game.table:
         game.discard.append(atk)
         if dfn:
@@ -399,11 +484,14 @@ def format_board(game: DurakGame) -> str:
     # Подсказка хода и формат ввода
     if game.phase == "attacking":
         att_name = game.player_names.get(game.player_ids[game.attacker_idx], "?")
-        action = "добавить карту или нажмите ✅ Закончить" if game.table else "введите карту в чат"
+        if game.table:
+            action = "подкинуть карту по рангу или нажать ✅ Закончить"
+        else:
+            action = "введите карту в чат"
         hint = f"🎯 <b>{att_name}</b> атакует — {action}"
     elif game.phase == "defending":
         def_name = game.player_names.get(game.player_ids[game.defender_idx], "?")
-        hint = f"🎯 <b>{def_name}</b> защищается — введите карту или нажмите 🤚 Взять"
+        hint = f"🎯 <b>{def_name}</b> защищается — отбивайтесь, переводите картой того же ранга или берите"
     else:
         hint = ""
 

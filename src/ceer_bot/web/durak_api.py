@@ -15,19 +15,25 @@ import logging
 from typing import TYPE_CHECKING
 from urllib.parse import unquote
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from ceer_bot.games.durak import (
     DurakGame,
     SUITS,
+  can_player_attack,
+  can_player_defend,
+  can_player_pass,
+  can_player_take,
+  can_transfer,
     card_display,
     check_finished,
     do_attack,
     do_defend,
     do_pass,
     do_take,
+  do_transfer,
     get_game,
 )
 from ceer_bot.keyboards.game_menu import build_durak_board
@@ -48,285 +54,494 @@ _DURAK_HTML = """\
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Дурак</title>
+<title>Дурак 🃏</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{
-  --bg:var(--tg-theme-bg-color,#18181b);
-  --bg2:var(--tg-theme-secondary-bg-color,#27272a);
-  --txt:var(--tg-theme-text-color,#fafafa);
-  --hint:var(--tg-theme-hint-color,#71717a);
+  --bg:var(--tg-theme-bg-color,#0f172a);
+  --bg2:var(--tg-theme-secondary-bg-color,#1e293b);
+  --txt:var(--tg-theme-text-color,#f1f5f9);
+  --hint:var(--tg-theme-hint-color,#64748b);
   --btn:var(--tg-theme-button-color,#6366f1);
-  --red:#f43f5e; --blk:#94a3b8;
-  --trump:#fbbf24;
+  --red:#f43f5e;--blk:#1e293b;
+  --trump:#f59e0b;--green:#10b981;
+  --felt:#166534;--felt2:#14532d;
 }
 html,body{height:100%;background:var(--bg);color:var(--txt);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  overscroll-behavior:none}
-body{display:flex;flex-direction:column;align-items:center;padding:8px 8px 20px}
-h1{font-size:18px;font-weight:700;margin-bottom:10px;opacity:.9}
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  overscroll-behavior:none;overflow:hidden}
+body{display:flex;flex-direction:column;height:100vh;height:100dvh}
 
-/* Статус-строка */
-.status{font-size:14px;font-weight:600;min-height:20px;margin-bottom:4px;text-align:center}
-.bet-line{font-size:12px;color:var(--hint);margin-bottom:10px;min-height:14px}
+/* Header */
+.hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px 6px;flex-shrink:0}
+.gtitle{font-size:16px;font-weight:800;letter-spacing:-.3px}
+.chips{display:flex;gap:6px}
+.chip{background:var(--bg2);border-radius:20px;padding:4px 10px;
+  font-size:12px;font-weight:700;display:flex;align-items:center;gap:4px}
+.chip-trump{border:1.5px solid var(--trump)}
 
-/* Козырь + колода */
-.info-bar{display:flex;gap:10px;margin-bottom:10px;width:100%;max-width:400px}
-.info-chip{background:var(--bg2);border-radius:10px;padding:6px 12px;
-  font-size:13px;font-weight:600;display:flex;align-items:center;gap:5px}
-.trump-sym{font-size:18px;line-height:1}
-.red{color:var(--red)}.blk{color:var(--blk)}
+/* Status */
+.sbar{text-align:center;padding:3px 14px;font-size:13px;font-weight:600;
+  min-height:22px;flex-shrink:0;transition:color .2s}
+.sbar.myturn{color:var(--btn)}
+.sbar.wait{color:var(--hint)}
 
-/* Игроки */
-.players{display:flex;flex-direction:column;gap:6px;width:100%;max-width:400px;margin-bottom:10px}
-.player{background:var(--bg2);border-radius:12px;padding:8px 12px;
-  display:flex;align-items:center;gap:8px;
-  border:2px solid transparent;transition:border-color .2s}
-.player.active-atk{border-color:#f59e0b}
-.player.active-def{border-color:#38bdf8}
-.pname{font-size:14px;font-weight:600;flex:1}
-.pcnt{font-size:12px;color:var(--hint)}
-.picon{font-size:18px;line-height:1;width:24px;text-align:center}
-.pout{opacity:.4}
+/* Players bar */
+.pbar{display:flex;gap:6px;padding:4px 12px;flex-shrink:0;overflow-x:auto;
+  scrollbar-width:none}
+.pbar::-webkit-scrollbar{display:none}
+.pchip{background:var(--bg2);border-radius:20px;padding:5px 10px;
+  font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;
+  border:2px solid transparent;transition:border-color .2s;flex-shrink:0}
+.pchip.atk{border-color:var(--trump)}
+.pchip.def{border-color:#38bdf8}
+.pchip.out{opacity:.35}
+.pchip .pn{font-weight:700;max-width:70px;overflow:hidden;text-overflow:ellipsis}
+.pchip .pc{color:var(--hint)}
 
-/* Стол */
-.table-wrap{width:100%;max-width:400px;margin-bottom:10px}
-.table-label{font-size:11px;color:var(--hint);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
-.table-cards{display:flex;flex-wrap:wrap;gap:6px;min-height:42px;
-  background:var(--bg2);border-radius:12px;padding:8px}
-.tpair{display:flex;align-items:center;gap:3px}
-.tcard{font-size:14px;font-weight:700;padding:4px 8px;border-radius:8px;background:#1e293b}
-.tcard.red{color:var(--red)}.tcard.blk{color:var(--blk)}
-.tcard.covered{background:#14532d;color:#86efac}
-.tarrow{color:var(--hint);font-size:12px}
-.tempty{color:var(--hint);font-size:13px;align-self:center}
+/* Table — green felt */
+.tarea{flex:1;background:var(--felt);border-radius:18px;
+  margin:5px 10px;padding:10px 10px 6px;
+  display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start;
+  overflow:hidden;position:relative;min-height:100px}
+.tempty{position:absolute;inset:0;display:flex;align-items:center;
+  justify-content:center;color:rgba(255,255,255,.2);font-size:13px;
+  font-weight:600;pointer-events:none}
+.tpair{display:flex;flex-direction:column;align-items:center;gap:3px}
 
-/* Моя рука */
-.hand-wrap{width:100%;max-width:400px;margin-bottom:10px}
-.hand-label{font-size:11px;color:var(--hint);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
-.hand-cards{display:flex;flex-wrap:wrap;gap:6px}
-.hcard{font-size:15px;font-weight:700;padding:8px 12px;border-radius:12px;
-  background:var(--bg2);cursor:pointer;border:2px solid transparent;
-  transition:transform .1s,border-color .15s,background .15s;user-select:none}
-.hcard.red{color:var(--red)}.hcard.blk{color:var(--blk)}
-.hcard.trump{box-shadow:0 0 0 2px var(--trump);border-color:var(--trump)!important}
-.hcard.my-turn:hover{background:#1e293b;transform:translateY(-4px)}
-.hcard.my-turn:active{transform:translateY(0) scale(.95)}
-.hcard.selected{border-color:var(--btn)!important;background:#1e1b4b!important;transform:translateY(-6px)}
+/* Card */
+.card{width:46px;height:66px;border-radius:6px;background:#fff;
+  border:1px solid #cbd5e1;display:flex;flex-direction:column;
+  padding:3px 4px;position:relative;cursor:pointer;user-select:none;
+  flex-shrink:0;transition:transform .15s,box-shadow .15s;
+  box-shadow:0 2px 4px rgba(0,0,0,.35)}
+.card .vt{font-size:12px;font-weight:900;line-height:1}
+.card .st{font-size:9px;line-height:1;margin-top:1px}
+.card .sc{position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);font-size:24px;line-height:1;opacity:.85}
+.card .vb{position:absolute;bottom:3px;right:4px;
+  font-size:12px;font-weight:900;transform:rotate(180deg);line-height:1}
+.card.red{color:var(--red)}
+.card.blk{color:#1a1a2e}
+.card.trump-c{box-shadow:0 0 0 2px var(--trump),0 3px 8px rgba(0,0,0,.4)}
+.card.cov{background:#dcfce7;border-color:#86efac}
+.card.cov.red{color:#dc2626}
+.card.cov.blk{color:#166534}
 
-/* Кнопки действий */
-.actions{display:flex;gap:8px;width:100%;max-width:400px;margin-bottom:10px}
-.action-btn{flex:1;padding:10px;border-radius:12px;border:none;
-  font-size:14px;font-weight:600;cursor:pointer;
-  transition:opacity .15s,transform .1s}
-.action-btn:active{transform:scale(.96)}
-.btn-pass{background:#16a34a;color:#fff}
-.btn-take{background:#dc2626;color:#fff}
-.btn-beat{background:var(--btn);color:#fff}
-.action-btn:disabled{opacity:.35;cursor:default}
+/* Slot (куда положить карту защиты) */
+.tslot{width:46px;height:66px;border-radius:6px;
+  border:2px dashed rgba(255,255,255,.25);flex-shrink:0}
 
-/* Оверлей результата */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);
+/* Hand */
+.harea{flex-shrink:0;padding:5px 10px 4px}
+.hlbl{font-size:10px;color:var(--hint);text-transform:uppercase;
+  letter-spacing:.5px;margin-bottom:5px}
+.hcards{display:flex;gap:5px;overflow-x:auto;padding:4px 0 10px;
+  scrollbar-width:none}
+.hcards::-webkit-scrollbar{display:none}
+.hcards .card.act:hover{transform:translateY(-7px);
+  box-shadow:0 10px 20px rgba(0,0,0,.45)}
+.hcards .card.act:active{transform:translateY(-3px) scale(.97)}
+.hcards .card.sel{
+  transform:translateY(-12px)!important;
+  box-shadow:0 0 0 3px var(--btn),0 12px 24px rgba(0,0,0,.5)!important}
+
+/* Actions */
+.acts{display:flex;gap:8px;padding:0 10px 14px;flex-shrink:0}
+.abtn{flex:1;padding:12px;border-radius:12px;border:none;
+  font-size:13px;font-weight:700;cursor:pointer;
+  transition:opacity .15s,transform .1s;letter-spacing:.2px}
+.abtn:active{transform:scale(.96)}
+.abtn:disabled{opacity:.28;cursor:default;pointer-events:none}
+.abtn.play{background:var(--btn);color:#fff}
+.abtn.pass{background:var(--green);color:#fff}
+.abtn.take{background:#dc2626;color:#fff}
+.acthint{padding:0 12px 8px;color:var(--hint);font-size:12px;font-weight:600;flex-shrink:0}
+
+/* Notice */
+.notice{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(20px);
+  background:rgba(15,23,42,.94);color:#fff;padding:10px 14px;border-radius:14px;
+  font-size:13px;font-weight:700;box-shadow:0 12px 30px rgba(0,0,0,.35);
+  opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:120;
+  max-width:calc(100vw - 24px);text-align:center}
+.notice.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Overlay result */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);
   display:flex;align-items:center;justify-content:center;
-  animation:fadein .3s;z-index:10}
-@keyframes fadein{from{opacity:0}to{opacity:1}}
-.rbox{background:var(--bg);border-radius:24px;padding:36px 40px;
-  text-align:center;max-width:280px;animation:scalein .3s cubic-bezier(.34,1.56,.64,1)}
-@keyframes scalein{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
-.remoji{font-size:60px;margin-bottom:14px;display:block}
-.rtitle{font-size:22px;font-weight:800;margin-bottom:6px}
+  animation:fi .3s;z-index:100}
+@keyframes fi{from{opacity:0}to{opacity:1}}
+.rbox{background:var(--bg);border-radius:24px;padding:40px 36px;
+  text-align:center;max-width:280px;
+  animation:pi .35s cubic-bezier(.34,1.56,.64,1)}
+@keyframes pi{from{transform:scale(.65);opacity:0}to{transform:scale(1);opacity:1}}
+.remi{font-size:64px;display:block;margin-bottom:14px}
+.rtit{font-size:22px;font-weight:800;margin-bottom:6px}
 .rsub{font-size:14px;color:var(--hint)}
+
+/* Waiting overlay */
+.woverlay{position:fixed;inset:0;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:18px;z-index:80}
+.wtitle{font-size:22px;font-weight:800}
+.wsub{font-size:14px;color:var(--hint);text-align:center;max-width:240px}
+.wplayers{background:var(--bg2);border-radius:16px;padding:14px 22px;
+  min-width:200px}
+.wrow{display:flex;align-items:center;gap:8px;padding:5px 0;
+  font-size:14px;font-weight:600}
+.spin{width:36px;height:36px;border:3px solid var(--bg2);
+  border-top-color:var(--btn);border-radius:50%;
+  animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
-<h1>🃏 Дурак</h1>
-<div class="status" id="st">Загрузка...</div>
-<div class="bet-line" id="bl"></div>
-<div class="info-bar" id="ib"></div>
-<div class="players" id="pl"></div>
-<div class="table-wrap">
-  <div class="table-label">Стол</div>
-  <div class="table-cards" id="tbl"></div>
+
+<div class="hdr">
+  <span class="gtitle">🃏 Дурак</span>
+  <div class="chips" id="chips"></div>
 </div>
-<div class="hand-wrap" id="hwrap" style="display:none">
-  <div class="hand-label">Ваши карты</div>
-  <div class="hand-cards" id="hand"></div>
+<div class="sbar" id="sbar">Загрузка...</div>
+<div class="pbar" id="pbar"></div>
+<div class="tarea" id="tarea">
+  <div class="tempty" id="tempty">Стол пуст</div>
 </div>
-<div class="actions" id="acts" style="display:none">
-  <button class="action-btn btn-pass" id="btn-pass" onclick="onPass()">✅ Закончить атаку</button>
-  <button class="action-btn btn-take" id="btn-take" onclick="onTake()">🤚 Взять карты</button>
+<div class="harea" id="harea" style="display:none">
+  <div class="hlbl">Ваши карты</div>
+  <div class="hcards" id="hcards"></div>
 </div>
+<div class="acthint" id="acthint" style="display:none"></div>
+<div class="acts" id="acts" style="display:none">
+  <button class="abtn play" id="btn-play" onclick="onPlaySelected()">🃏 Сходить</button>
+  <button class="abtn pass" id="btn-pass" onclick="onPass()">✅ Закончить атаку</button>
+  <button class="abtn take" id="btn-take" onclick="onTake()">🤚 Взять карты</button>
+</div>
+<div class="notice" id="notice"></div>
 
 <script>
-const tg = window.Telegram.WebApp;
-tg.ready(); tg.expand();
+const tg = window.Telegram?.WebApp;
+if(tg){tg.ready();tg.expand();}
 
-const gameId  = location.pathname.split('/').filter(Boolean).pop();
-const myId    = tg.initDataUnsafe?.user?.id ?? null;
-const initData = tg.initData;
+const gameId = location.pathname.split('/').filter(Boolean).pop();
+const myId   = tg?.initDataUnsafe?.user?.id ?? null;
+const initData = tg?.initData ?? '';
 
-let state = null, poll = null, selected = null;
+let state=null, poll=null, selected=null, sending=false, noticeTimer=null;
 
-const RED_SUITS = new Set(['♥','♦']);
+const RED = new Set(['♥','♦']);
+const isRed = c => RED.has(c.slice(-1));
 
-function suitClass(card){ return RED_SUITS.has(card.slice(-1)) ? 'red' : 'blk'; }
-
-/* ── Запрос состояния ── */
-async function fetch_state(){
-  try{
-    const r = await fetch(`/api/durak/${gameId}`);
-    if(!r.ok) return;
-    const s = await r.json();
-    if(!state || JSON.stringify(s) !== JSON.stringify(state)){ state=s; render(s); }
-    if(!s.finished) poll = setTimeout(fetch_state, 1500);
-  } catch(e){ poll = setTimeout(fetch_state, 3000); }
+/* ── Рендер карты ── */
+function cardEl(disp, {trump=false,covered=false,clickable=false,sel=false}={}){
+  const suit = disp.slice(-1);
+  const val  = disp.slice(0,-1);
+  const col  = isRed(suit) ? 'red' : 'blk';
+  const cls  = [
+    'card',col,
+    trump   ? 'trump-c' : '',
+    covered ? 'cov'     : '',
+    sel     ? 'sel'     : '',
+    clickable ? 'act'   : '',
+  ].filter(Boolean).join(' ');
+  return `<div class="${cls}" onclick="onCard('${disp}')">
+    <div class="vt">${val}</div><div class="st">${suit}</div>
+    <div class="sc">${suit}</div>
+    <div class="vb">${val}</div>
+  </div>`;
 }
 
-/* ── Рендер ── */
-function render(s){
-  const isMyTurn = (s.phase==='attacking' && s.attacker_id===myId) ||
-                   (s.phase==='defending' && s.defender_id===myId);
+function showNotice(text){
+  const el = document.getElementById('notice');
+  if(!el) return;
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
 
-  /* Статус */
-  const st = document.getElementById('st');
-  if(s.finished){ st.textContent = s.loser_id ? `🤡 ДУРАК: ${s.player_names[s.loser_id]}!` : 'Игра завершена'; }
-  else if(s.phase==='joining'){ st.textContent = 'Ожидание игроков...'; }
-  else if(isMyTurn){ st.textContent = s.phase==='attacking' ? '⚔️ Ваш ход — атакуйте!' : '🛡 Ваш ход — защищайтесь!'; }
-  else {
+function selectedAction(){
+  if(!state) return null;
+  const actions = state.allowed_actions || {};
+  if(actions.attack) return 'attack';
+  if(actions.defend) return 'defend';
+  return null;
+}
+
+function updateMainButton(s, selectedCard){
+  if(!tg?.MainButton) return;
+  const actions = s?.allowed_actions || {};
+  const action = actions.attack ? 'attack' : (actions.defend ? 'defend' : null);
+  if(action && selectedCard && !sending){
+    tg.MainButton.setText(action==='attack' ? 'Сходить картой' : 'Отбиться картой');
+    tg.MainButton.show();
+    tg.MainButton.enable();
+  } else {
+    tg.MainButton.hide();
+  }
+}
+
+if(tg?.MainButton){
+  tg.MainButton.onClick(() => onPlaySelected());
+}
+
+/* ── Основной рендер ── */
+function render(s){
+  const actions = s.allowed_actions || {};
+  const canAttack = !!actions.attack;
+  const canDefend = !!actions.defend;
+  const canTake = !!actions.take;
+  const canPass = !!actions.pass;
+  const canTransfer = !!actions.transfer;
+  const isMyTurn  = canAttack || canDefend || canTake || canPass;
+  const amI       = myId && s.player_ids.includes(myId);
+
+  // Waiting overlay
+  let wov = document.getElementById('woverlay');
+  if(s.phase==='joining'){
+    if(!wov){
+      wov = document.createElement('div');
+      wov.id='woverlay'; wov.className='woverlay';
+      document.body.appendChild(wov);
+    }
+    let rows='';
+    for(const pid of s.player_ids){
+      rows+=`<div class="wrow"><span>👤</span><span>${s.player_names[pid]??'?'}</span></div>`;
+    }
+    wov.innerHTML=`<div class="spin"></div>
+      <div class="wtitle">🃏 Дурак</div>
+      <div class="wsub">Ожидаем игроков…</div>
+      <div class="wplayers">${rows}</div>`;
+    return;
+  } else if(wov){ wov.remove(); }
+
+  // Status bar
+  const sb = document.getElementById('sbar');
+  sb.className = 'sbar';
+  if(s.finished){
+    sb.textContent = s.loser_id ? `🤡 ДУРАК: ${s.player_names[s.loser_id]}!` : '🏁 Игра завершена';
+  } else if(canDefend){
+    sb.textContent = canTransfer
+      ? '🛡 Ваш ход — отбейте карту или переведите тем же рангом'
+      : '🛡 Ваш ход — отбейте карту или возьмите';
+    sb.classList.add('myturn');
+  } else if(canAttack && s.table.length){
+    sb.textContent = canPass
+      ? '⚔️ Можно подкинуть карту или завершить атаку'
+      : '⚔️ Можно подкинуть карту того же ранга';
+    sb.classList.add('myturn');
+  } else if(canAttack){
+    sb.textContent = '⚔️ Ваш ход — выберите карту для атаки';
+    sb.classList.add('myturn');
+  } else {
     const tid = s.phase==='attacking' ? s.attacker_id : s.defender_id;
-    const tname = s.player_names[tid] ?? '?';
-    st.textContent = s.phase==='attacking' ? `⚔️ Атакует ${tname}` : `🛡 Защищается ${tname}`;
+    sb.textContent = s.phase==='attacking'
+      ? `⚔️ Атакует ${s.player_names[tid]??'?'}…`
+      : `🛡 Защищается ${s.player_names[tid]??'?'}…`;
+    sb.classList.add('wait');
   }
 
-  /* Ставка */
-  const bet = parseFloat(s.bet||0);
-  document.getElementById('bl').textContent = bet>0 ? `Ставка: ${bet.toFixed(2)} ${s.currency??''}` : '';
+  // Козырь + колода
+  const ts = s.trump_sym??'?';
+  const tc = isRed(ts) ? 'var(--red)' : 'var(--txt)';
+  document.getElementById('chips').innerHTML=
+    `<div class="chip chip-trump"><span style="color:${tc};font-size:15px">${ts}</span> Козырь</div>
+     <div class="chip">🗃 ${s.deck_count}</div>`;
 
-  /* Козырь + колода */
-  const sym = s.trump_sym||'?';
-  const isRed = RED_SUITS.has(sym);
-  document.getElementById('ib').innerHTML = `
-    <div class="info-chip">🃏 Козырь: <span class="trump-sym ${isRed?'red':'blk'}">${sym}</span></div>
-    <div class="info-chip">🗃 Колода: <b>${s.deck_count}</b></div>`;
-
-  /* Игроки */
-  const pl = document.getElementById('pl');
-  pl.innerHTML = '';
+  // Players bar
+  const pb=document.getElementById('pbar'); pb.innerHTML='';
   for(const pid of s.player_ids){
-    const name = s.player_names[pid]??'?';
-    const cnt  = s.hand_counts[pid]??0;
-    const out  = s.winners.includes(pid);
-    let icon = '👤', cls = '';
-    if(out){ icon='✅'; cls='pout'; }
-    else if(pid===s.attacker_id && !s.finished){ icon='⚔️'; cls='active-atk'; }
-    else if(pid===s.defender_id && !s.finished){ icon='🛡'; cls='active-def'; }
-    pl.innerHTML += `<div class="player ${cls}">
-      <div class="picon">${icon}</div>
-      <div class="pname">${name}</div>
-      <div class="pcnt">${out?'вышел':cnt+' карт'}</div>
+    const nm = s.player_names[pid]??'?';
+    const cn = s.hand_counts[pid]??0;
+    const out= s.winners.includes(pid);
+    let cls='pchip', ico='👤';
+    if(out){cls+=' out';ico='✅';}
+    else if((s.attackers||[]).includes(pid)&&!s.finished){cls+=' atk';ico='⚔️';}
+    else if(pid===s.defender_id&&!s.finished){cls+=' def';ico='🛡';}
+    if(pid===myId) ico='🫵';
+    pb.innerHTML+=`<div class="${cls}">
+      <span>${ico}</span>
+      <span class="pn">${nm}</span>
+      <span class="pc">${out?'вышел':`${cn}🃏`}</span>
     </div>`;
   }
 
-  /* Стол */
-  const tbl = document.getElementById('tbl');
-  tbl.innerHTML = '';
-  if(!s.table.length){ tbl.innerHTML='<div class="tempty">— пусто —</div>'; }
-  else {
+  // Стол
+  const ta=document.getElementById('tarea');
+  const te=document.getElementById('tempty');
+  ta.querySelectorAll('.tpair').forEach(e=>e.remove());
+  if(!s.table||!s.table.length){
+    te.style.display='flex';
+  } else {
+    te.style.display='none';
     for(const [atk,dfn] of s.table){
-      const ac=suitClass(atk), dc=dfn?suitClass(dfn):'';
-      tbl.innerHTML += `<div class="tpair">
-        <span class="tcard ${ac}">${atk}</span>
-        <span class="tarrow">→</span>
-        ${dfn ? `<span class="tcard covered ${dc}">${dfn}</span>` : '<span class="tcard" style="color:var(--hint)">❓</span>'}
-      </div>`;
+      const atkT=atk.slice(-1)===s.trump_sym;
+      const dfnT=dfn&&dfn.slice(-1)===s.trump_sym;
+      const pair=document.createElement('div');
+      pair.className='tpair';
+      pair.innerHTML=cardEl(atk,{trump:atkT})
+        +(dfn?cardEl(dfn,{trump:dfnT,covered:true}):'<div class="tslot"></div>');
+      ta.appendChild(pair);
     }
   }
 
-  /* Моя рука */
-  const myHand = s.my_hand ?? [];
-  const hwrap  = document.getElementById('hwrap');
-  const handEl = document.getElementById('hand');
-  if(myHand.length>0 || (myId && s.player_ids.includes(myId))){
-    hwrap.style.display='';
-    handEl.innerHTML='';
-    const trumpSym = s.trump_sym;
+  // Рука
+  const myHand=s.my_hand??[];
+  const ha=document.getElementById('harea');
+  const hc=document.getElementById('hcards');
+  if(amI){
+    ha.style.display='';
+    hc.innerHTML='';
     for(const c of myHand){
-      const sc = suitClass(c);
-      const isTrump = c.slice(-1)===trumpSym;
-      const isSel   = selected===c;
-      const myT     = isMyTurn && !s.finished;
-      handEl.innerHTML += `<div class="hcard ${sc}${isTrump?' trump':''}${myT?' my-turn':''}${isSel?' selected':''}"
-        data-card="${c}" onclick="onCard('${c}')">${c}</div>`;
+      hc.innerHTML+=cardEl(c,{
+        trump:c.slice(-1)===s.trump_sym,
+        clickable:(canAttack||canDefend)&&!s.finished,
+        sel:selected===c,
+      });
     }
-  } else { hwrap.style.display='none'; }
+  } else { ha.style.display='none'; }
 
-  /* Кнопки действий */
-  const acts = document.getElementById('acts');
-  const btnPass = document.getElementById('btn-pass');
-  const btnTake = document.getElementById('btn-take');
-  if(!s.finished && isMyTurn){
+  // Кнопки
+  const acts=document.getElementById('acts');
+  const hint=document.getElementById('acthint');
+  const bplay=document.getElementById('btn-play');
+  const bp=document.getElementById('btn-pass');
+  const bt=document.getElementById('btn-take');
+  if(!s.finished&&amI){
     acts.style.display='flex';
-    const tableHasCards = s.table.length>0;
-    const allBeaten     = s.table.length>0 && s.table.every(([,d])=>d!==null);
-    btnPass.style.display = s.phase==='attacking' ? '' : 'none';
-    btnTake.style.display = s.phase==='defending' ? '' : 'none';
-    btnPass.disabled = !tableHasCards || !allBeaten;
-  } else { acts.style.display='none'; }
+    hint.style.display='block';
+    bplay.style.display = (canAttack||canDefend) ? '' : 'none';
+    bplay.disabled = sending || !selected || !(canAttack||canDefend);
+    if(canAttack||canDefend){
+      hint.textContent = selected
+        ? `Выбрана карта: ${selected}`
+        : 'Выберите карту и нажмите «Сходить»';
+    } else if(canPass){
+      hint.textContent = 'Можно завершить атаку';
+    } else if(canTake){
+      hint.textContent = 'Можно взять карты';
+    } else {
+      hint.textContent = 'Сейчас ход другого игрока';
+    }
+    if(canPass){
+      bp.style.display='';bt.style.display='none';
+      bp.disabled=sending;
+    } else if(canTake) {
+      bp.style.display='none';bt.style.display='';
+      bt.disabled=sending;
+    } else {
+      bp.style.display='none';bt.style.display='none';
+    }
+  } else {
+    acts.style.display='none';
+    hint.style.display='none';
+  }
 
-  /* Оверлей */
-  if(s.finished && !document.querySelector('.overlay')){ showResult(s); }
+  updateMainButton(s, selected);
+
+  // Результат
+  if(s.finished&&!document.querySelector('.overlay')) showResult(s);
 }
 
 function showResult(s){
+  const bet=parseFloat(s.bet||0);
   let emoji,title,sub='';
-  if(!s.loser_id){ emoji='🏁'; title='Игра завершена'; }
-  else if(s.loser_id===myId){ emoji='🤡'; title='Вы — ДУРАК!'; const bet=parseFloat(s.bet||0); if(bet>0) sub=`-${(bet*(s.player_ids.length-1)).toFixed(2)} ${s.currency??''}`; }
-  else { emoji='🏆'; title=`ДУРАК: ${s.player_names[s.loser_id]}`; }
+  if(!s.loser_id){emoji='🏁';title='Игра завершена';}
+  else if(s.loser_id===myId){
+    emoji='🤡';title='Вы — ДУРАК!';
+    if(bet>0) sub=`Списано: −${(bet*(s.player_ids.length-1)).toFixed(2)} ${s.currency??''}`;
+  } else {
+    emoji='🏆';title=`ДУРАК: ${s.player_names[s.loser_id]}`;
+    if(bet>0&&myId&&s.winners.includes(myId))
+      sub=`+${bet.toFixed(2)} ${s.currency??''}`;
+  }
   const ov=document.createElement('div');
   ov.className='overlay';
-  ov.innerHTML=`<div class="rbox"><span class="remoji">${emoji}</span><div class="rtitle">${title}</div><div class="rsub">${sub}</div></div>`;
-  ov.addEventListener('click',()=>tg.close());
+  ov.innerHTML=`<div class="rbox">
+    <span class="remi">${emoji}</span>
+    <div class="rtit">${title}</div>
+    <div class="rsub">${sub}</div>
+  </div>`;
+  ov.addEventListener('click',()=>tg?tg.close():null);
   document.body.appendChild(ov);
-  setTimeout(()=>tg.close(),6000);
+  setTimeout(()=>tg&&tg.close(),7000);
 }
+
+/* ── Поллинг ── */
+async function fetchState(){
+  try{
+    const query = myId ? `?player_id=${encodeURIComponent(myId)}` : '';
+    const r=await fetch(`/api/durak/${gameId}${query}`,{
+      headers:initData?{'X-Telegram-Init-Data':initData}:{}
+    });
+    if(!r.ok){schedule(3000);return;}
+    const s=await r.json();
+    const changed=!state||JSON.stringify(s)!==JSON.stringify(state);
+    if(changed){state=s;render(s);}
+    if(!s.finished) schedule(s.phase==='joining'?2000:1300);
+  }catch{schedule(3000);}
+}
+function schedule(ms){clearTimeout(poll);poll=setTimeout(fetchState,ms);}
 
 /* ── Клик по карте ── */
 function onCard(card){
-  if(!state || !initData) return;
-  const isMyTurn = (state.phase==='attacking' && state.attacker_id===myId) ||
-                   (state.phase==='defending' && state.defender_id===myId);
-  if(!isMyTurn||state.finished) return;
-
-  if(selected===card){
-    /* Второй клик — отправить ход */
-    sendMove({action: state.phase==='attacking'?'attack':'defend', card});
-    selected=null;
-  } else {
-    selected=card;
-    render(state);
-  }
+  if(!state||state.finished||!initData||sending) return;
+  const actions = state.allowed_actions || {};
+  if(!actions.attack&&!actions.defend) return;
+  selected = selected===card ? null : card;
+  render(state);
 }
+function onPlaySelected(){
+  const action = selectedAction();
+  if(!selected||!action){
+    showNotice('Сначала выберите карту');
+    return;
+  }
+  sendMove({action, card:selected});
+}
+function onPass(){ if(!sending) sendMove({action:'pass'}); }
+function onTake(){ if(!sending) sendMove({action:'take'}); }
 
-/* ── Кнопки ── */
-function onPass(){ if(state&&initData){ sendMove({action:'pass'}); selected=null; } }
-function onTake(){ if(state&&initData){ sendMove({action:'take'}); selected=null; } }
-
-/* ── Отправка хода ── */
+/* ── Отправить ход ── */
 async function sendMove(body){
+  if(sending) return;
+  sending = true;
   clearTimeout(poll);
+  if(state) render(state);
   try{
     const r=await fetch(`/api/durak/${gameId}/move`,{
       method:'POST',
-      headers:{'Content-Type':'application/json','X-Telegram-Init-Data':initData},
-      body:JSON.stringify(body)
+      headers:{'Content-Type':'application/json',
+        ...(initData?{'X-Telegram-Init-Data':initData}:{})},
+      body:JSON.stringify(body),
     });
-    if(r.ok){ state=await r.json(); render(state); if(!state.finished) poll=setTimeout(fetch_state,1500); }
-    else { selected=null; render(state); poll=setTimeout(fetch_state,1500); }
-  } catch(e){ selected=null; poll=setTimeout(fetch_state,1500); }
+    if(r.ok){
+      state=await r.json();
+      selected=null;
+      render(state);
+      if(!state.finished)schedule(1300);
+    } else {
+      let detail='Ход не выполнен';
+      try{
+        const err = await r.json();
+        detail = err?.detail || detail;
+      } catch {}
+      showNotice(detail);
+      if(state) render(state);
+      schedule(1500);
+    }
+  }catch{
+    showNotice('Не удалось отправить ход');
+    if(state) render(state);
+    schedule(2000);
+  } finally {
+    sending = false;
+    if(state) render(state);
+  }
 }
 
-fetch_state();
+fetchState();
 </script>
 </body>
 </html>
@@ -371,8 +586,29 @@ def _game_state(game: DurakGame, currency: str, player_id: int | None = None) ->
         table_view.append([card_display(atk), card_display(dfn) if dfn else None])
 
     my_hand: list[str] | None = None
+    allowed_actions = {
+      "attack": False,
+      "defend": False,
+      "take": False,
+      "pass": False,
+      "transfer": False,
+    }
     if player_id and player_id in game.player_ids:
-        my_hand = [card_display(c) for c in game.hands.get(player_id, [])]
+      hand = game.hands.get(player_id, [])
+      my_hand = [card_display(c) for c in hand]
+      allowed_actions = {
+        "attack": any(can_player_attack(game, player_id, card) for card in hand),
+        "defend": can_player_defend(game, player_id),
+        "take": can_player_take(game, player_id),
+        "pass": can_player_pass(game, player_id),
+        "transfer": any(can_transfer(game, card) for card in hand),
+      }
+
+    attackers = [
+      pid
+      for pid in game.player_ids
+      if pid not in game.winners and (len(game.player_ids) < 2 or pid != game.player_ids[game.defender_idx])
+    ]
 
     return {
         "game_id":      game.game_id,
@@ -385,6 +621,7 @@ def _game_state(game: DurakGame, currency: str, player_id: int | None = None) ->
         "hand_counts":  {pid: len(h) for pid, h in game.hands.items()},
         "attacker_id":  game.player_ids[game.attacker_idx] if game.player_ids else None,
         "defender_id":  game.player_ids[game.defender_idx] if len(game.player_ids) > 1 else None,
+        "attackers":    attackers,
         "table":        table_view,
         "winners":      game.winners,
         "finished":     game.finished,
@@ -392,6 +629,7 @@ def _game_state(game: DurakGame, currency: str, player_id: int | None = None) ->
         "bet":          str(game.bet),
         "currency":     currency,
         "my_hand":      my_hand,
+        "allowed_actions": allowed_actions,
     }
 
 
@@ -411,7 +649,7 @@ def build_durak_router(container: "AppContainer") -> APIRouter:
         return HTMLResponse(content=_DURAK_HTML)
 
     @router.get("/api/durak/{game_id}")
-    async def get_durak_state(game_id: str, request: Request) -> dict:
+    async def get_durak_state(game_id: str, request: Request, player_id: int | None = Query(default=None)) -> dict:
         game = get_game(game_id)
         if game is None:
             raise HTTPException(status_code=404, detail="Игра не найдена")
@@ -422,6 +660,8 @@ def build_durak_router(container: "AppContainer") -> APIRouter:
             ud = _validate_init_data(raw, container.settings.ceer_bot_token)
             if ud:
                 pid = int(ud.get("id", 0)) or None
+        if pid is None and player_id in game.player_ids:
+          pid = player_id
         return _game_state(game, currency, pid)
 
     @router.post("/api/durak/{game_id}/move")
@@ -445,35 +685,26 @@ def build_durak_router(container: "AppContainer") -> APIRouter:
         if player_id not in game.player_ids:
             raise HTTPException(status_code=403, detail="Вы не участник этой игры")
 
-        attacker_id = game.player_ids[game.attacker_idx]
-        defender_id = game.player_ids[game.defender_idx] if len(game.player_ids) > 1 else None
-
         action = body.action
 
         if action == "attack":
-            if player_id != attacker_id:
-                raise HTTPException(status_code=400, detail="Сейчас не ваш ход (атака)")
             # Ищем карту по отображаемому виду — переводим обратно к внутреннему коду
             card_code = _find_card_by_display(game.hands.get(player_id, []), body.card)
-            if card_code is None or not do_attack(game, card_code):
+            if card_code is None or not do_attack(game, player_id, card_code):
                 raise HTTPException(status_code=400, detail="Недопустимый ход (атака)")
 
         elif action == "defend":
-            if player_id != defender_id:
-                raise HTTPException(status_code=400, detail="Сейчас не ваш ход (защита)")
             card_code = _find_card_by_display(game.hands.get(player_id, []), body.card)
-            if card_code is None or not do_defend(game, card_code):
-                raise HTTPException(status_code=400, detail="Этой картой нельзя защититься")
+            if card_code is None or not (do_defend(game, card_code) or do_transfer(game, card_code)):
+                raise HTTPException(status_code=400, detail="Этой картой нельзя отбиться или перевести")
 
         elif action == "take":
-            if player_id != defender_id:
+            if not can_player_take(game, player_id):
                 raise HTTPException(status_code=400, detail="Сейчас не ваш ход")
             do_take(game)
 
         elif action == "pass":
-            if player_id != attacker_id:
-                raise HTTPException(status_code=400, detail="Сейчас не ваш ход")
-            if not do_pass(game):
+            if not do_pass(game, player_id):
                 raise HTTPException(status_code=400, detail="Нельзя закончить атаку сейчас")
 
         else:
