@@ -48,12 +48,42 @@ class GetMyTGClient:
     async def health_check(self) -> JsonDict:
         return await self._request_json("GET", "/v1/service/health", auth_required=False)
 
-    async def list_countries(self, *, auth: bool = False) -> JsonDict:
+    async def list_countries(
+        self,
+        *,
+        auth: bool = False,
+        sort: str | None = None,
+        page: int | None = None,
+        page_size: int | None = None,
+        country_codes: str | None = None,
+    ) -> JsonDict:
         path = "/v1/accounts" if auth else "/v1/accounts/countries"
-        return await self._request_json("GET", path, auth_required=auth)
+        params: JsonDict = {}
+        if sort:
+            params["sort"] = sort
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if country_codes:
+            params["country_codes"] = country_codes
+        return await self._request_json("GET", path, auth_required=auth, params=params or None)
 
-    async def list_countries_personal(self) -> JsonDict:
-        return await self._request_json("GET", "/v1/accounts", auth_required=True)
+    async def list_countries_personal(
+        self,
+        *,
+        sort: str | None = None,
+        page: int | None = None,
+        page_size: int | None = None,
+        country_codes: str | None = None,
+    ) -> JsonDict:
+        return await self.list_countries(
+            auth=True,
+            sort=sort,
+            page=page,
+            page_size=page_size,
+            country_codes=country_codes,
+        )
 
     async def get_country(self, country_code: str) -> JsonDict:
         normalized_country = country_code.strip().upper()
@@ -98,6 +128,7 @@ class GetMyTGClient:
         path: str,
         *,
         auth_required: bool,
+        params: Mapping[str, object] | None = None,
         json_body: Mapping[str, object] | None = None,
     ) -> JsonDict:
         if auth_required:
@@ -112,6 +143,7 @@ class GetMyTGClient:
                 method,
                 f"{self.base_url}{path}",
                 headers=headers,
+                params=params,
                 json=json_body,
             )
         except (httpx.ConnectError, httpx.TimeoutException) as error:

@@ -9,17 +9,6 @@ _Обновлено: 2026-04-22_
 
 - [ ] [3/8] HTTP-клиент GetMyTGClient
 - [ ] [4/8] Сервис TgAccountService
-      📂 Файлы: `services/tgaccounts.py` (новый)
-      🔗 После: [2/8], [3/8]
-      **Что делать:**
-      - `TgAccountService(client, session_factory, wallet_service_or_repo)` — оркестрация
-      - Методы: `get_catalog(sort, page)`, `get_country_details(country_code)`, `buy_account(telegram_id, country_code)` → создаёт покупку на GetMyTG + сохраняет в БД, `request_verification(telegram_id, purchase_id, callback_url)`, `get_my_purchases(telegram_id)`, `refund(telegram_id, purchase_id)`
-      - `buy_account` должен проверять, что у пользователя хватает баланса ДО обращения к GetMyTG API (защита от двойного списания)
-      - Поднимать `TgAccountServiceError` при известных проблемах
-      ⚠️ Риск: GetMyTG сам списывает с их баланса, не с нашего кошелька — нужно предварительно списать с `TelegramUser.balance` (атомарно через SELECT FOR UPDATE), затем вызвать API; при ошибке API — откатить транзакцию
-      ⚠️ Риск: статус жизненного цикла PENDING→SUCCESS→ERROR→REFUND — хранить актуальный в нашей БД
-      ✅ Готово когда: `buy_account` тест проходит с моком GetMyTGClient
-
 - [ ] [5/8] Контейнер: регистрация клиента и сервиса
       📂 Файлы: `container.py`
       🔗 После: [3/8], [4/8]
@@ -312,6 +301,7 @@ _Обновлено: 2026-04-22_
 
 ## ✅ Выполнено
 
+- [x] [4/8] Сервис TgAccountService — _2026-04-22_
 - [x] [3/8] HTTP-клиент GetMyTGClient — _2026-04-22_
 - [x] [2/8] DB: модель TgAccountPurchase + репозиторий — _2026-04-22_
 - [x] [1/8] Конфиг и ENV: добавить GetMyTG-переменные — _2026-04-22_
