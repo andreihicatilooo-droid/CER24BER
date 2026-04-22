@@ -74,7 +74,7 @@ src/cerber_bot/
 pip install -e ".[dev]"
 
 # Run bot
-python -m cerber_bot          # or .\start.ps1
+python -m cerber_bot
 
 # Run tests
 python -m pytest tests/       # asyncio_mode = "auto", pythonpath = ["src"]
