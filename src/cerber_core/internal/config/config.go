@@ -8,11 +8,13 @@ import (
 
 // Config holds all runtime configuration for CERBER CORE.
 type Config struct {
-	BillingDSN    string
-	ServerPort    string
-	AdminKey      string // protects POST /admin/services
-	MasterAESKey  []byte // 32 bytes — encrypts service secret keys stored in DB
-	MasterHMACKey []byte // 32 bytes — hashes API keys stored in DB
+	BillingDatabaseURL string
+	UsersDatabaseURL   string
+	ServerPort         string
+	AdminKey           string // protects POST /admin/services
+	AESSecretKey       []byte // 32 bytes — for request/response encryption (fallback for testing)
+	MasterAESKey       []byte // 32 bytes — encrypts service secret keys stored in DB
+	MasterHMACKey      []byte // 32 bytes — hashes API keys stored in DB
 }
 
 // Load reads configuration from environment variables.
@@ -26,16 +28,30 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	
+	// AES_SECRET_KEY is optional (for testing/fallback); defaults to MASTER_AES_KEY if not set
+	aesSecretKey := aesKey
+	if val := os.Getenv("AES_SECRET_KEY"); val != "" {
+		key, err := hex.DecodeString(val)
+		if err != nil || len(key) != 32 {
+			return nil, errors.New("AES_SECRET_KEY must be exactly 64 hex characters (32 bytes)")
+		}
+		aesSecretKey = key
+	}
+	
 	adminKey := os.Getenv("ADMIN_KEY")
 	if adminKey == "" {
 		return nil, errors.New("ADMIN_KEY env var is required")
 	}
+	
 	return &Config{
-		BillingDSN:    getEnv("BILLING_DSN", "postgres://billing:billing@localhost:5432/billing?sslmode=disable"),
-		ServerPort:    getEnv("SERVER_PORT", "8080"),
-		AdminKey:      adminKey,
-		MasterAESKey:  aesKey,
-		MasterHMACKey: hmacKey,
+		BillingDatabaseURL: getEnv("BILLING_DATABASE_URL", "postgres://billing:billing@localhost:5432/billing?sslmode=disable"),
+		UsersDatabaseURL:   getEnv("USERS_DATABASE_URL", "postgres://usersvc:usersvc@localhost:5432/users?sslmode=disable"),
+		ServerPort:         getEnv("SERVER_PORT", "8080"),
+		AdminKey:           adminKey,
+		AESSecretKey:       aesSecretKey,
+		MasterAESKey:       aesKey,
+		MasterHMACKey:      hmacKey,
 	}, nil
 }
 

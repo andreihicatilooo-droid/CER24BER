@@ -6,11 +6,11 @@
 
 ## Инфраструктура
 
-- [ ] [P1] Разделить БД на `users-db` и `billing-db` в docker-compose.yml
+- [x] [P1] Разделить БД на `users-db` и `billing-db` в docker-compose.yml
   - Изменяемые файлы: `docker-compose.yml`
   - Критерии приемки: два отдельных сервиса postgres (`users-db`, `billing-db`) с изолированными volume, healthcheck и инициализирующими SQL-скриптами
 
-- [ ] [P1] Добавить `USERS_DATABASE_URL` и `AES_SECRET_KEY` в конфигурацию
+- [x] [P1] Добавить `USERS_DATABASE_URL` и `AES_SECRET_KEY` в конфигурацию
   - Изменяемые файлы: `internal/config/config.go`
   - Критерии приемки: `Config` содержит поля `BillingDatabaseURL`, `UsersDatabaseURL`, `AESSecretKey`; все значения загружаются из env с fallback
 

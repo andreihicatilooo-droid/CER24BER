@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ─── Isolated bridge network ──────────────────────────────────────────────────
 networks:
   cerber_net:
@@ -50,7 +48,7 @@ services:
 
   # ─── migrator ───────────────────────────────────────────────────────────────
   migrator:
-    image: migrate/migrate:v4
+    image: migrate/migrate:v4.17.0
     container_name: cerber_migrator
     networks: [cerber_net]
     depends_on:

@@ -18,7 +18,7 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 
-	billingDB, err := db.Connect(cfg.BillingDSN)
+	billingDB, err := db.Connect(cfg.BillingDatabaseURL)
 	if err != nil {
 		log.Fatalf("billing-db connect: %v", err)
 	}
@@ -47,42 +47,6 @@ func main() {
 	router.Setup(r, cfg.AdminKey, authSvc, adminH, userH, balanceH, topupH)
 
 	log.Printf("CERBER CORE listening on :%s", cfg.ServerPort)
-	if err := r.Run(":" + cfg.ServerPort); err != nil {
-		log.Fatalf("server: %v", err)
-	}
-}
-
-
-func main() {
-	cfg := config.Load()
-
-	database, err := db.Connect(cfg.DatabaseURL)
-	if err != nil {
-		log.Fatalf("db connect: %v", err)
-	}
-	defer database.Close()
-
-	// Repositories
-	userRepo    := repository.NewUserRepo(database)
-	serviceRepo := repository.NewServiceRepo(database)
-	accountRepo := repository.NewAccountRepo(database)
-	txRepo      := repository.NewTransactionRepo(database)
-	paymentRepo := repository.NewPaymentRepo(database)
-
-	// Services
-	authSvc    := service.NewAuthService(userRepo, serviceRepo, cfg.JWTSecret)
-	balanceSvc := service.NewBalanceService(database.DB, accountRepo, txRepo)
-	paymentSvc := service.NewPaymentService(paymentRepo, balanceSvc)
-
-	// Handlers
-	authH    := handler.NewAuthHandler(authSvc)
-	balanceH := handler.NewBalanceHandler(balanceSvc)
-	paymentH := handler.NewPaymentHandler(paymentSvc)
-
-	r := gin.Default()
-	router.Setup(r, cfg.JWTSecret, serviceRepo, authH, balanceH, paymentH)
-
-	log.Printf("Billing API listening on :%s", cfg.ServerPort)
 	if err := r.Run(":" + cfg.ServerPort); err != nil {
 		log.Fatalf("server: %v", err)
 	}
