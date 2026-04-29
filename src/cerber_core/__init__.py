@@ -1,1 +1,0 @@
-"""CERBER Core application."""

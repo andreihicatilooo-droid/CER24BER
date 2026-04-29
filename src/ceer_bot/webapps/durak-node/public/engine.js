@@ -96,3 +96,22 @@ export function drawCard(engine, { x, y, label, selected = false, trump = false 
     engine.roundedRect(x + 38, y + 6, 12, 12, 4, "#f59e0b");
   }
 }
+
+export function drawDeck(engine, { x, y, count = 0 }) {
+  // Рисуем стопку карт (3 слоя для эффекта толщины)
+  const colors = ["#1e40af", "#2563eb", "#3b82f6"];
+  const offsets = [4, 2, 0];
+  
+  for (let i = 0; i < 3; i++) {
+    engine.roundedRect(x + offsets[i], y + offsets[i], 56, 82, 8, colors[i], "#0c4a6e", 1);
+  }
+  
+  // Текст с количеством карт
+  engine.text(String(count), x + 28, y + 42, {
+    color: "#e0f2fe",
+    size: 24,
+    weight: "700",
+    align: "center",
+    baseline: "middle",
+  });
+}

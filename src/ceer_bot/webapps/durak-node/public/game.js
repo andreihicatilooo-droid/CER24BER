@@ -1,4 +1,4 @@
-import { CanvasEngine, drawCard } from "./engine.js";
+import { CanvasEngine, drawCard, drawDeck } from "./engine.js";
 
 const tg = window.Telegram?.WebApp;
 if (tg) {
@@ -137,7 +137,11 @@ function render() {
   const handTop = Math.max(height - 140, 334);
   engine.text("Ваши карты", 24, handTop - 10, { size: 12, color: "#93c5fd" });
 
-  let hx = 24;
+  // Рисуем колоду слева
+  const deckCount = state.deck_count || 0;
+  drawDeck(engine, { x: 24, y: handTop, count: deckCount });
+
+  let hx = 96;
   for (const card of hand) {
     const isSelected = selectedCard === card;
     drawCard(engine, {
