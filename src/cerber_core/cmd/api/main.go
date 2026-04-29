@@ -24,7 +24,19 @@ func main() {
 	}
 	defer billingDB.Close()
 
+	// usersDB holds PII (email, password_hash). The billing API never queries it
+	// directly — it is established here so the connection is validated at startup
+	// and can be passed to a future auth service without refactoring main.
+	usersDB, err := db.Connect(cfg.UsersDatabaseURL)
+	if err != nil {
+		log.Fatalf("users-db connect: %v", err)
+	}
+	defer usersDB.Close()
+	_ = usersDB // reserved for future PII auth service
+
 	// ─── Repositories ─────────────────────────────────────────────────────────
+	// billing-db: services, users (user_hash registry), balances, topup, exchange
+	// users-db:   PII (email, password_hash) — not used by billing API
 	serviceRepo  := repository.NewServiceRepo(billingDB)
 	userRepo     := repository.NewUserRepo(billingDB)
 	balanceRepo  := repository.NewBalanceRepo(billingDB)

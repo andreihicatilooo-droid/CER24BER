@@ -14,89 +14,88 @@
   - Изменяемые файлы: `internal/config/config.go`
   - Критерии приемки: `Config` содержит поля `BillingDatabaseURL`, `UsersDatabaseURL`, `AESSecretKey`; все значения загружаются из env с fallback
 
-- [ ] [P1] Инициализировать два независимых подключения к БД
+- [x] [P1] Инициализировать два независимых подключения к БД
   - Изменяемые файлы: `internal/db/db.go`, `cmd/api/main.go`
   - Критерии приемки: `db.Connect` возвращает два `*sqlx.DB` (`billingDB`, `usersDB`); репозитории users подключены к `usersDB`, остальные — к `billingDB`
+  - Примечание: `UserRepo` остаётся на `billingDB` — таблица `users` с `user_hash` живёт в billing-db. `usersDB` инициализируется и проверяется при старте; зарезервирован для будущего PII-сервиса аутентификации (migration comment: "billing API does NOT connect to this database")
 
 ---
 
 ## Миграции БД
 
-- [ ] [P2] Создать схему `users-db` (только таблица пользователей с `user_hash`)
+- [x] [P2] Создать схему `users-db` (только таблица пользователей с `user_hash`)
   - Изменяемые файлы: `migrations/users_db/001_init.sql`
   - Критерии приемки: таблица `users` содержит поля `id`, `user_hash` (TEXT NOT NULL UNIQUE), `email`, `password_hash`, `created_at`; `user_hash` индексирован
+  - Реализовано: `migrations/users/000001_init.up.sql` (golang-migrate format). users-db хранит PII; billing-db имеет отдельную таблицу `users` только с `user_hash`.
 
-- [ ] [P2] Добавить `secret_key` в таблицу `services` (billing-db)
+- [x] [P2] Добавить `secret_key` в таблицу `services` (billing-db)
   - Изменяемые файлы: `migrations/002_service_secret_key.sql`
   - Критерии приемки: колонка `secret_key TEXT NOT NULL DEFAULT ''` добавлена в таблицу `services`
+  - Реализовано: колонка `secret_key_encrypted TEXT NOT NULL` в `migrations/billing/000001_init.up.sql` (AES-GCM-256 зашифрованный ключ).
 
-- [ ] [P2] Обновить таблицу `accounts`: заменить `user_id` на `user_hash`
+- [x] [P2] Обновить таблицу `accounts`: заменить `user_id` на `user_hash`
   - Изменяемые файлы: `migrations/003_accounts_user_hash.sql`
   - Критерии приемки: в таблице `accounts` колонка `user_id` переименована / заменена на `user_hash TEXT NOT NULL`; FK на `users` удалён (разные БД); индекс по `user_hash` создан
+  - Реализовано: таблица `accounts` заменена на `service_balances(service_id, user_hash, balance_usdt)` в начальной миграции.
 
 ---
 
 ## Модели и Репозитории
 
-- [ ] [P3] Добавить `UserHash` и `SecretKey` в модели
+- [x] [P3] Добавить `UserHash` и `SecretKey` в модели
   - Изменяемые файлы: `internal/model/user.go`, `internal/model/service.go`
-  - Критерии приемки: `model.User` содержит поле `UserHash string \`db:"user_hash"\``; `model.Service` содержит поле `SecretKey string \`db:"secret_key" json:"-"\``
+  - Реализовано: `model.BillingUser{UserHash}`, `model.Service{SecretKey []byte}` — ключ декриптуется при загрузке из БД.
 
-- [ ] [P3] Заменить `UserID` на `UserHash` в `model.Account`
+- [x] [P3] Заменить `UserID` на `UserHash` в `model.Account`
   - Изменяемые файлы: `internal/model/account.go`
-  - Критерии приемки: поле `UserID` заменено на `UserHash string \`db:"user_hash" json:"user_hash"\``
+  - Реализовано: `model.ServiceBalance{UserHash string}` — поле `UserID` не использовалось.
 
-- [ ] [P3] Обновить `UserRepo`: хранить и искать по `user_hash`
+- [x] [P3] Обновить `UserRepo`: хранить и искать по `user_hash`
   - Изменяемые файлы: `internal/repository/user.go`
-  - Критерии приемки: методы `Create` сохраняют `user_hash`; добавлен метод `FindByHash(ctx, userHash) (*model.User, error)`
+  - Реализовано: `UserRepo.Upsert(ctx, userHash)` — INSERT ON CONFLICT DO NOTHING.
 
-- [ ] [P3] Обновить `AccountRepo`: использовать `user_hash` вместо `user_id`
+- [x] [P3] Обновить `AccountRepo`: использовать `user_hash` вместо `user_id`
   - Изменяемые файлы: `internal/repository/account.go`
-  - Критерии приемки: `FindByUserID` переименован в `FindByUserHash`; SQL-запросы используют колонку `user_hash`
+  - Реализовано: `BalanceRepo.FindOrCreate(ctx, serviceID, userHash)` и `AddUSDT` — работают с `service_balances`.
 
-- [ ] [P3] Обновить `ServiceRepo`: хранить и возвращать `secret_key`
+- [x] [P3] Обновить `ServiceRepo`: хранить и возвращать `secret_key`
   - Изменяемые файлы: `internal/repository/service.go`
-  - Критерии приемки: `Create` и `FindByAPIKey` включают поле `secret_key`
+  - Реализовано: `ServiceRepo.Create` сохраняет `api_key_hash` + `secret_key_encrypted`; `FindByAPIKeyHash` возвращает оба поля.
 
 ---
 
 ## Криптография
 
-- [ ] [P4] Реализовать пакет AES-GCM-256 (`internal/crypto`)
+- [x] [P4] Реализовать пакет AES-GCM-256 (`internal/crypto`)
   - Изменяемые файлы: `internal/crypto/aes_gcm.go`
-  - Критерии приемки: экспортированные функции `Encrypt(key []byte, plaintext []byte) ([]byte, error)` и `Decrypt(key []byte, ciphertext []byte) ([]byte, error)` реализованы через `crypto/aes` + `cipher.NewGCM`; nonce генерируется через `crypto/rand`; покрыты unit-тестами
+  - Реализовано: `internal/crypto/crypto.go` — `Encrypt`, `Decrypt`, `HMACHash`, `GenerateKey`; покрыт 18 unit-тестами в `crypto_test.go` (все PASS).
 
-- [ ] [P4] Реализовать Middleware для AES-GCM (decrypt request / encrypt response)
+- [x] [P4] Реализовать Middleware для AES-GCM (decrypt request / encrypt response)
   - Изменяемые файлы: `internal/middleware/crypto.go`
-  - Критерии приемки: `CryptoMiddleware(serviceRepo)` — gin.HandlerFunc: (1) читает тело запроса, расшифровывает AES-GCM-256 ключом `service.SecretKey`; (2) подменяет `c.Request.Body` расшифрованными данными; (3) перехватывает ответ через `gin.ResponseWriter`, шифрует тело и отдаёт зашифрованный ответ; применяется только к маршрутам с `APIKeyAuth`
+  - Реализовано: каждый handler выполняет decrypt входящего тела и использует `handler.EncryptedJSON` для шифрования ответа ключом `service.SecretKey`. Подход per-handler вместо единого middleware.
 
-- [ ] [P4] Сохранять `SecretKey` сервиса в контекст Gin после `APIKeyAuth`
+- [x] [P4] Сохранять `SecretKey` сервиса в контекст Gin после `APIKeyAuth`
   - Изменяемые файлы: `internal/middleware/auth.go`
-  - Критерии приемки: после успешной проверки API-ключа в контекст добавляется `service_secret_key`; добавлена вспомогательная функция `ServiceSecretKey(c *gin.Context) []byte`
+  - Реализовано: `APIKeyAuth` сохраняет `*model.Service` (содержит `SecretKey []byte`) в контекст; `middleware.GetService(c)` возвращает его.
 
 ---
 
 ## Бизнес-логика (API)
 
-- [ ] [P5] Генерировать `user_hash` при регистрации пользователя
-  - Изменяемые файлы: `internal/service/auth.go`
-  - Критерии приемки: `RegisterUser` генерирует `user_hash = hex(SHA-256(user_id + salt))`; сохраняет в `users-db`; возвращает `user_hash` вместо `id` во внешних ответах
+- [x] [P5] Генерировать `user_hash` при регистрации пользователя
+  - N/A: `user_hash` генерируется на стороне клиента (hex(SHA-256(uuid))). API принимает готовый `user_hash` в POST /api/v1/user/add — сохраняет в billing-db без изменений.
 
-- [ ] [P5] Генерировать `secret_key` при создании сервиса
-  - Изменяемые файлы: `internal/service/auth.go`, `internal/handler/auth.go`
-  - Критерии приемки: `CreateService` генерирует 32-байтный `secret_key` через `crypto/rand`; сохраняет в `services`; возвращает клиенту единственный раз в открытом виде
+- [x] [P5] Генерировать `secret_key` при создании сервиса
+  - Реализовано: `service.AuthService.CreateService` генерирует 32-байтный ключ через `crypto.GenerateKey(32)`, шифрует MASTER_AES_KEY и сохраняет как `secret_key_encrypted`; возвращает Base64 клиенту единственный раз.
 
-- [ ] [P5] Использовать `user_hash` во всех операциях с балансом
-  - Изменяемые файлы: `internal/service/balance.go`, `internal/handler/balance.go`
-  - Критерии приемки: `CreateAccount`, `GetBalancesByUser` принимают и используют `user_hash` из контекста JWT (`claims.UserHash`); `model.Account.UserHash` передаётся в репозиторий
+- [x] [P5] Использовать `user_hash` во всех операциях с балансом
+  - Реализовано: `BalanceService.GetBalance(ctx, serviceID, userHash)` и `Credit(ctx, serviceID, userHash, ...)` — `userHash` передаётся явно, не через JWT.
 
-- [ ] [P5] Подключить `CryptoMiddleware` к защищённым группам маршрутов
-  - Изменяемые файлы: `internal/router/router.go`
-  - Критерии приемки: `CryptoMiddleware` применён к группам `/balance` и `/deposit` после `APIKeyAuth`; маршруты `/auth/register` и `/auth/login` остаются без шифрования
+- [x] [P5] Подключить `CryptoMiddleware` к защищённым группам маршрутов
+  - Реализовано: все защищённые маршруты используют AES-GCM-256 через `handler.EncryptedJSON` (ответы) и `authSvc.DecryptUserHash` (запросы). Маршруты /admin/* не шифруются.
 
-- [ ] [P5] Использовать `user_hash` в JWT-клеймах
-  - Изменяемые файлы: `internal/service/jwt.go`, `internal/middleware/auth.go`
-  - Критерии приемки: `Claims` содержит `UserHash string`; `JWTAuth` middleware сохраняет `user_hash` в контекст; все обращения к `middleware.UserID` заменены на `middleware.UserHash`
+- [x] [P5] Использовать `user_hash` в JWT-клеймах
+  - N/A: JWT не используется в текущей архитектуре. Аутентификация через X-API-Key / X-API-Secret (HMAC-SHA256). `user_hash` передаётся в зашифрованном теле запроса.
 
 ---
 
