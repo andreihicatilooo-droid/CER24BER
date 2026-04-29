@@ -860,6 +860,7 @@ class DEAL_HANDLER_TEXT:
     ENTER_DEAL_TERMS = "Теперь отправьте полные условия сделки: что передается, сроки и критерии выполнения."
     CALLBACK_MY_DEALS = "Мои сделки"
     CALLBACK_DEAL_UNAVAILABLE = "Сделка недоступна"
+    CALLBACK_DEAL_NOT_FOUND = "Сделка не найдена"
     CALLBACK_DEAL_OPENED = "Сделка открыта"
     CALLBACK_ACCEPT_FAILED = "Не удалось принять"
     DEAL_ACCEPTED_NOTIFICATION = "Вторая сторона приняла сделку. Чат открыт, можно передавать данные или товар."
