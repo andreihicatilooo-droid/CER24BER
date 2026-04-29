@@ -9,6 +9,15 @@ CERBER CORE — интерактивный консольный тест REST AP
 
 Требования:
     pip install requests pycryptodome
+
+    HTTP 201
+  {
+    "api_key": "Npl+E2xD86yAiZUPGtpjKKsMp+QDbl5SkmC9E+ziF0k=",
+    "id": "717e4b0a-9633-4863-9c9d-0f15a3b4c12e",
+    "name": "CERBER TEST",
+    "note": "Store api_key and secret_key securely — they will not be shown again.",
+    "secret_key": "rnD76v+iMukGKRZZUW9oSt189axZ1+WGIIkTeL7rAIo="
+  }
 """
 
 import base64
@@ -18,6 +27,7 @@ import os
 import sys
 import textwrap
 import urllib.parse
+import uuid
 from getpass import getpass
 
 try:
@@ -58,11 +68,27 @@ def decrypt_response(resp_json: dict, secret_key: bytes) -> dict:
     return json.loads(aes_decrypt(secret_key, resp_json["data"]))
 
 
-def key_from_hex(hex_str: str) -> bytes:
-    key = bytes.fromhex(hex_str)
-    if len(key) != 32:
-        raise ValueError("secret_key must be 32 bytes (64 hex chars)")
-    return key
+def parse_secret_key(key_str: str) -> bytes:
+    """Parse secret key from Base64 or hex format."""
+    key_str = key_str.strip()
+    
+    # Try Base64 first (standard format from API)
+    try:
+        key = base64.b64decode(key_str)
+        if len(key) == 32:
+            return key
+    except Exception:
+        pass
+    
+    # Fallback to hex (64 chars)
+    try:
+        key = bytes.fromhex(key_str)
+        if len(key) == 32:
+            return key
+    except Exception:
+        pass
+    
+    raise ValueError("secret_key must be 32 bytes (Base64 44 chars or hex 64 chars)")
 
 
 # ─── Session state ────────────────────────────────────────────────────────────
@@ -73,6 +99,7 @@ class Session:
         self.api_key: str = ""
         self.secret_key: bytes = b""
         self.admin_key: str = ""
+        self.last_user_hash: str = ""  # Последний созданный user_hash
 
     @property
     def headers(self) -> dict:
@@ -125,9 +152,9 @@ def configure():
     print("\n── Конфигурация ──────────────────────────────────")
     session.base_url = input(f"  Base URL [{session.base_url}]: ").strip() or session.base_url
     session.api_key = input("  X-API-Key: ").strip()
-    hex_key = input("  Secret Key (64 hex символа): ").strip()
+    secret = input("  Secret Key (Base64 или hex): ").strip()
     try:
-        session.secret_key = key_from_hex(hex_key)
+        session.secret_key = parse_secret_key(secret)
         print("  ✓ Конфигурация сохранена")
     except ValueError as e:
         print(f"  ✗ {e}")
@@ -153,7 +180,7 @@ def admin_create_service():
         if input("  Применить эти ключи как текущие? [y/N]: ").lower() == "y":
             session.api_key = result["api_key"]
             try:
-                session.secret_key = key_from_hex(result["secret_key"])
+                session.secret_key = parse_secret_key(result["secret_key"])
                 print("  ✓ Ключи применены")
             except ValueError as e:
                 print(f"  ✗ {e}")
@@ -170,9 +197,36 @@ def user_add():
     _print_result(result)
 
 
+def user_add_auto():
+    """Автоматически создаёт user_hash и регистрирует пользователя."""
+    print("\n── AUTO: Создать user_hash и зарегистрировать ────")
+    
+    # Генерируем случайный UUID как основу
+    user_id = str(uuid.uuid4())
+    
+    # Вычисляем SHA-256 hash
+    user_hash = hashlib.sha256(user_id.encode()).hexdigest()
+    
+    print(f"  Сгенерирован user_id:   {user_id}")
+    print(f"  Вычислен user_hash:     {user_hash}")
+    
+    # Шифруем и отправляем
+    enc = encrypt_user_hash(user_hash, session.secret_key)
+    result = call("POST", "/api/v1/user/add", body={"encrypted_user_hash": enc})
+    _print_result(result)
+    
+    # Сохраняем для последующего использования
+    if result.get("user_hash") == user_hash:
+        session.last_user_hash = user_hash
+        print(f"\n  ✓ user_hash сохранён в сессии")
+        print(f"    Используй его в пунктах 4, 6 (нажми Enter для автоподстановки)")
+
+
 def balance_get():
     print("\n── GET /api/v1/balance ───────────────────────────")
-    user_hash = input("  user_hash (hex SHA-256): ").strip()
+    default = session.last_user_hash or ""
+    prompt = f"  user_hash [{default[:16]}...]: " if default else "  user_hash (hex SHA-256): "
+    user_hash = input(prompt).strip() or default
     if not user_hash:
         print("  Значение не может быть пустым")
         return
@@ -189,7 +243,12 @@ def topup_methods():
 
 def topup_create():
     print("\n── POST /api/v1/topup/create ─────────────────────")
-    user_hash = input("  user_hash (hex SHA-256): ").strip()
+    default = session.last_user_hash or ""
+    prompt = f"  user_hash [{default[:16]}...]: " if default else "  user_hash (hex SHA-256): "
+    user_hash = input(prompt).strip() or default
+    if not user_hash:
+        print("  Значение не может быть пустым")
+        return
     method_id = input("  method_id (UUID): ").strip()
     amount_str = input("  amount_usdt: ").strip()
     try:
@@ -235,6 +294,7 @@ MENU = [
     ("2", "POST /admin/services — создать сервис",             admin_create_service),
     ("",  None, None),
     ("3", "POST /api/v1/user/add — зарегистрировать user_hash", user_add),
+    ("9", "AUTO: Создать user_hash и зарегистрировать",        user_add_auto),
     ("4", "GET  /api/v1/balance — баланс пользователя",        balance_get),
     ("",  None, None),
     ("5", "GET  /api/v1/topup/methods — методы пополнения",    topup_methods),
@@ -255,6 +315,8 @@ def print_menu():
     print(f"║  API URL  : {session.base_url:<37}║")
     print(f"║  X-API-Key: {(session.api_key[:34] + '...' if len(session.api_key) > 37 else session.api_key):<37}║")
     print(f"║  SecretKey: {'настроен' if session.secret_key else 'не задан':<37}║")
+    if session.last_user_hash:
+        print(f"║  Last Hash: {session.last_user_hash[:37]:<37}║")
     print("╠══════════════════════════════════════════════════╣")
     for key, label, _ in MENU:
         if key == "":

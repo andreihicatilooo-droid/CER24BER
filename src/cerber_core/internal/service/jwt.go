@@ -1,32 +1,4 @@
 // Package service contains business logic for CERBER CORE.
-// This file is reserved for future use.
+// JWT functionality is not used in the current architecture.
+// Authentication is handled via X-API-Key headers.
 package service
-
-func GenerateJWT(userID, secret string) (string, error) {
-	claims := Claims{
-		UserID: userID,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(secret))
-}
-
-func ParseJWT(tokenStr, secret string) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, jwt.ErrSignatureInvalid
-		}
-		return []byte(secret), nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	claims, ok := token.Claims.(*Claims)
-	if !ok || !token.Valid {
-		return nil, jwt.ErrTokenInvalidClaims
-	}
-	return claims, nil
-}
