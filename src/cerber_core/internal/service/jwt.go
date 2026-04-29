@@ -1,15 +1,6 @@
+// Package service contains business logic for CERBER CORE.
+// This file is reserved for future use.
 package service
-
-import (
-	"time"
-
-	"github.com/golang-jwt/jwt/v5"
-)
-
-type Claims struct {
-	UserID string `json:"user_id"`
-	jwt.RegisteredClaims
-}
 
 func GenerateJWT(userID, secret string) (string, error) {
 	claims := Claims{

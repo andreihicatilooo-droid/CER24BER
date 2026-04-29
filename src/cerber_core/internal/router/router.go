@@ -3,20 +3,47 @@ package router
 import (
 	"github.com/cerber/billing/internal/handler"
 	"github.com/cerber/billing/internal/middleware"
-	"github.com/cerber/billing/internal/repository"
+	"github.com/cerber/billing/internal/service"
 	"github.com/gin-gonic/gin"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func Setup(
 	r *gin.Engine,
-	jwtSecret string,
-	serviceRepo *repository.ServiceRepo,
-	authH *handler.AuthHandler,
+	adminKey string,
+	authSvc *service.AuthService,
+	adminH *handler.AdminHandler,
+	userH *handler.UserHandler,
 	balanceH *handler.BalanceHandler,
-	paymentH *handler.PaymentHandler,
+	topupH *handler.TopupHandler,
 ) {
+	apiKeyAuth := middleware.APIKeyAuth(authSvc)
+
+	// ─── Admin (protected by static X-Admin-Key) ──────────────────────────────
+	admin := r.Group("/admin", middleware.MustAdminKey(adminKey))
+	{
+		admin.POST("/services", adminH.CreateService)
+	}
+
+	// ─── API v1 (all require X-API-KEY) ──────────────────────────────────────
+	v1 := r.Group("/api/v1", apiKeyAuth)
+	{
+		// POST /api/v1/user/add
+		v1.POST("/user/add", userH.Add)
+
+		// GET  /api/v1/balance?encrypted_user_hash=...
+		v1.GET("/balance", balanceH.Get)
+
+		// GET  /api/v1/topup/methods
+		v1.GET("/topup/methods", topupH.ListMethods)
+
+		// POST /api/v1/topup/create
+		v1.POST("/topup/create", topupH.Create)
+
+		// GET  /api/v1/topup/status?session_id=...
+		v1.GET("/topup/status", topupH.Status)
+	}
+}
+
 	// Swagger UI
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 

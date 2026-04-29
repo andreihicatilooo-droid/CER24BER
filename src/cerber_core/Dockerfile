@@ -1,21 +1,20 @@
 FROM golang:1.22-alpine AS builder
 WORKDIR /app
 
+# Download deps first (cached layer)
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN go install github.com/swaggo/swag/cmd/swag@latest && \
-    swag init -g cmd/api/main.go -o docs && \
-    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /billing ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /cerbercore ./cmd/api
 
-# ─── Runtime image ────────────────────────────────────────────────────────────
+# ─── Minimal runtime image ────────────────────────────────────────────────────
 FROM alpine:3.19
 RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /app
-COPY --from=builder /billing .
-COPY migrations/ ./migrations/
+COPY --from=builder /cerbercore .
 
 EXPOSE 8080
-ENTRYPOINT ["/app/billing"]
+ENTRYPOINT ["/app/cerbercore"]
+
