@@ -561,6 +561,7 @@ class CerberGUI:
         # ── Состояние процессов ────────────────────────────────
         self._bot_proc:         Optional[subprocess.Popen] = None
         self._admin_proc:       Optional[subprocess.Popen] = None
+        self._cerber_bot_proc:  Optional[subprocess.Popen] = None
         self._ceer_proc:        Optional[subprocess.Popen] = None
         self._tunnel_proc:      Optional[subprocess.Popen] = None
         self._ceer_tunnel_proc: Optional[subprocess.Popen] = None
