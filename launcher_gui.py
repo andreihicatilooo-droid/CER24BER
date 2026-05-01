@@ -569,7 +569,8 @@ class CerberGUI:
         self._log_q: "queue.Queue[tuple[str, str]]" = queue.Queue()
         self._log_buffers: dict[str, deque] = {k: deque(maxlen=600) for k in LOGS}
         self._ceer_enabled = tk.BooleanVar(value=bool(get_env("CEER_BOT_TOKEN")))
-        self._active_log = "bot"
+        self._active_bot_log: str    = "bot"
+        self._active_tunnel_log: str = "tunnel"
         self._tailers: list[LogTailer] = []
 
         # ── Анимация ───────────────────────────────────────────
@@ -583,7 +584,18 @@ class CerberGUI:
         content = tk.Frame(root, bg=BG)
         content.pack(fill=tk.BOTH, expand=True)
         self._build_sidebar(content)
-        self._build_log_panel(content)
+
+        right_area = tk.Frame(content, bg=BG)
+        right_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        top_row = tk.Frame(right_area, bg=BG)
+        top_row.pack(fill=tk.BOTH, expand=True)
+        self._build_bots_panel(top_row)
+        tk.Frame(top_row, bg=BORDER_A, width=1).pack(side=tk.LEFT, fill=tk.Y)
+        self._build_tunnels_panel(top_row)
+
+        tk.Frame(right_area, bg=ACCENT, height=1).pack(fill=tk.X)
+        self._build_other_panel(right_area)
 
         # ── Фоновые задачи ─────────────────────────────────────
         self._start_tailers()
@@ -763,9 +775,6 @@ class CerberGUI:
         self._section_hdr(inner, "ИНСТРУМЕНТЫ")
         self._btn(inner, "⚙   Настройки .env",       self._open_env_dialog,  fg=TEXT_M)
         self._btn(inner, "🔍  Проверка сервисов",     self._check_services,   fg=TEXT_M)
-        self._btn(inner, "📋  Открыть лог бота",      self._open_bot_log,     fg=TEXT_M)
-        self._btn(inner, "📁  Открыть папку логов",   self._open_logs_folder, fg=TEXT_M)
-        self._btn(inner, "🗑   Очистить вывод",       self._clear_log,        fg=TEXT_M)
         self._sep(inner)
 
         # ── СТАТУС ────────────────────────────────────────────
@@ -819,105 +828,287 @@ class CerberGUI:
     # ──────────────────────────────────────────────────────────
     # BUILD: LOG PANEL
     # ──────────────────────────────────────────────────────────
+    # BUILD: БOTS PANEL
+    # ──────────────────────────────────────────────────────────
 
-    def _build_log_panel(self, parent: tk.Frame) -> None:
-        log_frame = tk.Frame(parent, bg=BG)
-        log_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    def _build_bots_panel(self, parent: tk.Frame) -> None:
+        """Панель БОТЫ: кликабельный список ботов + лог выбранного."""
+        frame = tk.Frame(parent, bg=BG)
+        frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # ── Tab bar ───────────────────────────────────────────
-        tab_bar = tk.Frame(log_frame, bg=BG_PANEL, height=36)
-        tab_bar.pack(fill=tk.X)
-        tab_bar.pack_propagate(False)
+        # ── Шапка панели ──────────────────────────────────────
+        hdr = tk.Frame(frame, bg=BG_HDR, height=30)
+        hdr.pack(fill=tk.X)
+        hdr.pack_propagate(False)
+        tk.Label(hdr, text="▌ БОТЫ", fg=ACCENT, bg=BG_HDR,
+                 font=self._f_mono_b, padx=10).pack(side=tk.LEFT)
+        self._bot_log_title = tk.Label(hdr, text="— Core Output", fg=TEXT_M,
+                                       bg=BG_HDR, font=self._f_mono_s)
+        self._bot_log_title.pack(side=tk.LEFT, padx=4)
 
-        tabs: list[tuple[str, str]] = [
-            ("bot",         "Bot Output"),
-            ("bot_err",     "Bot Errors"),
-            ("admin",       "Admin Output"),
-            ("admin_err",   "Admin Errors"),
-            ("ceer",        "CEER Output"),
-            ("ceer_err",    "CEER Errors"),
-            ("tunnel",      "Tunnel"),
-            ("ceer_tunnel", "Mini App"),
-            ("launcher",    "Launcher"),
+        self._btn_copy_bot = tk.Button(
+            hdr, text="⎘",
+            command=lambda: self._copy_panel_log(self._bot_log_txt),
+            fg=ACCENT_C, bg=BG_HDR,
+            activeforeground=TEXT, activebackground=BG_CARD,
+            font=self._f_mono_s, relief=tk.FLAT, bd=0, padx=8, cursor="hand2",
+        )
+        self._btn_copy_bot.pack(side=tk.RIGHT, padx=2)
+        tk.Button(
+            hdr, text="✕",
+            command=lambda: self._clear_panel_log(self._bot_log_txt, self._active_bot_log),
+            fg=TEXT_D, bg=BG_HDR,
+            activeforeground=ACCENT_B, activebackground=BG_HDR,
+            font=self._f_mono_s, relief=tk.FLAT, bd=0, padx=8, cursor="hand2",
+        ).pack(side=tk.RIGHT, padx=2)
+
+        tk.Frame(frame, bg=ACCENT, height=1).pack(fill=tk.X)
+
+        # ── Список ботов ──────────────────────────────────────
+        list_fr = tk.Frame(frame, bg=BG_PANEL, height=58)
+        list_fr.pack(fill=tk.X)
+        list_fr.pack_propagate(False)
+
+        self._bot_list_btns: dict[str, tk.Button] = {}
+        self._bot_err_btns:  dict[str, tk.Button] = {}
+
+        BOT_ITEMS = [
+            ("bot",   "bot_err",   "Core"),
+            ("admin", "admin_err", "Admin"),
+            ("ceer",  "ceer_err",  "CEER"),
         ]
-        self._tab_btns: dict[str, tk.Button] = {}
-        for key, label in tabs:
-            b = tk.Button(
-                tab_bar, text=label,
-                command=lambda k=key: self._switch_tab(k),
+        for log_key, err_key, label in BOT_ITEMS:
+            item_fr = tk.Frame(list_fr, bg=BG_PANEL)
+            item_fr.pack(side=tk.LEFT, padx=6, pady=4)
+
+            main_btn = tk.Button(
+                item_fr, text=f"○  {label}",
+                command=lambda k=log_key: self._switch_bot_log(k),
                 fg=TEXT_M, bg=BG_PANEL,
                 activeforeground=TEXT, activebackground=BG_CARD,
                 font=self._f_mono_s, relief=tk.FLAT, bd=0,
-                padx=14, pady=6, cursor="hand2",
+                padx=10, pady=2, cursor="hand2",
             )
-            b.pack(side=tk.LEFT)
-            self._tab_btns[key] = b
+            main_btn.pack()
+            self._bot_list_btns[log_key] = main_btn
 
-        # Кнопки справа: Копировать и Очистить
-        tk.Button(
-            tab_bar, text="✕ Очистить",
-            command=self._clear_log,
-            fg=TEXT_D, bg=BG_PANEL,
-            activeforeground=ACCENT_B, activebackground=BG_PANEL,
-            font=self._f_mono_s, relief=tk.FLAT, bd=0,
-            padx=8, pady=6, cursor="hand2",
-        ).pack(side=tk.RIGHT, padx=4)
+            err_btn = tk.Button(
+                item_fr, text="Err",
+                command=lambda k=err_key: self._switch_bot_log(k),
+                fg=TEXT_D, bg=BG_PANEL,
+                activeforeground=ACCENT_B, activebackground=BG_CARD,
+                font=self._f_sec, relief=tk.FLAT, bd=0,
+                padx=4, pady=0, cursor="hand2",
+            )
+            err_btn.pack()
+            self._bot_err_btns[err_key] = err_btn
 
-        self._btn_copy_log = tk.Button(
-            tab_bar, text="⎘ Копировать",
-            command=self._copy_logs,
-            fg=ACCENT_C, bg=BG_PANEL,
-            activeforeground=TEXT, activebackground=BG_PANEL,
-            font=self._f_mono_s, relief=tk.FLAT, bd=0,
-            padx=8, pady=6, cursor="hand2",
-        )
-        self._btn_copy_log.pack(side=tk.RIGHT, padx=2)
+        tk.Frame(frame, bg=BORDER_A, height=1).pack(fill=tk.X)
 
-        # Акцентная линия
-        tk.Frame(log_frame, bg=ACCENT, height=1).pack(fill=tk.X)
-
-        # ── Text widget ────────────────────────────────────────
-        txt_fr = tk.Frame(log_frame, bg=BG)
+        # ── Текст лога ────────────────────────────────────────
+        txt_fr = tk.Frame(frame, bg=BG)
         txt_fr.pack(fill=tk.BOTH, expand=True)
 
-        self._log_txt = tk.Text(
-            txt_fr,
-            bg=BG_CARD, fg=TEXT,
-            font=self._f_mono_s,
-            wrap=tk.NONE,
-            state=tk.DISABLED,
-            relief=tk.FLAT, bd=0,
+        self._bot_log_txt = tk.Text(
+            txt_fr, bg=BG_CARD, fg=TEXT,
+            font=self._f_mono_s, wrap=tk.NONE,
+            state=tk.DISABLED, relief=tk.FLAT, bd=0,
             insertbackground=ACCENT_G,
             selectbackground="#280018",
-            padx=10, pady=6,
+            padx=8, pady=4,
         )
-        vsb = tk.Scrollbar(txt_fr, command=self._log_txt.yview,
+        vsb = tk.Scrollbar(txt_fr, command=self._bot_log_txt.yview,
                            bg=BG_PANEL, troughcolor=BG_PANEL, activebackground=ACCENT)
-        hsb = tk.Scrollbar(txt_fr, orient=tk.HORIZONTAL, command=self._log_txt.xview,
+        hsb = tk.Scrollbar(txt_fr, orient=tk.HORIZONTAL, command=self._bot_log_txt.xview,
                            bg=BG_PANEL, troughcolor=BG_PANEL, activebackground=ACCENT)
-        self._log_txt.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        self._bot_log_txt.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         vsb.pack(side=tk.RIGHT, fill=tk.Y)
         hsb.pack(side=tk.BOTTOM, fill=tk.X)
-        self._log_txt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self._bot_log_txt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # Прокрутка колёсиком в зоне лога
-        def _log_mw(e: tk.Event) -> None:
-            self._log_txt.yview_scroll(int(-1 * (e.delta / 120)), "units")
-
-        def _bind_log_wheel(_e: tk.Event) -> None:
-            self.root.bind("<MouseWheel>", _log_mw)
-
-        def _unbind_log_wheel(_e: tk.Event) -> None:
-            self.root.unbind("<MouseWheel>")
-
-        self._log_txt.bind("<Enter>", _bind_log_wheel)
-        self._log_txt.bind("<Leave>", _unbind_log_wheel)
-
-        # Теги цветов
         for tag, color in TAG_COLORS.items():
-            self._log_txt.tag_config(tag if tag else "default", foreground=color)
+            self._bot_log_txt.tag_config(tag if tag else "default", foreground=color)
 
-        self._switch_tab("bot")
+        def _bw(e: tk.Event) -> None:
+            self._bot_log_txt.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        self._bot_log_txt.bind("<Enter>", lambda e: self.root.bind("<MouseWheel>", _bw))
+        self._bot_log_txt.bind("<Leave>", lambda e: self.root.unbind("<MouseWheel>"))
+
+        self._switch_bot_log("bot")
+
+    # ──────────────────────────────────────────────────────────
+    # BUILD: TUNNELS PANEL
+    # ──────────────────────────────────────────────────────────
+
+    def _build_tunnels_panel(self, parent: tk.Frame) -> None:
+        """Панель ТУННЕЛИ: кликабельный список туннелей + лог выбранного."""
+        frame = tk.Frame(parent, bg=BG)
+        frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # ── Шапка панели ──────────────────────────────────────
+        hdr = tk.Frame(frame, bg=BG_HDR, height=30)
+        hdr.pack(fill=tk.X)
+        hdr.pack_propagate(False)
+        tk.Label(hdr, text="▌ ТУННЕЛИ", fg=ACCENT, bg=BG_HDR,
+                 font=self._f_mono_b, padx=10).pack(side=tk.LEFT)
+        self._tunnel_log_title = tk.Label(hdr, text="— Tunnel", fg=TEXT_M,
+                                          bg=BG_HDR, font=self._f_mono_s)
+        self._tunnel_log_title.pack(side=tk.LEFT, padx=4)
+
+        self._btn_copy_tun = tk.Button(
+            hdr, text="⎘",
+            command=lambda: self._copy_panel_log(self._tunnel_log_txt),
+            fg=ACCENT_C, bg=BG_HDR,
+            activeforeground=TEXT, activebackground=BG_CARD,
+            font=self._f_mono_s, relief=tk.FLAT, bd=0, padx=8, cursor="hand2",
+        )
+        self._btn_copy_tun.pack(side=tk.RIGHT, padx=2)
+        tk.Button(
+            hdr, text="✕",
+            command=lambda: self._clear_panel_log(
+                self._tunnel_log_txt, self._active_tunnel_log),
+            fg=TEXT_D, bg=BG_HDR,
+            activeforeground=ACCENT_B, activebackground=BG_HDR,
+            font=self._f_mono_s, relief=tk.FLAT, bd=0, padx=8, cursor="hand2",
+        ).pack(side=tk.RIGHT, padx=2)
+
+        tk.Frame(frame, bg=ACCENT, height=1).pack(fill=tk.X)
+
+        # ── Список туннелей ───────────────────────────────────
+        list_fr = tk.Frame(frame, bg=BG_PANEL, height=58)
+        list_fr.pack(fill=tk.X)
+        list_fr.pack_propagate(False)
+
+        self._tunnel_list_btns: dict[str, tk.Button] = {}
+
+        TUNNEL_ITEMS = [
+            ("tunnel",      "Tunnel"),
+            ("ceer_tunnel", "Mini App"),
+        ]
+        for log_key, label in TUNNEL_ITEMS:
+            item_fr = tk.Frame(list_fr, bg=BG_PANEL)
+            item_fr.pack(side=tk.LEFT, padx=10, pady=8)
+
+            main_btn = tk.Button(
+                item_fr, text=f"○  {label}",
+                command=lambda k=log_key: self._switch_tunnel_log(k),
+                fg=TEXT_M, bg=BG_PANEL,
+                activeforeground=TEXT, activebackground=BG_CARD,
+                font=self._f_mono_s, relief=tk.FLAT, bd=0,
+                padx=10, pady=4, cursor="hand2",
+            )
+            main_btn.pack()
+            self._tunnel_list_btns[log_key] = main_btn
+
+        tk.Frame(frame, bg=BORDER_A, height=1).pack(fill=tk.X)
+
+        # ── Текст лога ────────────────────────────────────────
+        txt_fr = tk.Frame(frame, bg=BG)
+        txt_fr.pack(fill=tk.BOTH, expand=True)
+
+        self._tunnel_log_txt = tk.Text(
+            txt_fr, bg=BG_CARD, fg=TEXT,
+            font=self._f_mono_s, wrap=tk.NONE,
+            state=tk.DISABLED, relief=tk.FLAT, bd=0,
+            insertbackground=ACCENT_G,
+            selectbackground="#280018",
+            padx=8, pady=4,
+        )
+        vsb = tk.Scrollbar(txt_fr, command=self._tunnel_log_txt.yview,
+                           bg=BG_PANEL, troughcolor=BG_PANEL, activebackground=ACCENT)
+        hsb = tk.Scrollbar(txt_fr, orient=tk.HORIZONTAL, command=self._tunnel_log_txt.xview,
+                           bg=BG_PANEL, troughcolor=BG_PANEL, activebackground=ACCENT)
+        self._tunnel_log_txt.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        hsb.pack(side=tk.BOTTOM, fill=tk.X)
+        self._tunnel_log_txt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        for tag, color in TAG_COLORS.items():
+            self._tunnel_log_txt.tag_config(tag if tag else "default", foreground=color)
+
+        def _tw(e: tk.Event) -> None:
+            self._tunnel_log_txt.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        self._tunnel_log_txt.bind("<Enter>", lambda e: self.root.bind("<MouseWheel>", _tw))
+        self._tunnel_log_txt.bind("<Leave>", lambda e: self.root.unbind("<MouseWheel>"))
+
+        self._switch_tunnel_log("tunnel")
+
+    # ──────────────────────────────────────────────────────────
+    # BUILD: OTHER PANEL
+    # ──────────────────────────────────────────────────────────
+
+    def _build_other_panel(self, parent: tk.Frame) -> None:
+        """Нижняя панель: кнопки-инструменты + лог лаунчера."""
+        frame = tk.Frame(parent, bg=BG_PANEL, height=170)
+        frame.pack(fill=tk.X)
+        frame.pack_propagate(False)
+
+        # ── Шапка ─────────────────────────────────────────────
+        hdr = tk.Frame(frame, bg=BG_HDR, height=28)
+        hdr.pack(fill=tk.X)
+        hdr.pack_propagate(False)
+        tk.Label(hdr, text="▌ ПРОЧЕЕ", fg=TEXT_M, bg=BG_HDR,
+                 font=self._f_mono_b, padx=10).pack(side=tk.LEFT)
+        tk.Label(hdr, text="— Launcher Log", fg=TEXT_D, bg=BG_HDR,
+                 font=self._f_mono_s).pack(side=tk.LEFT, padx=4)
+        tk.Button(
+            hdr, text="⎘",
+            command=lambda: self._copy_panel_log(self._other_log_txt),
+            fg=ACCENT_C, bg=BG_HDR,
+            activeforeground=TEXT, activebackground=BG_CARD,
+            font=self._f_mono_s, relief=tk.FLAT, bd=0, padx=8, cursor="hand2",
+        ).pack(side=tk.RIGHT, padx=2)
+        tk.Button(
+            hdr, text="✕",
+            command=lambda: self._clear_panel_log(self._other_log_txt, "launcher"),
+            fg=TEXT_D, bg=BG_HDR,
+            activeforeground=ACCENT_B, activebackground=BG_HDR,
+            font=self._f_mono_s, relief=tk.FLAT, bd=0, padx=8, cursor="hand2",
+        ).pack(side=tk.RIGHT, padx=2)
+
+        # ── Кнопки слева ──────────────────────────────────────
+        btn_fr = tk.Frame(frame, bg=BG_PANEL, width=150)
+        btn_fr.pack(side=tk.LEFT, fill=tk.Y, padx=4, pady=2)
+        btn_fr.pack_propagate(False)
+
+        for txt, cmd, fg_ in [
+            ("⚙  .env",             self._open_env_dialog,  TEXT_M),
+            ("🔍 Сервисы",           self._check_services,   TEXT_M),
+            ("📁 Папка логов",        self._open_logs_folder, TEXT_M),
+        ]:
+            tk.Button(
+                btn_fr, text=txt, command=cmd,
+                fg=fg_, bg=BG_BTN,
+                activeforeground=TEXT, activebackground=BG_CARD,
+                font=self._f_mono_s, relief=tk.FLAT, bd=0,
+                anchor="w", padx=10, pady=5, cursor="hand2",
+            ).pack(fill=tk.X, pady=1)
+
+        tk.Frame(frame, bg=BORDER_A, width=1).pack(side=tk.LEFT, fill=tk.Y, pady=4)
+
+        # ── Лог лаунчера ──────────────────────────────────────
+        txt_fr = tk.Frame(frame, bg=BG)
+        txt_fr.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self._other_log_txt = tk.Text(
+            txt_fr, bg=BG_CARD, fg=TEXT,
+            font=self._f_mono_s, wrap=tk.NONE,
+            state=tk.DISABLED, relief=tk.FLAT, bd=0,
+            padx=8, pady=4,
+        )
+        vsb = tk.Scrollbar(txt_fr, command=self._other_log_txt.yview,
+                           bg=BG_PANEL, troughcolor=BG_PANEL, activebackground=ACCENT)
+        self._other_log_txt.configure(yscrollcommand=vsb.set)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        self._other_log_txt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        for tag, color in TAG_COLORS.items():
+            self._other_log_txt.tag_config(tag if tag else "default", foreground=color)
+
+        def _ow(e: tk.Event) -> None:
+            self._other_log_txt.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        self._other_log_txt.bind("<Enter>", lambda e: self.root.bind("<MouseWheel>", _ow))
+        self._other_log_txt.bind("<Leave>", lambda e: self.root.unbind("<MouseWheel>"))
 
     # ──────────────────────────────────────────────────────────
     # HELPER WIDGETS
@@ -950,53 +1141,136 @@ class CerberGUI:
     # LOG MANAGEMENT
     # ──────────────────────────────────────────────────────────
 
-    def _switch_tab(self, key: str) -> None:
-        self._active_log = key
-        for k, b in self._tab_btns.items():
-            b.configure(fg=TEXT if k == key else TEXT_M,
-                        bg=BG_CARD if k == key else BG_PANEL)
-        self._repopulate_log()
+    # ── Маршрутизация лога по ключу ───────────────────────────
+    _BOT_KEYS    = {"bot", "bot_err", "admin", "admin_err", "ceer", "ceer_err"}
+    _TUNNEL_KEYS = {"tunnel", "ceer_tunnel"}
 
-    def _repopulate_log(self) -> None:
-        w = self._log_txt
-        w.configure(state=tk.NORMAL)
-        w.delete("1.0", tk.END)
-        for text, tag in self._log_buffers[self._active_log]:
-            w.insert(tk.END, text + "\n", tag if tag else "default")
-        w.configure(state=tk.DISABLED)
-        w.see(tk.END)
+    def _get_log_widget(self, key: str) -> "tk.Text":
+        if key in self._TUNNEL_KEYS:
+            return self._tunnel_log_txt
+        if key == "launcher":
+            return self._other_log_txt
+        return self._bot_log_txt
+
+    # ── Переключатели активного лога ──────────────────────────
+    def _switch_bot_log(self, key: str) -> None:
+        self._active_bot_log = key
+        titles = {
+            "bot":       "Core Output",   "bot_err":   "Core Errors",
+            "admin":     "Admin Output",  "admin_err": "Admin Errors",
+            "ceer":      "CEER Output",   "ceer_err":  "CEER Errors",
+        }
+        self._bot_log_title.configure(text=f"— {titles.get(key, key)}")
+        # Подсветка кнопок главных
+        for k, b in self._bot_list_btns.items():
+            b.configure(bg=BG_CARD if k == key else BG_PANEL,
+                        fg=TEXT if k == key else (
+                            ACCENT_G if self._is_bot_running(k) else TEXT_M))
+        # Подсветка кнопок ошибок
+        for k, b in self._bot_err_btns.items():
+            b.configure(bg=BG_CARD if k == key else BG_PANEL,
+                        fg=ACCENT_B if k == key else TEXT_D)
+        self._repopulate_widget(self._bot_log_txt, key)
+
+    def _switch_tunnel_log(self, key: str) -> None:
+        self._active_tunnel_log = key
+        titles = {"tunnel": "CERBER Tunnel", "ceer_tunnel": "Mini App Tunnel"}
+        self._tunnel_log_title.configure(text=f"— {titles.get(key, key)}")
+        for k, b in self._tunnel_list_btns.items():
+            b.configure(bg=BG_CARD if k == key else BG_PANEL,
+                        fg=TEXT if k == key else TEXT_M)
+        self._repopulate_widget(self._tunnel_log_txt, key)
+
+    def _is_bot_running(self, key: str) -> bool:
+        return {
+            "bot":   (self._bot_proc   and self._bot_proc.poll()   is None),
+            "admin": (self._admin_proc and self._admin_proc.poll() is None),
+            "ceer":  (self._ceer_proc  and self._ceer_proc.poll()  is None),
+        }.get(key, False)  # type: ignore[return-value]
+
+    # ── Обновление кнопок в списках ───────────────────────────
+    def _refresh_bot_list_btn(self, log_key: str, running: bool) -> None:
+        btn = self._bot_list_btns.get(log_key)
+        if btn:
+            labels = {"bot": "Core", "admin": "Admin", "ceer": "CEER"}
+            lbl = labels.get(log_key, log_key)
+            active = (log_key == self._active_bot_log)
+            btn.configure(
+                text=f"{'●' if running else '○'}  {lbl}",
+                fg=(TEXT if active else (ACCENT_G if running else TEXT_M)),
+                bg=BG_CARD if active else BG_PANEL,
+            )
+
+    def _refresh_tunnel_list_btn(self, log_key: str, running: bool) -> None:
+        btn = self._tunnel_list_btns.get(log_key)
+        if btn:
+            labels = {"tunnel": "Tunnel", "ceer_tunnel": "Mini App"}
+            lbl = labels.get(log_key, log_key)
+            active = (log_key == self._active_tunnel_log)
+            btn.configure(
+                text=f"{'●' if running else '○'}  {lbl}",
+                fg=(TEXT if active else (ACCENT_C if running else TEXT_M)),
+                bg=BG_CARD if active else BG_PANEL,
+            )
+
+    # ── Заполнение / добавление текста ───────────────────────
+    def _repopulate_widget(self, widget: "tk.Text", key: str) -> None:
+        widget.configure(state=tk.NORMAL)
+        widget.delete("1.0", tk.END)
+        for text, tag in self._log_buffers[key]:
+            widget.insert(tk.END, text + "\n", tag if tag else "default")
+        widget.configure(state=tk.DISABLED)
+        widget.see(tk.END)
 
     def _add_log(self, key: str, text: str, tag: str = "") -> None:
-        ts = datetime.now().strftime("%H:%M:%S")
+        ts   = datetime.now().strftime("%H:%M:%S")
         line = f"[{ts}] {text}"
         self._log_buffers[key].append((line, tag))
-        if key == self._active_log:
-            self._append_to_widget(line, tag)
+        # Показываем строку только если этот ключ сейчас активен в своей панели
+        if key in self._TUNNEL_KEYS:
+            if key == self._active_tunnel_log:
+                self._append_to_widget(self._tunnel_log_txt, line, tag)
+        elif key == "launcher":
+            self._append_to_widget(self._other_log_txt, line, tag)
+        else:
+            if key == self._active_bot_log:
+                self._append_to_widget(self._bot_log_txt, line, tag)
 
-    def _append_to_widget(self, text: str, tag: str = "") -> None:
-        w = self._log_txt
-        w.configure(state=tk.NORMAL)
-        w.insert(tk.END, text + "\n", tag if tag else "default")
-        n = int(w.index(tk.END).split(".")[0])
+    def _append_to_widget(self, widget: "tk.Text", text: str, tag: str = "") -> None:
+        widget.configure(state=tk.NORMAL)
+        widget.insert(tk.END, text + "\n", tag if tag else "default")
+        n = int(widget.index(tk.END).split(".")[0])
         if n > 800:
-            w.delete("1.0", f"{n - 600}.0")
-        w.configure(state=tk.DISABLED)
-        w.see(tk.END)
+            widget.delete("1.0", f"{n - 600}.0")
+        widget.configure(state=tk.DISABLED)
+        widget.see(tk.END)
 
-    def _copy_logs(self) -> None:
-        """Копирует содержимое активного лога в буфер обмена и на 1 с подсвечивает кнопку."""
-        text = self._log_txt.get("1.0", tk.END)
+    # ── Копирование / очистка ─────────────────────────────────
+    def _copy_panel_log(self, widget: "tk.Text") -> None:
+        text = widget.get("1.0", tk.END)
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
-        self._btn_copy_log.configure(text="✓ Скопировано", fg=ACCENT_G)
-        self.root.after(1000, lambda: self._btn_copy_log.configure(text="⎘ Копировать", fg=ACCENT_C))
+
+    def _clear_panel_log(self, widget: "tk.Text", key: str) -> None:
+        self._log_buffers[key].clear()
+        widget.configure(state=tk.NORMAL)
+        widget.delete("1.0", tk.END)
+        widget.configure(state=tk.DISABLED)
+
+    # ── Устаревшие-прокси (вызываются из старых мест) ─────────
+    def _switch_tab(self, key: str) -> None:
+        if key in self._TUNNEL_KEYS:
+            self._switch_tunnel_log(key)
+        elif key == "launcher":
+            pass  # лаунчер всегда виден
+        else:
+            self._switch_bot_log(key)
 
     def _clear_log(self) -> None:
-        self._log_buffers[self._active_log].clear()
-        w = self._log_txt
-        w.configure(state=tk.NORMAL)
-        w.delete("1.0", tk.END)
-        w.configure(state=tk.DISABLED)
+        self._clear_panel_log(self._bot_log_txt, self._active_bot_log)
+
+    def _copy_logs(self) -> None:
+        self._copy_panel_log(self._bot_log_txt)
 
     @staticmethod
     def _detect_tag(log_key: str, text: str) -> str:
@@ -1007,7 +1281,8 @@ class CerberGUI:
             return "warn"
         if any(w in tl for w in ("✓", "[ok]", "started", "running", "success", "ready")):
             return "ok"
-        if log_key == "tunnel" or any(w in tl for w in ("cloudflare", "trycloudflare")):
+        if log_key in ("tunnel", "ceer_tunnel") or any(
+                w in tl for w in ("cloudflare", "trycloudflare")):
             return "info"
         return ""
 
@@ -1038,8 +1313,15 @@ class CerberGUI:
                 log_key, text = self._log_q.get_nowait()
                 tag = self._detect_tag(log_key, text)
                 self._log_buffers[log_key].append((text, tag))
-                if log_key == self._active_log:
-                    self._append_to_widget(text, tag)
+                widget = self._get_log_widget(log_key)
+                if log_key in self._TUNNEL_KEYS:
+                    if log_key == self._active_tunnel_log:
+                        self._append_to_widget(widget, text, tag)
+                elif log_key == "launcher":
+                    self._append_to_widget(widget, text, tag)
+                else:
+                    if log_key == self._active_bot_log:
+                        self._append_to_widget(widget, text, tag)
         except queue.Empty:
             pass
 
@@ -1050,7 +1332,8 @@ class CerberGUI:
 
     def _update_status(self) -> None:
         # Бот
-        if self._bot_proc and self._bot_proc.poll() is None:
+        bot_running = bool(self._bot_proc and self._bot_proc.poll() is None)
+        if bot_running:
             self._sb_bot_var.set("●  Core: Запущен")
             self._sb_bot_lbl.configure(fg=ACCENT_G)
             self._hdr_bot_var.set("●  Core")
@@ -1061,13 +1344,16 @@ class CerberGUI:
                 if code != 0:
                     self._add_log("launcher", f"[!] CERBER Core завершился (код {code})", "err")
                 self._bot_proc = None
+                bot_running = False
             self._sb_bot_var.set("○  Core: Остановлен")
             self._sb_bot_lbl.configure(fg=ACCENT_B)
             self._hdr_bot_var.set("○  Core")
             self._hdr_bot_lbl.configure(fg=TEXT_M)
+        self._refresh_bot_list_btn("bot", bot_running)
 
         # Admin Bot
-        if self._admin_proc and self._admin_proc.poll() is None:
+        admin_running = bool(self._admin_proc and self._admin_proc.poll() is None)
+        if admin_running:
             self._sb_admin_var.set("●  Admin: Запущен")
             self._sb_admin_lbl.configure(fg=ACCENT_G)
             self._hdr_admin_var.set("●  Admin")
@@ -1078,13 +1364,16 @@ class CerberGUI:
                 if code != 0:
                     self._add_log("launcher", f"[!] CERBER Admin завершился (код {code})", "err")
                 self._admin_proc = None
+                admin_running = False
             self._sb_admin_var.set("○  Admin: Остановлен")
             self._sb_admin_lbl.configure(fg=TEXT_M)
             self._hdr_admin_var.set("○  Admin")
             self._hdr_admin_lbl.configure(fg=TEXT_M)
+        self._refresh_bot_list_btn("admin", admin_running)
 
         # CEER Bot
-        if self._ceer_proc and self._ceer_proc.poll() is None:
+        ceer_running = bool(self._ceer_proc and self._ceer_proc.poll() is None)
+        if ceer_running:
             self._sb_ceer_var.set("●  CEER: Запущен")
             self._sb_ceer_lbl.configure(fg=ACCENT_G)
             self._hdr_ceer_var.set("●  CEER")
@@ -1095,10 +1384,12 @@ class CerberGUI:
                 if code != 0:
                     self._add_log("launcher", f"[!] CEER завершился (код {code})", "err")
                 self._ceer_proc = None
+                ceer_running = False
             self._sb_ceer_var.set("○  CEER: Остановлен")
             self._sb_ceer_lbl.configure(fg=TEXT_M)
             self._hdr_ceer_var.set("○  CEER")
             self._hdr_ceer_lbl.configure(fg=TEXT_M)
+        self._refresh_bot_list_btn("ceer", ceer_running)
 
         # Туннель
         if self._tunnel_proc and self._tunnel_proc.poll() is None:
@@ -1141,6 +1432,8 @@ class CerberGUI:
             self._hdr_tun_lbl.configure(fg=TEXT_M)
             self._sb_url_var.set("")
             self._foot_url_var.set("")
+        tun_running = bool(self._tunnel_proc and self._tunnel_proc.poll() is None)
+        self._refresh_tunnel_list_btn("tunnel", tun_running)
 
         # CEER Mini App туннель
         if self._ceer_tunnel_proc and self._ceer_tunnel_proc.poll() is None:
@@ -1178,6 +1471,8 @@ class CerberGUI:
             self._sb_ctun_lbl.configure(fg=TEXT_M)
             self._hdr_miniapp_var.set("")
             self._sb_curl_var.set("")
+        ctun_running = bool(self._ceer_tunnel_proc and self._ceer_tunnel_proc.poll() is None)
+        self._refresh_tunnel_list_btn("ceer_tunnel", ctun_running)
 
     # ──────────────────────────────────────────────────────────
     # ANIMATION: BANNER
@@ -1291,7 +1586,7 @@ class CerberGUI:
                 launcher_log(f"CERBER Admin started PID {self._admin_proc.pid}")
             else:
                 self._add_log("launcher", "CERBER Admin: пропуск (ADMIN_BOT_TOKEN не задан)", "gray")
-            self._switch_tab("bot")
+            self._switch_bot_log("bot")
         except Exception as e:
             self._add_log("launcher", f"Ошибка запуска бота: {e}", "err")
 
@@ -1353,7 +1648,7 @@ class CerberGUI:
             )
             self._add_log("launcher", f"CEER Bot запущен  PID {self._ceer_proc.pid}", "ok")
             launcher_log(f"CEER Bot started PID {self._ceer_proc.pid}")
-            self._switch_tab("ceer")
+            self._switch_bot_log("ceer")
         except Exception as e:
             self._add_log("launcher", f"Ошибка запуска CEER: {e}", "err")
 
@@ -1405,7 +1700,7 @@ class CerberGUI:
             self._add_log("launcher",
                           f"Порт: {ceer_port}  — ожидаю trycloudflare URL...", "gray")
             launcher_log(f"CEER Mini App tunnel started PID {self._ceer_tunnel_proc.pid}")
-            self._switch_tab("ceer_tunnel")
+            self._switch_tunnel_log("ceer_tunnel")
         except Exception as e:
             self._add_log("launcher", f"Ошибка запуска CEER туннеля: {e}", "err")
 
@@ -1455,7 +1750,7 @@ class CerberGUI:
             self._add_log("launcher", f"Туннель запущен  PID {self._tunnel_proc.pid}", "info")
             self._add_log("launcher", f"Порт: {web_port}  — ожидаю trycloudflare URL...", "gray")
             launcher_log(f"Tunnel started PID {self._tunnel_proc.pid}")
-            self._switch_tab("tunnel")
+            self._switch_tunnel_log("tunnel")
         except Exception as e:
             self._add_log("launcher", f"Ошибка запуска туннеля: {e}", "err")
 
@@ -1484,7 +1779,6 @@ class CerberGUI:
         EnvDialog(self.root, fonts)
 
     def _check_services(self) -> None:
-        self._switch_tab("launcher")
         self._add_log("launcher", "─" * 60, "dim")
         self._add_log("launcher", "Проверка доступности сервисов...", "info")
 

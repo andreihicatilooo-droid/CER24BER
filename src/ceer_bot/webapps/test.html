@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Рендер стола CER24BER</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap');
+        body {
+            font-family: 'Fira Code', monospace;
+            background-color: #0f172a; /* tailwind slate-900 */
+            color: #22c55e; /* tailwind green-500 for terminal feel */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .game-canvas {
+            width: 800px;
+            height: 600px;
+            background: radial-gradient(circle, #1e293b 0%, #020617 100%);
+            position: relative;
+            border: 2px solid #334155;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+        }
+        .playing-card {
+            width: 90px;
+            height: 130px;
+            background-color: white;
+            border-radius: 8px;
+            position: absolute;
+            box-shadow: 2px 4px 8px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 4px 8px;
+            font-family: sans-serif;
+            font-weight: bold;
+            font-size: 24px;
+            border: 1px solid #cbd5e1;
+            user-select: none;
+        }
+        .card-red { color: #dc2626; }
+        .card-black { color: #171717; }
+        .card-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 40px;
+        }
+        .card-bottom-right {
+            align-self: flex-end;
+            transform: rotate(180deg);
+        }
+        .card-back {
+            background: repeating-linear-gradient(
+              45deg,
+              #1e293b,
+              #1e293b 10px,
+              #0f172a 10px,
+              #0f172a 20px
+            );
+            border: 2px solid #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-canvas">
+    <!-- UI Текст: Верх -->
+    <div class="absolute top-4 left-4 text-sm">
+        <p>ИГРА: ДУРАК [ПОДКИДНОЙ]</p>
+        <p>СТАТУС: ЗАЩИТА</p>
+    </div>
+    
+    <!-- UI Текст: Игроки -->
+    <div class="absolute top-4 right-4 text-right text-sm">
+        <p class="text-white">@attacker (Атакует): 4 карты</p>
+        <p class="text-yellow-400">@defender (Защищается): 5 карт</p>
+        <p class="text-gray-400">@player3 (Ждет): 6 карт</p>
+    </div>
+
+    <!-- UI Текст: Инфо колоды -->
+    <div class="absolute top-[200px] left-[50px] text-xs">
+        <p>ОСТАЛОСЬ В КОЛОДЕ: 24</p>
+        <p>КОЗЫРЬ: ЧЕРВЫ (♥)</p>
+    </div>
+
+    <!-- Колода и Козырь (Слой 1) -->
+    <!-- Козырь (повернут) -->
+    <div class="playing-card card-red" style="left: 50px; top: 80px; transform: rotate(-90deg);">
+        <span>J♥</span>
+        <span class="card-center">♥</span>
+        <span class="card-bottom-right">J♥</span>
+    </div>
+    <!-- Колода (Имитация объема через смещение) -->
+    <div class="playing-card card-back" style="left: 100px; top: 50px;"></div>
+    <div class="playing-card card-back" style="left: 102px; top: 48px;"></div>
+    <div class="playing-card card-back" style="left: 104px; top: 46px;"></div>
+    <div class="playing-card card-back" style="left: 106px; top: 44px;"></div>
+    <div class="playing-card card-back" style="left: 108px; top: 42px;"></div>
+
+    <!-- Игровой стол (Слой 2) -->
+    
+    <!-- Пара 1: Атака -->
+    <div class="playing-card card-black" style="left: 150px; top: 250px;">
+        <span>8♠</span>
+        <span class="card-center">♠</span>
+        <span class="card-bottom-right">8♠</span>
+    </div>
+    <!-- Пара 1: Защита (+30px X/Y) -->
+    <div class="playing-card card-black" style="left: 180px; top: 280px; z-index: 10;">
+        <span>10♠</span>
+        <span class="card-center">♠</span>
+        <span class="card-bottom-right">10♠</span>
+    </div>
+
+    <!-- Пара 2: Атака (+120px X от пред. атаки) -->
+    <div class="playing-card card-red" style="left: 270px; top: 250px;">
+        <span>8♦</span>
+        <span class="card-center">♦</span>
+        <span class="card-bottom-right">8♦</span>
+    </div>
+    <!-- Пара 2: Защита (+30px X/Y) -->
+    <div class="playing-card card-red" style="left: 300px; top: 280px; z-index: 10;">
+        <span>A♦</span>
+        <span class="card-center">♦</span>
+        <span class="card-bottom-right">A♦</span>
+    </div>
+
+    <!-- Пара 3: Атака (Не отбита) -->
+    <div class="playing-card card-black" style="left: 390px; top: 250px;">
+        <span>8♣</span>
+        <span class="card-center">♣</span>
+        <span class="card-bottom-right">8♣</span>
+    </div>
+
+</div>
+
+</body>
+</html>
