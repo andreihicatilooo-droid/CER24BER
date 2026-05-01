@@ -49,6 +49,8 @@ LOGS: dict[str, Path] = {
     "admin_err":   LOG_DIR / "admin_error.log",
     "ceer":        LOG_DIR / "ceer.log",
     "ceer_err":    LOG_DIR / "ceer_error.log",
+    "cerber_bot":     LOG_DIR / "cerber_bot.log",
+    "cerber_bot_err": LOG_DIR / "cerber_bot_error.log",
     "tunnel":      LOG_DIR / "tunnel.log",
     "ceer_tunnel": LOG_DIR / "ceer_tunnel.log",
     "launcher":    LOG_DIR / "launcher.log",
@@ -657,6 +659,11 @@ class CerberGUI:
                                           fg=ACCENT_C, bg=BG_HDR, font=self._f_mono_s)
         self._hdr_miniapp_lbl.pack(side=tk.RIGHT, padx=10)
 
+        self._hdr_cerber_bot_var = tk.StringVar(value="○  Shop")
+        self._hdr_cerber_bot_lbl = tk.Label(status_fr, textvariable=self._hdr_cerber_bot_var,
+                                             fg=TEXT_M, bg=BG_HDR, font=self._f_mono_s)
+        self._hdr_cerber_bot_lbl.pack(side=tk.RIGHT, padx=10)
+
         tk.Frame(self.root, bg=ACCENT, height=1).pack(fill=tk.X)
 
     # ──────────────────────────────────────────────────────────
@@ -784,6 +791,7 @@ class CerberGUI:
 
         self._sb_bot_var  = tk.StringVar(value="○  Core: Остановлен")
         self._sb_admin_var = tk.StringVar(value="○  Admin: Остановлен")
+        self._sb_cerber_bot_var = tk.StringVar(value="○  Shop: Остановлен")
         self._sb_ceer_var = tk.StringVar(value="○  CEER: Остановлен")
         self._sb_tun_var  = tk.StringVar(value="○  Туннель: Выкл")
         self._sb_ctun_var = tk.StringVar(value="○  Mini App: Выкл")
@@ -799,6 +807,11 @@ class CerberGUI:
                            fg=TEXT_M, bg=BG_PANEL,
                            font=self._f_mono_s, anchor="w")
         self._sb_admin_lbl.pack(fill=tk.X, pady=1)
+
+        self._sb_cerber_bot_lbl = tk.Label(status_fr, textvariable=self._sb_cerber_bot_var,
+                                            fg=ACCENT_B, bg=BG_PANEL,
+                                            font=self._f_mono_s, anchor="w")
+        self._sb_cerber_bot_lbl.pack(fill=tk.X, pady=1)
 
         self._sb_ceer_lbl = tk.Label(status_fr, textvariable=self._sb_ceer_var,
                                       fg=TEXT_M, bg=BG_PANEL,
@@ -873,9 +886,10 @@ class CerberGUI:
         self._bot_err_btns:  dict[str, tk.Button] = {}
 
         BOT_ITEMS = [
-            ("bot",   "bot_err",   "Core"),
-            ("admin", "admin_err", "Admin"),
-            ("ceer",  "ceer_err",  "CEER"),
+            ("bot",        "bot_err",        "Core"),
+            ("admin",      "admin_err",      "Admin"),
+            ("cerber_bot", "cerber_bot_err", "Shop"),
+            ("ceer",       "ceer_err",       "CEER"),
         ]
         for log_key, err_key, label in BOT_ITEMS:
             item_fr = tk.Frame(list_fr, bg=BG_PANEL)
@@ -1142,7 +1156,7 @@ class CerberGUI:
     # ──────────────────────────────────────────────────────────
 
     # ── Маршрутизация лога по ключу ───────────────────────────
-    _BOT_KEYS    = {"bot", "bot_err", "admin", "admin_err", "ceer", "ceer_err"}
+    _BOT_KEYS    = {"bot", "bot_err", "admin", "admin_err", "cerber_bot", "cerber_bot_err", "ceer", "ceer_err"}
     _TUNNEL_KEYS = {"tunnel", "ceer_tunnel"}
 
     def _get_log_widget(self, key: str) -> "tk.Text":
@@ -1156,9 +1170,10 @@ class CerberGUI:
     def _switch_bot_log(self, key: str) -> None:
         self._active_bot_log = key
         titles = {
-            "bot":       "Core Output",   "bot_err":   "Core Errors",
-            "admin":     "Admin Output",  "admin_err": "Admin Errors",
-            "ceer":      "CEER Output",   "ceer_err":  "CEER Errors",
+            "bot":           "Core Output",   "bot_err":           "Core Errors",
+            "admin":         "Admin Output",  "admin_err":         "Admin Errors",
+            "cerber_bot":    "Shop Output",   "cerber_bot_err":    "Shop Errors",
+            "ceer":          "CEER Output",   "ceer_err":          "CEER Errors",
         }
         self._bot_log_title.configure(text=f"— {titles.get(key, key)}")
         # Подсветка кнопок главных
@@ -1183,9 +1198,10 @@ class CerberGUI:
 
     def _is_bot_running(self, key: str) -> bool:
         return {
-            "bot":   (self._bot_proc   and self._bot_proc.poll()   is None),
-            "admin": (self._admin_proc and self._admin_proc.poll() is None),
-            "ceer":  (self._ceer_proc  and self._ceer_proc.poll()  is None),
+            "bot":        (self._bot_proc        and self._bot_proc.poll()        is None),
+            "admin":      (self._admin_proc       and self._admin_proc.poll()      is None),
+            "cerber_bot": (self._cerber_bot_proc  and self._cerber_bot_proc.poll() is None),
+            "ceer":       (self._ceer_proc         and self._ceer_proc.poll()       is None),
         }.get(key, False)  # type: ignore[return-value]
 
     # ── Обновление кнопок в списках ───────────────────────────
@@ -1294,15 +1310,17 @@ class CerberGUI:
         for t in self._tailers:
             t.stop()
         self._tailers = [
-            LogTailer(LOGS["bot"],         self._log_q, "bot"),
-            LogTailer(LOGS["bot_err"],     self._log_q, "bot_err"),
-            LogTailer(LOGS["admin"],       self._log_q, "admin"),
-            LogTailer(LOGS["admin_err"],   self._log_q, "admin_err"),
-            LogTailer(LOGS["ceer"],        self._log_q, "ceer"),
-            LogTailer(LOGS["ceer_err"],    self._log_q, "ceer_err"),
-            LogTailer(LOGS["tunnel"],      self._log_q, "tunnel"),
-            LogTailer(LOGS["ceer_tunnel"], self._log_q, "ceer_tunnel"),
-            LogTailer(LOGS["launcher"],    self._log_q, "launcher"),
+            LogTailer(LOGS["bot"],            self._log_q, "bot"),
+            LogTailer(LOGS["bot_err"],        self._log_q, "bot_err"),
+            LogTailer(LOGS["admin"],          self._log_q, "admin"),
+            LogTailer(LOGS["admin_err"],      self._log_q, "admin_err"),
+            LogTailer(LOGS["ceer"],           self._log_q, "ceer"),
+            LogTailer(LOGS["ceer_err"],       self._log_q, "ceer_err"),
+            LogTailer(LOGS["cerber_bot"],     self._log_q, "cerber_bot"),
+            LogTailer(LOGS["cerber_bot_err"], self._log_q, "cerber_bot_err"),
+            LogTailer(LOGS["tunnel"],         self._log_q, "tunnel"),
+            LogTailer(LOGS["ceer_tunnel"],    self._log_q, "ceer_tunnel"),
+            LogTailer(LOGS["launcher"],       self._log_q, "launcher"),
         ]
         for t in self._tailers:
             t.start()
@@ -1390,6 +1408,26 @@ class CerberGUI:
             self._hdr_ceer_var.set("○  CEER")
             self._hdr_ceer_lbl.configure(fg=TEXT_M)
         self._refresh_bot_list_btn("ceer", ceer_running)
+
+        # cerber_bot (Shop)
+        cerber_bot_running = bool(self._cerber_bot_proc and self._cerber_bot_proc.poll() is None)
+        if cerber_bot_running:
+            self._sb_cerber_bot_var.set("●  Shop: Запущен")
+            self._sb_cerber_bot_lbl.configure(fg=ACCENT_G)
+            self._hdr_cerber_bot_var.set("●  Shop")
+            self._hdr_cerber_bot_lbl.configure(fg=ACCENT_G)
+        else:
+            if self._cerber_bot_proc and self._cerber_bot_proc.poll() is not None:
+                code = self._cerber_bot_proc.returncode
+                if code != 0:
+                    self._add_log("launcher", f"[!] cerber_bot завершился (код {code})", "err")
+                self._cerber_bot_proc = None
+                cerber_bot_running = False
+            self._sb_cerber_bot_var.set("○  Shop: Остановлен")
+            self._sb_cerber_bot_lbl.configure(fg=ACCENT_B)
+            self._hdr_cerber_bot_var.set("○  Shop")
+            self._hdr_cerber_bot_lbl.configure(fg=TEXT_M)
+        self._refresh_bot_list_btn("cerber_bot", cerber_bot_running)
 
         # Туннель
         if self._tunnel_proc and self._tunnel_proc.poll() is None:
@@ -1673,7 +1711,56 @@ class CerberGUI:
         self.root.after(1500, self._start_ceer)
 
     # ──────────────────────────────────────────────────────────
-    # ACTIONS: CEER MINI APP ТУННЕЛЬ
+    # ACTIONS: CERBER BOT (Shop)
+    # ──────────────────────────────────────────────────────────
+
+    def _start_cerber_bot(self) -> None:
+        if self._cerber_bot_proc and self._cerber_bot_proc.poll() is None:
+            self._add_log("launcher", "cerber_bot (шоп) уже запущен", "warn")
+            return
+        if not VENV_PY.exists():
+            self._add_log("launcher", f"[!] .venv не найден: {VENV_PY}", "err")
+            return
+        if not ENV_FILE.exists():
+            self._add_log("launcher", "[!] .env не найден. Создайте из .env.example", "err")
+            return
+        if not get_env("BOT_TOKEN", ""):
+            self._add_log("launcher", "[!] BOT_TOKEN не задан в .env", "err")
+            return
+        try:
+            out = open(LOGS["cerber_bot"],     "a", encoding="utf-8")
+            err = open(LOGS["cerber_bot_err"], "a", encoding="utf-8")
+            self._cerber_bot_proc = subprocess.Popen(
+                [str(VENV_PY), "-m", "cerber_bot"],
+                cwd=str(ROOT), stdout=out, stderr=err,
+            )
+            self._add_log("launcher",
+                          f"cerber_bot запущен  PID {self._cerber_bot_proc.pid}", "ok")
+            launcher_log(f"cerber_bot started PID {self._cerber_bot_proc.pid}")
+            self._switch_bot_log("cerber_bot")
+        except Exception as e:
+            self._add_log("launcher", f"Ошибка запуска cerber_bot: {e}", "err")
+
+    def _stop_cerber_bot(self) -> None:
+        if not self._cerber_bot_proc or self._cerber_bot_proc.poll() is not None:
+            self._add_log("launcher", "cerber_bot не запущен", "gray")
+            self._cerber_bot_proc = None
+            return
+        pid = self._cerber_bot_proc.pid
+        self._cerber_bot_proc.terminate()
+        try:
+            self._cerber_bot_proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self._cerber_bot_proc.kill()
+        self._add_log("launcher", f"cerber_bot остановлен  PID {pid}", "warn")
+        launcher_log(f"cerber_bot stopped PID {pid}")
+        self._cerber_bot_proc = None
+
+    def _restart_cerber_bot(self) -> None:
+        self._add_log("launcher", "Перезапуск cerber_bot...", "warn")
+        self._stop_cerber_bot()
+        self.root.after(1500, self._start_cerber_bot)
+
     # ──────────────────────────────────────────────────────────
 
     def _start_ceer_tunnel(self) -> None:
@@ -1826,7 +1913,8 @@ class CerberGUI:
     def _on_close(self) -> None:
         for t in self._tailers:
             t.stop()
-        for proc in (self._bot_proc, self._admin_proc, self._ceer_proc, self._tunnel_proc, self._ceer_tunnel_proc):
+        for proc in (self._bot_proc, self._admin_proc, self._cerber_bot_proc, self._ceer_proc,
+                     self._tunnel_proc, self._ceer_tunnel_proc):
             if proc and proc.poll() is None:
                 proc.terminate()
                 try:
