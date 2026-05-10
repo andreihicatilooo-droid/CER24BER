@@ -1,5 +1,5 @@
 # CERBER — TODO
-_Обновлено: 2026-04-22_
+_Обновлено: 2026-05-10_
 
 ---
 
@@ -75,7 +75,53 @@ _Обновлено: 2026-04-22_
 
 #### 🔗 Цепочка «Рефакторинг платёжного слоя» — строго по порядку
 
----
+
+- [ ] [1/8] Финализировать API-контракт биллинга в Go
+      📂 Файлы: `src/cerber_core/internal/router/router.go`, `src/cerber_core/internal/service/balance.go`, `src/cerber_core/internal/service/payment.go`, `src/cerber_core/internal/handler/balance.go`, `src/cerber_core/internal/handler/payment.go`, `src/cerber_core/internal/handler/admin.go`
+      ⚠️ Риск: неполный контракт сохранит локальные мутации баланса в Python и сорвёт единый cutover
+      ✅ Готово когда: контракт покрывает balance/history, payment create/status/webhook, hold/unblock/transfer, withdrawal lifecycle, refund и admin-операции
+
+- [ ] [2/8] Исправить схему и SQL репозиториев cerber_core
+      📂 Файлы: `src/cerber_core/migrations/001_init.sql`, `src/cerber_core/internal/repository/transaction.go`, `src/cerber_core/internal/repository/account.go`, `src/cerber_core/internal/model/transaction.go`, `src/cerber_core/internal/model/account.go`
+      🔗 После: «[1/8] Финализировать API-контракт биллинга в Go»
+      ⚠️ Риск: текущие запросы ListByAccount/ListByService ссылаются на несуществующие колонки; возможны падения в runtime
+      ✅ Готово когда: все SQL-запросы репозиториев выполняются на актуальной схеме без ошибок
+
+- [ ] [3/8] Реализовать провайдерный слой платежей в Go
+      📂 Файлы: `src/cerber_core/internal/service/payment.go`, `src/cerber_core/internal/repository/payment.go`, `src/cerber_core/internal/router/router.go`, `src/cerber_core/internal/handler/payment.go`
+      🔗 После: «[2/8] Исправить схему и SQL репозиториев cerber_core»
+      ⚠️ Риск: параллельная жизнь webhook-веток в Python и Go может дать двойную обработку платежей
+      ✅ Готово когда: NicePay Link/H2H и Rukassa полностью закрыты в Go, webhook приземляются в Go, есть идемпотентность
+
+- [ ] [4/8] Добавить reconciliation и метрики в core
+      📂 Файлы: `src/cerber_core/cmd/api/main.go`, `src/cerber_core/internal/service/payment.go`
+      🔗 После: «[3/8] Реализовать провайдерный слой платежей в Go»
+      ⚠️ Риск: без воркера зависнут pending-платежи; без метрик невозможно быстро локализовать деградации провайдеров
+      ✅ Готово когда: pending старше N минут сверяются воркером; есть метрики success rate, p95 latency и provider errors
+
+- [ ] [5/8] Внедрить BillingClient во всех Python-потребителях
+      📂 Файлы: `src/cerber_bot/container.py`, `src/cerber_bot/config.py`, `src/cerber_bot/services/payments.py`, `src/cerber_bot/services/store.py`, `src/cerber_bot/services/deals.py`, `src/cerber_bot/services/users.py`, `src/cerber_bot/services/tgaccounts.py`, `src/ceer_bot/services/users.py`
+      🔗 После: «[4/8] Добавить reconciliation и метрики в core»
+      ⚠️ Риск: mixed-state (часть мутаций локально, часть в Go) приведёт к расхождению балансов
+      ✅ Готово когда: новые операции `user.balance +=/-=` и `held_balance +=/-=` в runtime отсутствуют, все мутации идут через Go API
+
+- [ ] [6/8] Поднять admin-layer управления пополнениями
+      📂 Файлы: `src/cerber_core/internal/handler/admin.go`, `src/cerber_core/internal/router/router.go`, `src/cerber_bot/handlers/admin.py`, `src/cerber_admin/main.py`
+      🔗 После: «[5/8] Внедрить BillingClient во всех Python-потребителях»
+      ⚠️ Риск: ручные корректировки без audit-лога делают финансовые операции непрозрачными
+      ✅ Готово когда: есть список пополнений с фильтрами, mark paid/failed, direct credit/debit, лимиты и включение/отключение провайдеров
+
+- [ ] [7/8] Выполнить полный cutover webhook и UI на Go
+      📂 Файлы: `src/cerber_bot/nicepay_webhook.py`, `src/cerber_bot/web/routes/nicepay.py`, `src/cerber_bot/web/routes/rukassa.py`, `src/cerber_bot/handlers/storefront.py`, `src/cerber_bot/handlers/deals.py`, `src/cerber_bot/handlers/menu.py`, `src/cerber_bot/texts.py`
+      🔗 После: «[6/8] Поднять admin-layer управления пополнениями»
+      ⚠️ Риск: если старый Python-webhook останется активным, возможны дубликаты зачислений
+      ✅ Готово когда: webhook обрабатываются только в Go, UI читает баланс/историю/статусы только из Go API
+
+- [ ] [8/8] Закрыть техдолг и обновить тестовый контур
+      📂 Файлы: `src/cerber_bot/db/models.py`, `src/cerber_bot/db/session.py`, `src/cerber_bot/services/catalog.py`, `src/cerber_bot/integrations/base.py`, `src/cerber_bot/integrations/http.py`, `src/cerber_bot/integrations/registry.py`, `src/cerber_bot/integrations/schemas.py`, `tests/test_payment_service.py`, `tests/test_store_service.py`, `tests/test_deal_service.py`, `tests/test_user_service.py`
+      🔗 После: «[7/8] Выполнить полный cutover webhook и UI на Go»
+      ⚠️ Риск: преждевременное удаление legacy-слоя сломает платежные сценарии до финального cutover
+      ✅ Готово когда: runtime не зависит от локальных WalletPayment/WalletTransaction, интеграционные тесты проходят на Go billing API
 
       📂 Файлы: ceer_bot/, src/cerber_bot/db/models.py, src/cerber_bot/services/users.py, ...
       **Что делать:**
@@ -163,16 +209,6 @@ _Обновлено: 2026-04-22_
             - Все игровые операции с балансом проходят через сервисы CERBER.
             - Тесты и документация отражают интеграцию.
 
-- [ ] [1/2] Абстракция PaymentGateway + реестр платёжных провайдеров
-      📂 Файлы: `integrations/nicepay.py`, `services/payments.py`, `nicepay_webhook.py`, `container.py`, `config.py`
-      ⚠️ Риск: `NICEPAY_LIMITS` и `PAYMENT_PROVIDER_NAME` хардкод в сервисе — перенести в класс провайдера; webhook-диспетчер маршрутизировать по полю `provider` из `WalletPayment`
-      ✅ Готово когда: добавление новой платёжки — только новый класс + регистрация в реестре; `NicePayClient` реализует `PaymentGateway` Protocol
-
-- [ ] [2/2] WalletService — единая точка мутаций баланса
-      📂 Файлы: `services/payments.py`, `services/deals.py`, `services/store.py`, `container.py`
-      🔗 После: «[1/2] Абстракция PaymentGateway + реестр платёжных провайдеров»
-      ⚠️ Риск: все три сервиса мутируют `user.balance` напрямую — рефакторить только вместе с PaymentGateway; тесты трёх сервисов потребуют обновления; `held_balance` — тоже в WalletService
-      ✅ Готово когда: `user.balance +=` / `user.balance -=` отсутствуют в `deals.py`, `store.py`, `payments.py`
 
 #### 🔗 Цепочка «FAQ в боте» — строго по порядку
 
