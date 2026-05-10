@@ -60,6 +60,7 @@ class TgCountryDetails:
     amount: Decimal
     currency: str
     available: bool
+    available_count: int | None
     base_price: Decimal | None
     discount_percent: int | None
 
@@ -214,6 +215,14 @@ class TgAccountService:
             rows = await repository.list_by_telegram_id(telegram_id)
             return tuple(rows)
 
+    async def get_purchase(self, telegram_id: int, purchase_id: int) -> TgAccountPurchase:
+        async with self.session_factory() as session:
+            repository = TgAccountRepository(session)
+            purchase = await repository.get_by_id(purchase_id)
+            if purchase is None or purchase.telegram_id != telegram_id:
+                raise TgAccountNotFoundError("Покупка не найдена.")
+            return purchase
+
     async def refund(self, telegram_id: int, purchase_id: int) -> TgAccountPurchase:
         async with self.session_factory() as session:
             user_repo = UserRepository(session)
@@ -299,6 +308,7 @@ def _parse_country_details(payload: dict[str, Any]) -> TgCountryDetails:
         amount=_extract_price_amount(payload, default=Decimal("0")),
         currency=_extract_price_currency(payload, default="USD"),
         available=bool(payload.get("available")),
+        available_count=_int_value(payload.get("available_count"), default=None),
         base_price=base_price,
         discount_percent=discount_percent,
     )

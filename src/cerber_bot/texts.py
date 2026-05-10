@@ -41,6 +41,7 @@ class MAIN_MENU_TEXT:
     DEALS = "🤝Гарант"
     ORDERS = "📦 Мои заказы"
     PROFILE = "👤 Профиль"
+    HOME = "🏠 Главное меню"
     REFRESH = "🔄 Обновить каталог"
     SUPPORT = "🆘 Поддержка"
     WEB_APP = "🌐 Веб-магазин"
@@ -536,7 +537,8 @@ class STOREFRONT_TEXT:
     STARS_PAYMENT_BALANCE = "Баланс после пополнения: {amount}"
     STARS_PAYMENT_ERROR = "Ошибка при обработке оплаты Stars: {error}"
 
-    FIELD_PROMPT = "Введите <b>{name}</b>:"    FIELD_PROMPT_DESCRIPTION = "\n{description}"
+    FIELD_PROMPT = "Введите <b>{name}</b>:"
+    FIELD_PROMPT_DESCRIPTION = "\n{description}"
     FIELD_PROMPT_OPTIONAL = " (необязательно, или отправьте <code>-</code> для пропуска)"
     FIELD_PROMPT_INTEGER_ERROR = "⚠️ Введите целое число (без букв и символов)."
     FIELD_PROGRESS = "Поле {done} из {total}"
@@ -1292,6 +1294,8 @@ class TG_ACCOUNTS_KEYBOARD_TEXT:
     MY_PURCHASES = "📱 Мои аккаунты"
     COUNTRIES = "Каталог стран"
     BUY = "Купить"
+    CONFIRM = "✅ Подтвердить"
+    CANCEL = "❌ Отмена"
     GET_CODE = "✅ Получить код"
     REFUND = "↩️ Возврат"
     PAGINATION_PREVIOUS = "◀"
@@ -1315,3 +1319,91 @@ class TG_ACCOUNTS_KEYBOARD_TEXT:
         """Формат кнопки покупки в списке."""
         phone_str = phone if phone else "?"
         return f"#{phone_str} {country} • {status}"
+
+
+class TG_ACCOUNTS_TEXT:
+    TITLE = "<b>Аккаунты Telegram</b>"
+    DESCRIPTION = (
+        "Покупайте Telegram-аккаунты по странам, отслеживайте статус покупки и "
+        "запрашивайте код подтверждения в одном разделе."
+    )
+    CONFIGURED_HINT = "Доступны покупка, запрос кода и возврат через GetMyTG."
+    PUBLIC_ONLY_HINT = "GetMyTG API-ключ не настроен: доступен только просмотр раздела."
+    COUNTRIES_TITLE = "<b>Каталог стран</b>"
+    COUNTRIES_PAGE = "Страница {page} из {total_pages}"
+    COUNTRIES_EMPTY = "Каталог стран пуст. Попробуйте позже."
+    COUNTRIES_HINT = "Выберите страну, чтобы открыть карточку и перейти к покупке."
+    COUNTRY_TITLE = "<b>{emoji} {name}</b>"
+    COUNTRY_CODE = "Код страны: <code>{code}</code>"
+    COUNTRY_PRICE = "Цена: {amount}"
+    COUNTRY_BASE_PRICE = "Цена без скидки: {amount}"
+    COUNTRY_DISCOUNT = "Скидка: {percent}%"
+    COUNTRY_AVAILABLE = "Доступность: {value}"
+    COUNTRY_AVAILABLE_COUNT = "В наличии: {count}"
+    COUNTRY_BUY_HINT = "Нажмите «Купить», чтобы перейти к подтверждению покупки."
+    COUNTRY_UNAVAILABLE_HINT = "Сейчас эта страна недоступна для покупки."
+    BUY_CONFIRM_TITLE = "<b>Подтверждение покупки</b>"
+    BUY_CONFIRM_COUNTRY = "Страна: {country}"
+    BUY_CONFIRM_PRICE = "Будет списано: {amount}"
+    BUY_CONFIRM_HINT = "Подтвердите покупку кнопкой ниже или отмените действие."
+    BUY_CONTEXT_LOST = "Контекст покупки потерян. Откройте карточку страны заново."
+    BUY_CANCELED = "Покупка отменена."
+    PURCHASES_TITLE = "<b>Мои покупки</b>"
+    PURCHASES_PAGE = "Страница {page} из {total_pages}"
+    PURCHASES_EMPTY = "У вас пока нет купленных Telegram-аккаунтов."
+    PURCHASES_HINT = "Выберите покупку из списка, чтобы посмотреть детали и действия."
+    PURCHASE_TITLE = "<b>Покупка #{purchase_id}</b>"
+    PURCHASE_COUNTRY = "Страна: {country}"
+    PURCHASE_PHONE = "Номер: {phone}"
+    PURCHASE_STATUS = "Статус: {status}"
+    PURCHASE_AMOUNT = "Списано: {amount}"
+    PURCHASE_TYPE = "Тип покупки: {purchase_type}"
+    PURCHASE_CODE = "Код: <code>{code}</code>"
+    PURCHASE_PASSWORD = "Пароль: <code>{password}</code>"
+    PURCHASE_UPDATED = "Обновлено: {updated_at}"
+    PURCHASE_CODE_PENDING = "Код ещё не получен. Нажмите «Получить код» и дождитесь ответа сервиса."
+    PURCHASE_HINT = "Используйте кнопки ниже, чтобы запросить код или оформить возврат."
+    REQUESTING_CODE = "<b>⏳ Получаем код подтверждения...</b>"
+    REFUNDING = "<b>⏳ Оформляем возврат...</b>"
+    NOT_CONFIGURED = "GetMyTG API-ключ не настроен. Операция покупки недоступна."
+    CALLBACK_HOME = "Раздел открыт"
+    CALLBACK_COUNTRIES = "Каталог открыт"
+    CALLBACK_COUNTRY = "Карточка страны"
+    CALLBACK_CONFIRM = "Подтвердите покупку"
+    CALLBACK_BUY_PROCESSING = "Покупаем аккаунт..."
+    CALLBACK_PURCHASES = "Мои покупки"
+    CALLBACK_PURCHASE = "Покупка открыта"
+    CALLBACK_REQUEST_CODE = "Получаем код..."
+    CALLBACK_REFUND = "Оформляем возврат..."
+    CALLBACK_UNAVAILABLE = "Раздел недоступен"
+    UNKNOWN_STATUS = "неизвестно"
+    STATUS_LABELS = {
+        "PENDING": "ожидает код",
+        "SUCCESS": "код получен",
+        "DELIVERED": "доставлен",
+        "ACTIVE": "активен",
+        "REFUND": "возврат",
+        "FAILED": "ошибка",
+        "ERROR": "ошибка",
+    }
+
+    @classmethod
+    def configured_hint(cls, configured: bool) -> str:
+        return cls.CONFIGURED_HINT if configured else cls.PUBLIC_ONLY_HINT
+
+    @classmethod
+    def countries_page(cls, page: int, total_pages: int) -> str:
+        return cls.COUNTRIES_PAGE.format(page=page, total_pages=total_pages)
+
+    @classmethod
+    def purchases_page(cls, page: int, total_pages: int) -> str:
+        return cls.PURCHASES_PAGE.format(page=page, total_pages=total_pages)
+
+    @classmethod
+    def country_title(cls, emoji: str, name: str) -> str:
+        return cls.COUNTRY_TITLE.format(emoji=emoji, name=name)
+
+    @classmethod
+    def status_label(cls, status: str) -> str:
+        normalized = (status or "").strip().upper()
+        return cls.STATUS_LABELS.get(normalized, normalized or cls.UNKNOWN_STATUS)

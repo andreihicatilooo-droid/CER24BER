@@ -25,6 +25,7 @@ from cerber_bot.handlers.giftapi import build_giftapi_router
 from cerber_bot.handlers.menu import build_deals_router, build_menu_router
 from cerber_bot.handlers.start import build_start_router
 from cerber_bot.handlers.storefront import build_storefront_router
+from cerber_bot.handlers.tgaccounts import build_tgaccounts_router
 from cerber_bot.log_config import setup_logging
 from cerber_bot.nicepay_webhook import NicePayWebhookServer
 from cerber_bot.web.app import create_web_app
@@ -49,6 +50,7 @@ async def run() -> None:
     dispatcher = Dispatcher(storage=MemoryStorage())
     dispatcher.include_router(build_start_router(container))
     dispatcher.include_router(build_storefront_router(container))
+    dispatcher.include_router(build_tgaccounts_router(container))
     dispatcher.include_router(build_giftapi_router(container))
     dispatcher.include_router(build_deals_router(container))
     dispatcher.include_router(build_menu_router(container))

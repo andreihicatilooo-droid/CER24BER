@@ -14,6 +14,8 @@ TGACC_HOME_ACTION = "tgacc:home"
 TGACC_COUNTRIES_PAGE_PREFIX = "tgacc:cp:"  # + номер страницы
 TGACC_COUNTRY_DETAIL_PREFIX = "tgacc:cd:"  # + country_code
 TGACC_BUY_PREFIX = "tgacc:buy:"  # + country_code
+TGACC_CONFIRM_BUY_PREFIX = "tgacc:ok:"  # + country_code
+TGACC_CANCEL_BUY_ACTION = "tgacc:cancel"
 TGACC_MY_PURCHASES_ACTION = "tgacc:myp"
 TGACC_MY_PURCHASES_PAGE_PREFIX = "tgacc:pp:"  # + номер страницы
 TGACC_PURCHASE_DETAIL_PREFIX = "tgacc:pd:"  # + purchase_id
@@ -95,7 +97,7 @@ def build_countries_keyboard(catalog: TgCatalogPage) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def build_country_detail_keyboard(country_code: str, available: bool) -> InlineKeyboardMarkup:
+def build_country_detail_keyboard(country_code: str, available: bool, *, back_page: int = 1) -> InlineKeyboardMarkup:
     """Клавиатура карточки страны с кнопкой "Купить"."""
     rows: list[list[InlineKeyboardButton]] = []
     
@@ -111,12 +113,30 @@ def build_country_detail_keyboard(country_code: str, available: bool) -> InlineK
     
     rows.append(
         [
-            InlineKeyboardButton(text=TG_ACCOUNTS_KEYBOARD_TEXT.BACK, callback_data=TGACC_COUNTRIES_PAGE_PREFIX + "1"),
+            InlineKeyboardButton(text=TG_ACCOUNTS_KEYBOARD_TEXT.BACK, callback_data=f"{TGACC_COUNTRIES_PAGE_PREFIX}{back_page}"),
             InlineKeyboardButton(text=MAIN_MENU_TEXT.HOME, callback_data="menu:main"),
         ]
     )
     
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def build_buy_confirmation_keyboard(country_code: str) -> InlineKeyboardMarkup:
+    """Клавиатура подтверждения покупки аккаунта."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=TG_ACCOUNTS_KEYBOARD_TEXT.CONFIRM,
+                    callback_data=f"{TGACC_CONFIRM_BUY_PREFIX}{country_code}",
+                ),
+                InlineKeyboardButton(
+                    text=TG_ACCOUNTS_KEYBOARD_TEXT.CANCEL,
+                    callback_data=TGACC_CANCEL_BUY_ACTION,
+                ),
+            ],
+        ]
+    )
 
 
 def build_my_purchases_keyboard(purchases: tuple[TgAccountPurchase, ...], page_info: PageInfo) -> InlineKeyboardMarkup:
