@@ -15,7 +15,7 @@ from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, Message, PreCheckoutQuery
 
 from cerber_bot.container import AppContainer
 from cerber_bot.handlers.menu import extract_message
@@ -46,11 +46,13 @@ from cerber_bot.keyboards.storefront import (
     STORE_H2H_CONFIRM_PREFIX,
     STORE_H2H_METHOD_PREFIX,
     STORE_H2H_PROOF_SKIP_PREFIX,
+    STORE_STARS_AMOUNT_PREFIX,
     STORE_TOP_UP_CUSTOM_ACTION,
     STORE_TOP_UP_H2H_ACTION,
     STORE_TOP_UP_LINK_ACTION,
     STORE_TOP_UP_NICEPAY_ACTION,
     STORE_TOP_UP_RUKASSA_ACTION,
+    STORE_TOP_UP_STARS_ACTION,
     STORE_TOP_UP_CATALOG_ACTION,
     STORE_TOP_UP_PREFIX,
     STORE_WALLET_ACTION,
@@ -65,6 +67,7 @@ from cerber_bot.keyboards.storefront import (
     build_popular_keyboard,
     build_product_detail_keyboard,
     build_products_keyboard,
+    build_stars_amount_keyboard,
     build_store_home_keyboard,
     build_top_up_catalog_keyboard,
     build_wallet_history_keyboard,
@@ -89,7 +92,7 @@ from cerber_bot.services.store import (
     build_page_info,
     format_money,
 )
-from cerber_bot.services.payments import PaymentConfigurationError, PaymentFlowError, PaymentH2HDetails, PaymentH2HDetails
+from cerber_bot.services.payments import PaymentConfigurationError, PaymentFlowError, PaymentH2HDetails
 from cerber_bot.texts import NICEPAY_H2H_METHODS, STORE_KEYBOARD_TEXT, STOREFRONT_TEXT
 
 
@@ -420,6 +423,7 @@ def build_storefront_router(container: AppContainer) -> Router:
         is_h2h = container.payment_service.is_h2h_mode
         is_nicepay_link = container.payment_service.is_nicepay_link_configured
         is_link = container.payment_service.is_configured and not is_h2h and not is_rukassa and not is_nicepay_link
+        is_stars = container.payment_service.stars_enabled
         # Когда активны оба провайдера, показываем каждый отдельно
         await message.answer(
             STOREFRONT_TEXT.TOP_UP_CATALOG_PROMPT,
@@ -428,6 +432,7 @@ def build_storefront_router(container: AppContainer) -> Router:
                 show_link=is_link,
                 show_nicepay=is_nicepay_link,
                 show_rukassa=is_rukassa,
+                show_stars=is_stars,
             ),
         )
         await callback.answer(STOREFRONT_TEXT.CALLBACK_TOP_UP_CATALOG)
@@ -492,6 +497,88 @@ def build_storefront_router(container: AppContainer) -> Router:
         await state.set_state(StorefrontStates.waiting_for_top_up_amount)
         await message.answer(STOREFRONT_TEXT.TOP_UP_CUSTOM_PROMPT, reply_markup=_wallet_kb())
         await callback.answer(STOREFRONT_TEXT.CALLBACK_TOP_UP_AMOUNT_READY)
+
+    @router.callback_query(F.data == STORE_TOP_UP_STARS_ACTION)
+    async def handle_top_up_stars(callback: CallbackQuery) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+        await send_screen(
+            message,
+            STOREFRONT_TEXT.STARS_SELECT_AMOUNT,
+            build_stars_amount_keyboard(),
+            callback=callback,
+        )
+        await callback.answer(STOREFRONT_TEXT.CALLBACK_STARS_OPENED)
+
+    @router.callback_query(F.data.startswith(STORE_STARS_AMOUNT_PREFIX))
+    async def handle_stars_amount(callback: CallbackQuery) -> None:
+        message = extract_message(callback)
+        if message is None or callback.from_user is None:
+            await callback.answer()
+            return
+
+        amount_text = callback.data.removeprefix(STORE_STARS_AMOUNT_PREFIX)
+        try:
+            stars_amount = int(amount_text)
+        except ValueError:
+            await callback.answer()
+            return
+
+        await callback.answer(STOREFRONT_TEXT.CALLBACK_STARS_SENDING)
+        try:
+            invoice = await container.payment_service.create_stars_invoice(callback.from_user, stars_amount)
+        except (PaymentFlowError, PaymentConfigurationError) as error:
+            await send_screen(message, render_store_error(error), _wallet_kb(), callback=callback)
+            return
+
+        from aiogram import Bot
+        bot: Bot = message.bot  # type: ignore[assignment]
+        await bot.send_invoice(
+            chat_id=callback.from_user.id,
+            title=invoice.title,
+            description=invoice.description,
+            payload=invoice.payload,
+            currency="XTR",
+            prices=[LabeledPrice(label=f"⭐ {invoice.stars_amount} Stars", amount=invoice.stars_amount)],
+        )
+
+    @router.pre_checkout_query()
+    async def handle_pre_checkout_query(pre_checkout: PreCheckoutQuery) -> None:
+        await pre_checkout.answer(ok=True)
+
+    @router.message(F.successful_payment)
+    async def handle_successful_payment(message: Message) -> None:
+        if message.from_user is None or message.successful_payment is None:
+            return
+        sp = message.successful_payment
+        if sp.currency != "XTR":
+            return
+
+        try:
+            completion = await container.payment_service.process_stars_payment(
+                payload=sp.invoice_payload,
+                stars_amount=sp.total_amount,
+                telegram_charge_id=sp.telegram_payment_charge_id,
+                provider_charge_id=sp.provider_payment_charge_id,
+            )
+        except (PaymentFlowError, PaymentConfigurationError) as error:
+            await message.answer(STOREFRONT_TEXT.STARS_PAYMENT_ERROR.format(error=str(error)))
+            return
+
+        lines = [
+            STOREFRONT_TEXT.STARS_PAYMENT_SUCCESS_TITLE,
+            STOREFRONT_TEXT.STARS_PAYMENT_STARS.format(amount=sp.total_amount),
+        ]
+        if completion.credited_amount is not None and completion.credited_currency:
+            lines.append(STOREFRONT_TEXT.STARS_PAYMENT_CREDITED.format(
+                amount=format_money(completion.credited_amount, completion.credited_currency)
+            ))
+        lines.append(STOREFRONT_TEXT.STARS_PAYMENT_BALANCE.format(
+            amount=format_money(completion.balance_after, completion.credited_currency or container.payment_service.wallet_currency)
+        ))
+        await message.answer("\n".join(lines), reply_markup=_wallet_kb())
 
     @router.callback_query(F.data.startswith(STORE_TOP_UP_PREFIX))
     async def handle_top_up_fixed(callback: CallbackQuery, state: FSMContext) -> None:

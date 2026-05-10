@@ -81,6 +81,7 @@ class STORE_KEYBOARD_TEXT:
     TOP_UP_LINK = "🔗 Через ссылку"
     TOP_UP_NICEPAY = "💳 Через NicePay"
     TOP_UP_RUKASSA = "💰 Через Rukassa"
+    TOP_UP_STARS = "⭐ Telegram Stars"
     H2H_I_PAID = "✅ Я перевёл"
     H2H_CANCEL = "❌ Отмена"
     H2H_UPLOAD_PROOF = "📎 Отправить чек"
@@ -522,8 +523,20 @@ class STOREFRONT_TEXT:
     H2H_PROOF_TOO_LARGE = "Файл слишком большой. Максимальный размер — 1 МБ."
     H2H_PROOF_UPLOAD_ERROR = "Не удалось отправить чек: {error}"
 
-    FIELD_PROMPT = "Введите <b>{name}</b>:"
-    FIELD_PROMPT_DESCRIPTION = "\n{description}"
+    STARS_SELECT_AMOUNT = (
+        "<b>⭐ Пополнение через Telegram Stars</b>\n\n"
+        "Выберите количество Stars для пополнения баланса.\n"
+        "После оплаты средства зачисляются мгновенно."
+    )
+    CALLBACK_STARS_OPENED = "Выберите количество Stars"
+    CALLBACK_STARS_SENDING = "Открываем оплату Stars..."
+    STARS_PAYMENT_SUCCESS_TITLE = "<b>⭐ Оплата Stars подтверждена</b>"
+    STARS_PAYMENT_STARS = "Оплачено: {amount} ⭐ Stars"
+    STARS_PAYMENT_CREDITED = "Зачислено на кошелёк: {amount}"
+    STARS_PAYMENT_BALANCE = "Баланс после пополнения: {amount}"
+    STARS_PAYMENT_ERROR = "Ошибка при обработке оплаты Stars: {error}"
+
+    FIELD_PROMPT = "Введите <b>{name}</b>:"    FIELD_PROMPT_DESCRIPTION = "\n{description}"
     FIELD_PROMPT_OPTIONAL = " (необязательно, или отправьте <code>-</code> для пропуска)"
     FIELD_PROMPT_INTEGER_ERROR = "⚠️ Введите целое число (без букв и символов)."
     FIELD_PROGRESS = "Поле {done} из {total}"

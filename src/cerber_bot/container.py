@@ -120,6 +120,8 @@ class AppContainer:
             success_url=resolved_settings.rukassa_success_url if rukassa_client else resolved_settings.nicepay_success_url,
             fail_url=resolved_settings.rukassa_fail_url if rukassa_client else resolved_settings.nicepay_fail_url,
             method=resolved_settings.nicepay_method,
+            stars_enabled=resolved_settings.stars_enabled,
+            stars_to_usd_rate=resolved_settings.stars_to_usd_rate,
         )
         store_service = StoreService(
             session_factory=session_factory,

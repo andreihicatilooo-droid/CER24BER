@@ -28,6 +28,7 @@ from cerber_bot.texts import PAYMENT_SERVICE_TEXT, RUKASSA_TEXT
 
 PAYMENT_PROVIDER_NAME = "nicepay"
 RUKASSA_PROVIDER_NAME = "rukassa"
+STARS_PROVIDER_NAME = "telegram_stars"
 NICEPAY_LIMITS: dict[str, tuple[Decimal, Decimal]] = {
     "USD": (Decimal("10.00"), Decimal("990.00")),
     "EUR": (Decimal("10.00"), Decimal("850.00")),
@@ -102,6 +103,16 @@ class PaymentH2HDetails:
     wallet_currency: str
 
 
+@dataclass(slots=True, frozen=True)
+class StarsInvoiceData:
+    payload: str
+    title: str
+    description: str
+    stars_amount: int
+    estimated_wallet_amount: Decimal
+    wallet_currency: str
+
+
 class PaymentService:
     def __init__(
         self,
@@ -119,6 +130,8 @@ class PaymentService:
         success_url: str | None,
         fail_url: str | None,
         method: str | None,
+        stars_enabled: bool = False,
+        stars_to_usd_rate: Decimal = Decimal("0.013"),
     ) -> None:
         self.session_factory = session_factory
         self.nicepay_client = nicepay_client
@@ -133,6 +146,8 @@ class PaymentService:
         self.success_url = success_url.strip() if success_url else None
         self.fail_url = fail_url.strip() if fail_url else None
         self.method = method.strip() if method else None
+        self.stars_enabled = stars_enabled
+        self.stars_to_usd_rate = stars_to_usd_rate
 
     @property
     def _use_rukassa(self) -> bool:
@@ -693,6 +708,141 @@ class PaymentService:
             )
         except NicePayError as error:
             raise PaymentFlowError(str(error)) from error
+
+    async def create_stars_invoice(
+        self,
+        telegram_user: TelegramUserObject,
+        stars_amount: int,
+    ) -> StarsInvoiceData:
+        """Создать pending-запись в БД и вернуть параметры для send_invoice (XTR)."""
+        if not self.stars_enabled:
+            raise PaymentConfigurationError("Оплата через Telegram Stars не включена.")
+        if stars_amount < 1:
+            raise PaymentFlowError("Количество Stars должно быть не менее 1.")
+
+        payload = build_payment_payload(telegram_user.id)
+        stars_as_usd = Decimal(stars_amount) * self.stars_to_usd_rate
+
+        async with self.session_factory() as session:
+            user_repository = UserRepository(session)
+            payment_repository = WalletPaymentRepository(session)
+            user, _ = await user_repository.get_or_create(
+                telegram_id=telegram_user.id,
+                username=telegram_user.username,
+                first_name=telegram_user.first_name,
+                last_name=telegram_user.last_name,
+                language_code=telegram_user.language_code,
+                is_bot=telegram_user.is_bot,
+                balance_currency=self.wallet_currency,
+            )
+            wallet_currency = user.balance_currency or self.wallet_currency
+            try:
+                estimated_wallet_amount = await self.exchange_rate_service.convert(
+                    stars_as_usd, "USD", wallet_currency
+                )
+            except ExchangeRateError as error:
+                raise PaymentFlowError(str(error)) from error
+
+            await payment_repository.create_pending(
+                telegram_id=telegram_user.id,
+                payload=payload,
+                provider=STARS_PROVIDER_NAME,
+                amount=Decimal(stars_amount),
+                currency="XTR",
+                title=self.title,
+                description=f"Telegram Stars: {stars_amount} ⭐",
+            )
+            await session.commit()
+
+        return StarsInvoiceData(
+            payload=payload,
+            title=self.title,
+            description=f"Пополнение кошелька на {stars_amount} ⭐ Stars",
+            stars_amount=stars_amount,
+            estimated_wallet_amount=estimated_wallet_amount,
+            wallet_currency=wallet_currency,
+        )
+
+    async def process_stars_payment(
+        self,
+        *,
+        payload: str,
+        stars_amount: int,
+        telegram_charge_id: str,
+        provider_charge_id: str | None,
+    ) -> PaymentCompletion:
+        """Зачислить баланс после successful_payment (XTR)."""
+        async with self.session_factory() as session:
+            user_repository = UserRepository(session)
+            wallet_repository = WalletTransactionRepository(session)
+            payment_repository = WalletPaymentRepository(session)
+
+            payment = await payment_repository.get_by_payload(payload)
+            if payment is None:
+                raise PaymentFlowError(PAYMENT_SERVICE_TEXT.PAYMENT_NOT_FOUND)
+            if payment.provider != STARS_PROVIDER_NAME:
+                raise PaymentFlowError(PAYMENT_SERVICE_TEXT.WRONG_PROVIDER)
+
+            user = await user_repository.get_by_telegram_id(payment.telegram_id, with_lock=True)
+            await session.refresh(payment)
+            if user is None:
+                raise PaymentFlowError(PAYMENT_SERVICE_TEXT.PAYMENT_NOT_FOUND)
+            wallet_currency = user.balance_currency or self.wallet_currency
+
+            if payment.status == "paid":
+                credited_tx = await wallet_repository.get_by_reference(telegram_charge_id)
+                await session.commit()
+                return PaymentCompletion(
+                    telegram_id=payment.telegram_id,
+                    amount=Decimal(stars_amount),
+                    currency="XTR",
+                    credited_amount=(Decimal(str(credited_tx.amount)) if credited_tx else None),
+                    credited_currency=(credited_tx.currency if credited_tx else wallet_currency),
+                    balance_after=Decimal(str(user.balance)),
+                    payload=payload,
+                    payment_id=telegram_charge_id,
+                )
+
+            stars_as_usd = Decimal(stars_amount) * self.stars_to_usd_rate
+            try:
+                credited_amount = await self.exchange_rate_service.convert(
+                    stars_as_usd, "USD", wallet_currency
+                )
+            except ExchangeRateError as error:
+                raise PaymentFlowError(str(error)) from error
+
+            user.balance_currency = wallet_currency
+            user.balance += credited_amount
+            await wallet_repository.add(
+                telegram_id=payment.telegram_id,
+                transaction_type="top_up",
+                amount=credited_amount,
+                currency=wallet_currency,
+                description=build_wallet_credit_description(
+                    payment_amount=Decimal(stars_amount),
+                    payment_currency="XTR",
+                    credited_amount=credited_amount,
+                    wallet_currency=wallet_currency,
+                ),
+                reference=telegram_charge_id,
+            )
+            await payment_repository.mark_paid(
+                payment,
+                provider_reference=telegram_charge_id,
+                provider_payment_id=provider_charge_id,
+            )
+            await session.commit()
+
+        return PaymentCompletion(
+            telegram_id=payment.telegram_id,
+            amount=Decimal(stars_amount),
+            currency="XTR",
+            credited_amount=credited_amount,
+            credited_currency=wallet_currency,
+            balance_after=Decimal(str(user.balance)),
+            payload=payload,
+            payment_id=telegram_charge_id,
+        )
 
     def _effective_limits(self) -> tuple[Decimal, Decimal]:
         if self._use_rukassa:

@@ -37,8 +37,12 @@ STORE_TOP_UP_H2H_ACTION = "store:tph2h"      # выбор метода H2H
 STORE_TOP_UP_LINK_ACTION = "store:tplink"    # выбор метода ссылка
 STORE_TOP_UP_NICEPAY_ACTION = "store:tpnp"   # явный выбор NicePay (когда оба провайдера активны)
 STORE_TOP_UP_RUKASSA_ACTION = "store:tpruk"  # пополнение через Rukassa
+STORE_TOP_UP_STARS_ACTION = "store:tpstars"  # пополнение через Telegram Stars
+STORE_STARS_AMOUNT_PREFIX = "store:stars:"   # + количество Stars
 STORE_TOP_UP_CATALOG_ACTION = "store:tpcat"  # каталог провайдеров пополнения
 STORE_WALLET_HISTORY_ACTION = "store:whist"  # история операций кошелька
+
+STARS_PRESETS: tuple[int, ...] = (50, 100, 250, 500, 1000)
 
 
 def build_store_home_keyboard() -> InlineKeyboardMarkup:
@@ -231,6 +235,7 @@ def build_top_up_catalog_keyboard(
     show_link: bool = False,
     show_nicepay: bool = False,
     show_rukassa: bool = False,
+    show_stars: bool = False,
 ) -> InlineKeyboardMarkup:
     """Каталог доступных способов пополнения баланса."""
     rows: list[list[InlineKeyboardButton]] = []
@@ -242,7 +247,27 @@ def build_top_up_catalog_keyboard(
         rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_NICEPAY, callback_data=STORE_TOP_UP_NICEPAY_ACTION)])
     if show_rukassa:
         rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_RUKASSA, callback_data=STORE_TOP_UP_RUKASSA_ACTION)])
+    if show_stars:
+        rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.TOP_UP_STARS, callback_data=STORE_TOP_UP_STARS_ACTION)])
     rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.BACK, callback_data=STORE_WALLET_ACTION)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def build_stars_amount_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура выбора количества Stars для пополнения."""
+    rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for i, amount in enumerate(STARS_PRESETS):
+        row.append(InlineKeyboardButton(
+            text=f"⭐ {amount}",
+            callback_data=f"{STORE_STARS_AMOUNT_PREFIX}{amount}",
+        ))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([InlineKeyboardButton(text=STORE_KEYBOARD_TEXT.BACK, callback_data=STORE_TOP_UP_CATALOG_ACTION)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
