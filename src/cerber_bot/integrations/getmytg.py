@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import hashlib
+import hmac
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
 
@@ -26,6 +29,8 @@ class GetMyTGRequestError(GetMyTGError):
 
 
 class GetMyTGClient:
+    WEBHOOK_SIGNATURE_QUERY_PARAM = "sig"
+
     def __init__(
         self,
         *,
@@ -44,6 +49,40 @@ class GetMyTGClient:
     def _ensure_configured(self) -> None:
         if not self.is_configured:
             raise GetMyTGConfigError("GetMyTG API key is not configured")
+
+    @staticmethod
+    def build_webhook_signature(*, path: str, secret: str) -> str:
+        normalized_path = path if path.startswith("/") else f"/{path}"
+        return hmac.new(
+            secret.encode("utf-8"),
+            normalized_path.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+    @classmethod
+    def sign_webhook_url(cls, callback_url: str, secret: str) -> str:
+        normalized_secret = secret.strip()
+        if not normalized_secret:
+            return callback_url
+
+        parts = urlsplit(callback_url)
+        query = dict(parse_qsl(parts.query, keep_blank_values=True))
+        query[cls.WEBHOOK_SIGNATURE_QUERY_PARAM] = cls.build_webhook_signature(
+            path=parts.path or "/",
+            secret=normalized_secret,
+        )
+        return urlunsplit(parts._replace(query=urlencode(query)))
+
+    @classmethod
+    def verify_webhook_signature(
+        cls,
+        *,
+        path: str,
+        provided_signature: str,
+        secret: str,
+    ) -> bool:
+        expected = cls.build_webhook_signature(path=path, secret=secret)
+        return hmac.compare_digest(expected, provided_signature.strip())
 
     async def health_check(self) -> JsonDict:
         return await self._request_json("GET", "/v1/service/health", auth_required=False)

@@ -9,16 +9,18 @@ from aiogram import Dispatcher
 from cerber_bot.config import Settings
 from cerber_bot.container import AppContainer
 from cerber_bot.handlers.tgaccounts import build_getmytg_callback_url, build_tgaccounts_router, render_country_detail_screen
+from cerber_bot.integrations.getmytg import GetMyTGClient
 from cerber_bot.services.tgaccounts import TgCountryDetails
 
 
-def _build_settings(database_path: Path) -> Settings:
+def _build_settings(database_path: Path, *, webhook_secret: str | None = None) -> Settings:
     return Settings(
         BOT_TOKEN="123456:FAKE_TOKEN_FOR_TESTS",
         DATABASE_URL=f"sqlite+aiosqlite:///{database_path.as_posix()}",
         GIFTAPI_TOKEN=None,
         GIFTAPI_SECRET=None,
         GETMYTG_API_KEY="test-key",
+        GETMYTG_WEBHOOK_SECRET=webhook_secret,
         NICEPAY_MERCHANT_ID=None,
         NICEPAY_SECRET=None,
         WEB_ENABLED=False,
@@ -65,5 +67,25 @@ async def test_build_getmytg_callback_url_uses_settings_path(tmp_path: Path) -> 
     container = await AppContainer.build(_build_settings(tmp_path / "tgaccounts-callback.db"))
     try:
         assert build_getmytg_callback_url(container) == "https://example.test/webhooks/getmytg"
+    finally:
+        await container.close()
+
+
+@pytest.mark.asyncio
+async def test_build_getmytg_callback_url_adds_signature_when_secret_is_set(tmp_path: Path) -> None:
+    container = await AppContainer.build(
+        _build_settings(
+            tmp_path / "tgaccounts-callback-signed.db",
+            webhook_secret="super-secret",
+        )
+    )
+    try:
+        signature = GetMyTGClient.build_webhook_signature(
+            path="/webhooks/getmytg",
+            secret="super-secret",
+        )
+        assert build_getmytg_callback_url(container) == (
+            f"https://example.test/webhooks/getmytg?{GetMyTGClient.WEBHOOK_SIGNATURE_QUERY_PARAM}={signature}"
+        )
     finally:
         await container.close()

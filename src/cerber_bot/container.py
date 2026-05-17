@@ -44,6 +44,7 @@ class AppContainer:
     payment_service: PaymentService
     store_service: StoreService
     nbox_service: NboxService
+    user_service: UserService
 
     @classmethod
     async def build(cls, settings: Settings | None = None) -> "AppContainer":
@@ -139,6 +140,10 @@ class AppContainer:
             withdrawal_min_amount_usdt=resolved_settings.withdrawal_min_amount_usdt,
             withdrawal_networks=resolved_settings.withdrawal_networks,
         )
+        user_service = UserService(
+            session_factory,
+            default_balance_currency=resolved_settings.wallet_currency,
+        )
 
         return cls(
             settings=resolved_settings,
@@ -158,10 +163,11 @@ class AppContainer:
             payment_service=payment_service,
             store_service=store_service,
             nbox_service=NboxService(),
+            user_service=user_service,
         )
 
     def build_user_service(self) -> UserService:
-        return UserService(self.session_factory, default_balance_currency=self.settings.wallet_currency)
+        return self.user_service
 
     async def close(self) -> None:
         await self.nicepay_http_client.aclose()

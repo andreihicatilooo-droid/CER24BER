@@ -1363,6 +1363,14 @@ class TG_ACCOUNTS_TEXT:
     PURCHASE_UPDATED = "Обновлено: {updated_at}"
     PURCHASE_CODE_PENDING = "Код ещё не получен. Нажмите «Получить код» и дождитесь ответа сервиса."
     PURCHASE_HINT = "Используйте кнопки ниже, чтобы запросить код или оформить возврат."
+    WEBHOOK_SUCCESS_TITLE = "<b>Код для Telegram-аккаунта получен</b>"
+    WEBHOOK_SUCCESS_HINT = "Данные сохранены в разделе «Аккаунты Telegram» → «Мои покупки»."
+    WEBHOOK_FAILED_TITLE = "<b>Код для Telegram-аккаунта не получен</b>"
+    WEBHOOK_FAILED_REASON = "Причина: {reason}"
+    WEBHOOK_FAILED_REASON_UNKNOWN = "неизвестна"
+    WEBHOOK_FAILED_HINT = (
+        "Откройте покупку в разделе «Мои покупки», чтобы проверить статус или оформить возврат."
+    )
     REQUESTING_CODE = "<b>⏳ Получаем код подтверждения...</b>"
     REFUNDING = "<b>⏳ Оформляем возврат...</b>"
     NOT_CONFIGURED = "GetMyTG API-ключ не настроен. Операция покупки недоступна."

@@ -80,7 +80,7 @@ def build_menu_router(container: AppContainer) -> Router:
             return
 
         await state.clear()
-        profile = await container.build_user_service().get_profile(callback.from_user.id)
+        profile = await container.user_service.get_profile(callback.from_user.id)
         if profile is None:
             await message.answer(MENU_TEXT.PROFILE_NOT_FOUND)
             await callback.answer()
@@ -257,7 +257,7 @@ def build_deals_router(container: AppContainer) -> Router:
             await callback.answer()
             return
 
-        await container.build_user_service().register_or_update(callback.from_user)
+        await container.user_service.register_or_update(callback.from_user)
         await state.set_state(None)
         await render_deal_dashboard_screen(message, state, container, telegram_id=callback.from_user.id, callback=callback)
         await callback.answer(DEAL_HANDLER_TEXT.CALLBACK_MENU)

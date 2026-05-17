@@ -25,7 +25,7 @@ def build_start_router(container: AppContainer) -> Router:
             return
 
         await state.clear()
-        _, created = await container.build_user_service().register_or_update(message.from_user)
+        _, created = await container.user_service.register_or_update(message.from_user)
         caption = START_TEXT.welcome_caption(created)
         await send_welcome_message(
             message=message,
