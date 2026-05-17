@@ -29,6 +29,23 @@ def test_parser_includes_management_commands() -> None:
     assert "logs" in help_text
 
 
+def test_main_without_args_opens_menu_in_new_terminal(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    class _Stdin:
+        def isatty(self) -> bool:
+            return True
+
+    opened: list[bool] = []
+    monkeypatch.setattr(cli.sys, "stdin", _Stdin())
+    monkeypatch.setattr(cli, "_launch_menu_terminal", lambda: opened.append(True) or True)
+
+    exit_code = cli.main([])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert opened == [True]
+    assert "открыт в отдельном терминале" in output
+
+
 def test_expand_component_names_supports_group_aliases() -> None:
     assert expand_component_names(["bots"]) == ["shop", "admin", "ceer"]
     assert expand_component_names(["tunnels"]) == ["tunnel"]
@@ -142,12 +159,13 @@ def test_menu_can_open_component_and_show_logs(
     responses = iter(["1", "log", "back", "quit"])
     monkeypatch.setattr(cli, "_read_menu_input", lambda prompt: next(responses))
     monkeypatch.setattr(cli, "_pause", lambda: None)
+    monkeypatch.setattr(cli, "_clear_terminal", lambda: None)
 
-    exit_code = cli.main(["menu"])
+    exit_code = cli.main(["menu", "--inline"])
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "CERBER launcher" in output
+    assert "Главная панель" in output
     assert "Компонент: cerber_bot" in output
     assert "boot ok" in output
 

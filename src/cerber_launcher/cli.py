@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import shlex
+import shutil
+import subprocess
 import sys
 from collections import deque
 from dataclasses import dataclass
@@ -22,12 +26,13 @@ from cerber_launcher.runtime import (
     terminate_component,
 )
 from cerber_launcher.server import run_server
-from cerber_launcher.shared import ENV_FILE, LOGS, get_env, init_env_file, launcher_log, read_env_lines, set_env, unset_env
+from cerber_launcher.shared import ENV_FILE, LOGS, PROJECT_ROOT, get_env, init_env_file, launcher_log, python_executable, read_env_lines, set_env, unset_env
 
 
 DEFAULT_LOG_LINES = 20
 MENU_LOG_LINES = 40
 ERROR_PATTERN = re.compile(r"(traceback|exception|error|fatal|failed|critical|ошиб)", re.IGNORECASE)
+MENU_LAUNCH_ARGS = ("menu", "--inline")
 
 
 @dataclass(slots=True, frozen=True)
@@ -49,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command is None:
         if sys.stdin.isatty():
-            return _run_menu()
+            return _open_menu_terminal_or_run_inline()
         parser.print_help()
         return 0
 
@@ -120,7 +125,8 @@ def _build_parser() -> argparse.ArgumentParser:
     logs_parser.add_argument("--lines", type=_positive_int, default=DEFAULT_LOG_LINES, help="Сколько последних строк вывести")
     logs_parser.add_argument("--errors", action="store_true", help="Показать только error-логи")
 
-    subparsers.add_parser("menu", help="Открыть интерактивное меню управления")
+    menu_parser = subparsers.add_parser("menu", help="Открыть интерактивное меню управления")
+    menu_parser.add_argument("--inline", action="store_true", help=argparse.SUPPRESS)
 
     env_parser = subparsers.add_parser("env", help="Управление .env из CLI")
     env_subparsers = env_parser.add_subparsers(dest="env_command", required=True)
@@ -205,8 +211,10 @@ def _handle_logs(args: argparse.Namespace) -> int:
     return 0
 
 
-def _handle_menu(_: argparse.Namespace) -> int:
-    return _run_menu()
+def _handle_menu(args: argparse.Namespace) -> int:
+    if args.inline:
+        return _run_menu()
+    return _open_menu_terminal_or_run_inline()
 
 
 def _print_doctor(components: list[str]) -> int:
@@ -362,98 +370,157 @@ def _print_statuses(statuses) -> None:
         print(f"{item.label:<12} {marker:<8} pid={pid:<8} {item.detail}")
 
 
+def _open_menu_terminal_or_run_inline() -> int:
+    if _launch_menu_terminal():
+        print("CERBER launcher UI открыт в отдельном терминале.")
+        return 0
+    print("Не удалось открыть отдельный терминал. Интерфейс запущен в текущем окне.")
+    return _run_menu()
+
+
+def _launch_menu_terminal() -> bool:
+    command = _menu_launch_command()
+    launcher_log(f"menu spawn requested command={' '.join(command)}")
+
+    if sys.platform == "win32":
+        try:
+            subprocess.Popen(
+                command,
+                cwd=str(PROJECT_ROOT),
+                creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
+            )
+        except OSError as error:
+            launcher_log(f"menu spawn failed: {error}")
+            return False
+        launcher_log("menu opened in new console")
+        return True
+
+    if sys.platform == "darwin":
+        return _launch_menu_terminal_macos(command)
+
+    return _launch_menu_terminal_unix(command)
+
+
+def _menu_launch_command() -> list[str]:
+    launcher_entry = PROJECT_ROOT / "launcher.py"
+    return [str(python_executable()), str(launcher_entry), *MENU_LAUNCH_ARGS]
+
+
+def _launch_menu_terminal_macos(command: list[str]) -> bool:
+    shell_command = f"cd {shlex.quote(str(PROJECT_ROOT))}; {shlex.join(command)}"
+    script = f'tell application "Terminal" to do script {shell_command!r}'
+    try:
+        subprocess.Popen(["osascript", "-e", script], cwd=str(PROJECT_ROOT))
+    except OSError as error:
+        launcher_log(f"menu spawn failed: {error}")
+        return False
+    launcher_log("menu opened in Terminal.app")
+    return True
+
+
+def _launch_menu_terminal_unix(command: list[str]) -> bool:
+    candidates: list[tuple[str, list[str] | None]] = [
+        ("x-terminal-emulator", ["-e", *command]),
+        ("gnome-terminal", ["--", *command]),
+        ("konsole", ["-e", *command]),
+        ("xfce4-terminal", ["--command", shlex.join(command)]),
+        ("alacritty", ["-e", *command]),
+        ("kitty", ["-e", *command]),
+        ("xterm", ["-e", *command]),
+    ]
+
+    for program, extra_args in candidates:
+        executable = shutil.which(program)
+        if executable is None or extra_args is None:
+            continue
+        try:
+            subprocess.Popen([executable, *extra_args], cwd=str(PROJECT_ROOT))
+        except OSError:
+            continue
+        launcher_log(f"menu opened in terminal {program}")
+        return True
+
+    launcher_log("menu spawn failed: no supported terminal emulator found")
+    return False
+
+
 def _run_menu() -> int:
+    message: str | None = None
     while True:
-        print()
-        print("CERBER launcher")
-        _print_component_table(_collect_component_overviews(list(COMPONENT_ORDER)))
-        print()
-        print("Команды: [номер], start, stop, restart, bots, tunnels, doctor, logs, refresh, quit")
+        _render_main_menu_screen(message)
 
         choice = _read_menu_input("launcher> ")
+        message = None
         if choice in {"quit", "q", "exit"}:
             return 0
         if choice in {"", "refresh", "r"}:
             continue
         if choice == "start":
-            _run_menu_action(_default_targets(), "start")
+            message = _run_menu_action(_default_targets(), "start")
             continue
         if choice == "stop":
-            _run_menu_action(list(COMPONENT_ORDER), "stop")
+            message = _run_menu_action(list(COMPONENT_ORDER), "stop")
             continue
         if choice == "restart":
-            _run_menu_action(list(COMPONENT_ORDER), "restart")
+            message = _run_menu_action(list(COMPONENT_ORDER), "restart")
             continue
         if choice == "bots":
-            _print_component_table(_collect_component_overviews(list(BOT_COMPONENTS)))
-            _pause()
+            _show_component_list_screen("Список ботов", list(BOT_COMPONENTS))
             continue
         if choice == "tunnels":
-            _print_component_table(_collect_component_overviews(list(TUNNEL_COMPONENTS)))
-            _pause()
+            _show_component_list_screen("Список туннелей", list(TUNNEL_COMPONENTS))
             continue
         if choice == "doctor":
-            _print_doctor(list(COMPONENT_ORDER))
-            _pause()
+            _show_doctor_screen("Диагностика launcher", list(COMPONENT_ORDER))
             continue
         if choice == "logs":
-            _print_logs_for_targets(["launcher"], MENU_LOG_LINES)
-            _pause()
+            _show_logs_screen("Логи launcher", ["launcher"], MENU_LOG_LINES)
             continue
         if choice.isdigit():
             index = int(choice) - 1
             if 0 <= index < len(COMPONENT_ORDER):
                 _run_component_menu(COMPONENT_ORDER[index])
                 continue
-        print("Неизвестная команда.")
+        message = "Неизвестная команда. Используйте номер, start, stop, restart, bots, tunnels, doctor, logs или quit."
 
 
 def _run_component_menu(component: str) -> None:
+    message: str | None = None
     while True:
         overview = _build_component_overview(component)
-        print()
-        print(f"Компонент: {overview.label}")
-        _print_component_table([overview])
-        if overview.command:
-            print(f"Команда запуска: {overview.command}")
-        print("Команды: start, stop, restart, status, doctor, log, error, logs, back")
+        _render_component_menu_screen(overview, message)
 
         choice = _read_menu_input(f"{overview.label}> ")
+        message = None
         if choice in {"back", "b", "0", "quit", "q"}:
             return
         if choice == "start":
-            _run_menu_action([component], "start")
+            message = _run_menu_action([component], "start")
             continue
         if choice == "stop":
-            _run_menu_action([component], "stop")
+            message = _run_menu_action([component], "stop")
             continue
         if choice == "restart":
-            _run_menu_action([component], "restart")
+            message = _run_menu_action([component], "restart")
             continue
         if choice == "status":
-            _print_component_table([_build_component_overview(component)])
-            _pause()
             continue
         if choice == "doctor":
-            _print_doctor([component])
-            _pause()
+            _show_doctor_screen(f"Диагностика: {overview.label}", [component])
             continue
         if choice == "log":
-            _print_log_entries(_primary_log_paths_for_target(component), MENU_LOG_LINES)
-            _pause()
+            _show_log_entries_screen(f"Лог: {overview.label}", _primary_log_paths_for_target(component), MENU_LOG_LINES)
             continue
         if choice == "error":
-            _print_log_entries(_error_log_paths_for_target(component), MENU_LOG_LINES)
-            _pause()
+            _show_log_entries_screen(f"Ошибки: {overview.label}", _error_log_paths_for_target(component), MENU_LOG_LINES)
             continue
         if choice == "logs":
-            _print_logs_for_targets([component], MENU_LOG_LINES)
-            _pause()
+            _show_logs_screen(f"Все логи: {overview.label}", [component], MENU_LOG_LINES)
             continue
-        print("Неизвестная команда.")
+        message = "Неизвестная команда. Используйте start, stop, restart, status, doctor, log, error, logs или back."
 
 
-def _run_menu_action(components: list[str], action: str) -> None:
+def _run_menu_action(components: list[str], action: str) -> str:
     try:
         if action == "start":
             statuses = [start_component(component) for component in components]
@@ -466,10 +533,9 @@ def _run_menu_action(components: list[str], action: str) -> None:
                 statuses.append(start_component(component))
         else:
             raise LauncherRuntimeError(f"Неизвестное действие: {action}")
-        _print_statuses(statuses)
+        return _format_action_statuses(action, statuses)
     except LauncherRuntimeError as error:
-        print(f"[launcher] {error}")
-    _pause()
+        return f"Ошибка: {error}"
 
 
 def _read_menu_input(prompt: str) -> str:
@@ -588,6 +654,133 @@ def _print_log_entries(entries: list[tuple[str, Path]], lines: int) -> None:
 
         for line in content:
             print(line)
+
+
+def _render_main_menu_screen(message: str | None) -> None:
+    _clear_terminal()
+    overviews = _collect_component_overviews(list(COMPONENT_ORDER))
+    _render_header("Главная панель", "Управление ботами и туннелями CERBER")
+    _print_summary_panel(overviews)
+    if message:
+        _print_panel("Последнее действие", [message])
+    _print_panel(
+        "Главное меню",
+        [
+            "1-4: открыть карточку компонента",
+            "start: запустить стандартный набор ботов",
+            "stop: остановить все компоненты",
+            "restart: перезапустить все компоненты",
+            "bots | tunnels | doctor | logs | refresh | quit",
+        ],
+    )
+    _print_component_table(overviews)
+
+
+def _render_component_menu_screen(overview: ComponentOverview, message: str | None) -> None:
+    _clear_terminal()
+    _render_header(f"Компонент: {overview.label}", "Карточка управления компонентом")
+    _print_component_table([overview])
+    lines = [
+        "start: запустить",
+        "stop: остановить",
+        "restart: перезапустить",
+        "status: обновить карточку",
+        "doctor: диагностика готовности",
+        "log: основной лог",
+        "error: error-лог",
+        "logs: все связанные логи",
+        "back: вернуться в главное меню",
+    ]
+    if overview.command:
+        lines.insert(0, f"Команда запуска: {overview.command}")
+    _print_panel("Меню компонента", lines)
+    if message:
+        _print_panel("Последнее действие", [message])
+
+
+def _show_component_list_screen(title: str, components: list[str]) -> None:
+    _clear_terminal()
+    _render_header(title, "Сводка по выбранной группе компонентов")
+    overviews = _collect_component_overviews(components)
+    _print_summary_panel(overviews)
+    _print_component_table(overviews)
+    _pause()
+
+
+def _show_doctor_screen(title: str, components: list[str]) -> None:
+    _clear_terminal()
+    _render_header(title, "Проверка готовности компонентов к запуску")
+    _print_doctor(components)
+    _pause()
+
+
+def _show_logs_screen(title: str, targets: list[str], lines: int, *, error_only: bool = False) -> None:
+    _clear_terminal()
+    mode = "Только ошибки" if error_only else "Все логи"
+    _render_header(title, f"{mode}, последние {lines} строк")
+    _print_logs_for_targets(targets, lines, error_only=error_only)
+    _pause()
+
+
+def _show_log_entries_screen(title: str, entries: list[tuple[str, Path]], lines: int) -> None:
+    _clear_terminal()
+    _render_header(title, f"Последние {lines} строк")
+    _print_log_entries(entries, lines)
+    _pause()
+
+
+def _render_header(title: str, subtitle: str) -> None:
+    width = _terminal_width()
+    line = "=" * width
+    print(line)
+    print(title)
+    print(subtitle)
+    print(line)
+
+
+def _print_summary_panel(overviews: list[ComponentOverview]) -> None:
+    enabled_count = sum(1 for item in overviews if item.enabled)
+    running_count = sum(1 for item in overviews if item.running)
+    logs_count = sum(1 for item in overviews if item.has_logs)
+    error_count = sum(1 for item in overviews if item.has_errors)
+    _print_panel(
+        "Сводка",
+        [
+            f"Всего компонентов: {len(overviews)}",
+            f"Включено: {enabled_count}",
+            f"Работает: {running_count}",
+            f"С логами: {logs_count}",
+            f"С ошибками: {error_count}",
+        ],
+    )
+
+
+def _print_panel(title: str, lines: list[str]) -> None:
+    text_lines = lines or [""]
+    width = min(_terminal_width(), max(len(title), *(len(line) for line in text_lines)) + 4)
+    inner_width = max(10, width - 4)
+    print("+" + "-" * (inner_width + 2) + "+")
+    print(f"| {title[:inner_width].ljust(inner_width)} |")
+    print("+" + "-" * (inner_width + 2) + "+")
+    for line in text_lines:
+        print(f"| {_shorten(line, inner_width).ljust(inner_width)} |")
+    print("+" + "-" * (inner_width + 2) + "+")
+
+
+def _clear_terminal() -> None:
+    command = "cls" if os.name == "nt" else "clear"
+    os.system(command)
+
+
+def _terminal_width() -> int:
+    return max(80, shutil.get_terminal_size(fallback=(120, 40)).columns)
+
+
+def _format_action_statuses(action: str, statuses) -> str:
+    if not statuses:
+        return f"Действие {action} выполнено, но компонентов не было."
+    summary = "; ".join(f"{item.label}: {item.detail}" for item in statuses)
+    return f"{action.upper()}: {summary}"
 
 
 def _toggle_marker(value: bool) -> str:
