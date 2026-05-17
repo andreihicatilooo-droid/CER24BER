@@ -1,10 +1,10 @@
-# Project Guidelines — CERBER Bot
+# Руководство по проекту — CERBER Bot
 
-## Overview
+## Обзор
 
-Async Telegram bot storefront with escrow deals, multi-currency wallet, GiftAPI integration, NicePay payments, and a FastAPI web dashboard. Russian-language UI and documentation.
+Асинхронный Telegram-бот магазин со сделками (escrow), мультивалютным кошельком, интеграцией GiftAPI, платежами NicePay и веб-панелью на FastAPI. Русскоязычный пользовательский интерфейс и документация.
 
-## Architecture
+## Архитектура
 
 ```
 src/cerber_bot/

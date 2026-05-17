@@ -1,0 +1,9 @@
+{
+  "pid": 16836,
+  "command": [
+    "G:\\CER24BER\\.venv\\Scripts\\python.exe",
+    "-m",
+    "cerber_bot"
+  ],
+  "started_at": "2026-05-17T15:55:31.916931+00:00"
+}
