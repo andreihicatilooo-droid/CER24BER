@@ -1,5 +1,5 @@
 ---
-description: "Code cleanup agent for CERBER bot. Use when auditing, refactoring, or cleaning up the project: finding dead code, unused imports, duplicate logic, orphaned files, unreachable handlers, stale TODO comments, unused constants, redundant DB columns, or leftover AI-generated scaffolding. Asks clarifying questions before any change that could affect other modules. Read-only by default — proposes a plan before editing."
+description: "Кто я: аудитор техдолга и cleanup-срезов CERBER. КОГДА использовать: когда нужно найти мёртвый код, дубликаты, неиспользуемые файлы, устаревшие константы, висячие TODO и dev-артефакты, а затем аккуратно зачистить хвосты. НЕ использовать: когда нужен архитектурный redesign, планирование новой функции, правка пользовательского интерфейса и текстов или сквозная реализация новой возможности. Триггер-слова: cleanup, аудит, dead code, unused, дубликаты, удалить хвосты, orphan files, stale TODO, dev-артефакты."
 name: "CERBER Cleanup"
 tools: [read, search, todo, edit]
 argument-hint: "Что проверить? (весь проект / конкретная папка / тип проблемы)"

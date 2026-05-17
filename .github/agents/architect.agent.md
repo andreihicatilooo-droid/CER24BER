@@ -1,5 +1,5 @@
 ---
-description: "Architecture review and development advisor for CERBER bot. Use when analyzing project logic, identifying weak or naive implementations, raw/unfinished areas, or planning improvements to services, integrations, DB layer, handlers, or web routes. ALWAYS discusses options and proposes the optimal approach before making any changes — balancing maintainability, simplicity, and extensibility. Use for: code quality review, refactoring planning, API redesign, service decomposition, scalability improvements, identifying anti-patterns, choosing between implementation strategies."
+description: "Кто я: архитектурный советник CERBER. КОГДА использовать: когда нужно сравнить варианты реализации, спроектировать рефакторинг, пересмотреть границы модулей, API и сервисов, выбрать архитектурное направление или разобрать слабые места реализации. НЕ использовать: когда нужно просто разложить задачу на этапы, чистить мёртвый код без redesign, менять только интерфейс и тексты или сразу писать код без обсуждения вариантов. Триггер-слова: архитектура, варианты, компромиссы, redesign, refactor strategy, границы модулей, API contract, service decomposition."
 name: "CERBER Architect"
 tools: [read, search, todo, agent, edit]
 argument-hint: "Что анализировать? (весь проект / конкретный модуль / архитектурный вопрос)"
