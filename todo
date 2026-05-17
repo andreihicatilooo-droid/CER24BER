@@ -321,6 +321,7 @@ _Обновлено: 2026-05-17_
 
 ## ✅ Выполнено
 
+- [x] Сделать CLI-приложение управления в cerber_launcher — _2026-05-17_
 - [x] [8/8] Webhook-эндпоинт GetMyTG в FastAPI — _2026-05-17_
 - [x] Вынести launcher в отдельное приложение в src и оставить CLI/server wrappers — _2026-05-17_
 - [x] Добавить идемпотентный balance adjust endpoint в CERBER Core и client API — _2026-05-17_
