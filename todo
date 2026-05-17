@@ -129,12 +129,6 @@ _Обновлено: 2026-05-17_
 
 #### 🔗 Цепочка «Развитие AI-контура CERBER» — строго по порядку
 
-- [ ] [4/5] Провести аудит tools и skills для AI
-      📂 Файлы: `.github/agents/cerber.agent.md`, `.github/agents/discovery.agent.md`, `.github/skills/`, `.github/copilot-instructions.md`
-      🔗 После: «[2/5] Добавить агента CERBER Discovery»
-      ⚠️ Риск: лишние tools снизят управляемость, а недостающие skills не позволят CERBER быть реальным помощником и руками пользователя
-      ✅ Готово когда: для CERBER и Discovery определён минимально достаточный toolset и список обязательных и опциональных skills
-
 - [ ] [5/5] Добавить ideation workflow и проверить маршрутизацию
       📂 Файлы: `.github/skills/idea-to-brief/SKILL.md` (новый), `.github/agents/router.agent.md`, `.github/agents/cerber.agent.md`, `.github/agents/discovery.agent.md`
       🔗 После: «[3/5] Добавить универсального агента CERBER»
@@ -254,6 +248,7 @@ _Обновлено: 2026-05-17_
 
 ## ✅ Выполнено
 
+- [x] [4/5] Провести аудит tools и skills для AI — _2026-05-17_
 - [x] [3/5] Добавить универсального агента CERBER — _2026-05-17_
 - [x] [2/5] Добавить агента CERBER Discovery — _2026-05-17_
 - [x] [1/5] Зафиксировать роли CERBER, Router и Discovery — _2026-05-17_
