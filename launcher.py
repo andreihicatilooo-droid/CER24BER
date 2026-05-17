@@ -625,6 +625,41 @@ ENV_SECTIONS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
             "10000",
         ),
     ]),
+    ("CERBER CORE (биллинг API)", [
+        (
+            "CERBER_CORE_ENABLED",
+            "Включить интеграцию с CERBER Core для topup-сессий и подтверждения пополнений.\n"
+            "    false — бот работает только на локальном платёжном слое.\n"
+            "    true — при создании и подтверждении платежей бот обращается в CERBER Core.",
+            "true / false",
+            "false",
+        ),
+        (
+            "CERBER_CORE_BASE_URL",
+            "Базовый URL CERBER Core billing API.",
+            "Например: http://localhost:8080",
+            "http://localhost:8080",
+        ),
+        (
+            "CERBER_CORE_API_KEY",
+            "API-ключ сервиса, выданный CERBER Core через /admin/services.",
+            "Base64-строка, которую вернул CERBER Core",
+            "",
+        ),
+        (
+            "CERBER_CORE_SECRET_KEY",
+            "Секретный AES-GCM ключ сервиса для encrypted_user_hash и расшифровки ответов CERBER Core.",
+            "Base64-строка, которую вернул CERBER Core",
+            "",
+        ),
+        (
+            "CERBER_CORE_TOPUP_METHOD_CODE",
+            "Код topup-метода в CERBER Core, который бот использует при создании topup-сессии.\n"
+            "    Должен существовать в таблице topup_methods на стороне core.",
+            "Например: card_ru / sbp / usdt_trc20 / card_intl",
+            "card_ru",
+        ),
+    ]),
     ("NicePay (платёжный шлюз)", [
         (
             "NICEPAY_BASE_URL",

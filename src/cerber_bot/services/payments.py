@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Mapping
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from aiogram.types import User as TelegramUserObject
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from cerber_bot.db.repositories.payments import WalletPaymentRepository
 from cerber_bot.db.repositories.users import UserRepository
 from cerber_bot.db.repositories.wallet import WalletTransactionRepository
+from cerber_bot.integrations.cerber_core import CerberCoreClient, CerberCoreError
 from cerber_bot.integrations.nicepay import NicePayClient, NicePayError
 from cerber_bot.integrations.rukassa import RukassaClient, RukassaError, RukassaFrozenError, RUKASSA_PAID_STATUS
 from cerber_bot.services.exchange import ExchangeRateError, ExchangeRateService
@@ -132,6 +133,8 @@ class PaymentService:
         method: str | None,
         stars_enabled: bool = False,
         stars_to_usd_rate: Decimal = Decimal("0.013"),
+        cerber_core_client: CerberCoreClient | None = None,
+        cerber_core_topup_method_code: str = "card_ru",
     ) -> None:
         self.session_factory = session_factory
         self.nicepay_client = nicepay_client
@@ -148,6 +151,8 @@ class PaymentService:
         self.method = method.strip() if method else None
         self.stars_enabled = stars_enabled
         self.stars_to_usd_rate = stars_to_usd_rate
+        self.cerber_core_client = cerber_core_client
+        self.cerber_core_topup_method_code = cerber_core_topup_method_code.strip() or "card_ru"
 
     @property
     def _use_rukassa(self) -> bool:
@@ -180,7 +185,11 @@ class PaymentService:
         if normalized_amount > max_amount:
             raise PaymentFlowError(PAYMENT_SERVICE_TEXT.max_top_up(format_money(max_amount, self.payment_currency)))
 
-        payload = build_payment_payload(telegram_user.id)
+        payload = await self._create_provider_payload(
+            telegram_user=telegram_user,
+            amount=normalized_amount,
+            currency=self.payment_currency,
+        )
         description = build_payment_description(self.description, normalized_amount, self.payment_currency)
         amount_minor_units = amount_to_minor_units(normalized_amount)
 
@@ -419,6 +428,8 @@ class PaymentService:
                 )
                 return to_callback_result(completion, method=notification.method)
 
+            await self._confirm_core_topup_if_needed(payment.payload)
+
             try:
                 credited_amount = await self.exchange_rate_service.convert(
                     payment_amount,
@@ -475,6 +486,10 @@ class PaymentService:
     @property
     def is_h2h_mode(self) -> bool:
         return bool(self.method) and self.nicepay_client.is_configured and not self._use_rukassa
+
+    @property
+    def is_cerber_core_mode(self) -> bool:
+        return self.cerber_core_client is not None
 
     async def process_rukassa_webhook(
         self,
@@ -566,6 +581,8 @@ class PaymentService:
                 )
                 return to_callback_result(completion, method=payment_method)
 
+            await self._confirm_core_topup_if_needed(payment.payload)
+
             try:
                 credited_amount = await self.exchange_rate_service.convert(
                     payment_amount,
@@ -627,7 +644,11 @@ class PaymentService:
         if normalized_amount > max_amount:
             raise PaymentFlowError(PAYMENT_SERVICE_TEXT.max_top_up(format_money(max_amount, self.payment_currency)))
 
-        payload = build_payment_payload(telegram_user.id)
+        payload = await self._create_provider_payload(
+            telegram_user=telegram_user,
+            amount=normalized_amount,
+            currency=self.payment_currency,
+        )
         amount_minor_units = amount_to_minor_units(normalized_amount)
 
         async with self.session_factory() as session:
@@ -720,8 +741,12 @@ class PaymentService:
         if stars_amount < 1:
             raise PaymentFlowError("Количество Stars должно быть не менее 1.")
 
-        payload = build_payment_payload(telegram_user.id)
         stars_as_usd = Decimal(stars_amount) * self.stars_to_usd_rate
+        payload = await self._create_provider_payload(
+            telegram_user=telegram_user,
+            amount=stars_as_usd,
+            currency="USD",
+        )
 
         async with self.session_factory() as session:
             user_repository = UserRepository(session)
@@ -803,6 +828,8 @@ class PaymentService:
                     payment_id=telegram_charge_id,
                 )
 
+            await self._confirm_core_topup_if_needed(payment.payload)
+
             stars_as_usd = Decimal(stars_amount) * self.stars_to_usd_rate
             try:
                 credited_amount = await self.exchange_rate_service.convert(
@@ -852,9 +879,50 @@ class PaymentService:
         max_amount = min(self.max_amount, provider_max)
         return min_amount, max_amount
 
+    async def _create_provider_payload(
+        self,
+        *,
+        telegram_user: TelegramUserObject,
+        amount: Decimal,
+        currency: str,
+    ) -> str:
+        if self.cerber_core_client is None:
+            return build_payment_payload(telegram_user.id)
+
+        try:
+            amount_usdt = await self.exchange_rate_service.convert(amount, currency, "USDT")
+        except ExchangeRateError as error:
+            raise PaymentFlowError(str(error)) from error
+
+        try:
+            session = await self.cerber_core_client.create_topup_session(
+                telegram_id=telegram_user.id,
+                amount_usdt=amount_usdt,
+                method_code=self.cerber_core_topup_method_code,
+            )
+        except CerberCoreError as error:
+            raise PaymentFlowError(str(error)) from error
+        return session.id
+
+    async def _confirm_core_topup_if_needed(self, payload: str) -> None:
+        if self.cerber_core_client is None or not is_core_session_payload(payload):
+            return
+        try:
+            await self.cerber_core_client.confirm_topup(payload)
+        except CerberCoreError as error:
+            raise PaymentFlowError(str(error)) from error
+
 
 def build_payment_payload(telegram_id: int) -> str:
     return f"w{telegram_id}_{uuid4().hex[:20]}"
+
+
+def is_core_session_payload(payload: str) -> bool:
+    try:
+        UUID(str(payload))
+    except (ValueError, TypeError, AttributeError):
+        return False
+    return True
 
 
 def build_customer_account(telegram_user: TelegramUserObject) -> str:

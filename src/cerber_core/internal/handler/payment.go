@@ -75,3 +75,22 @@ func (h *TopupHandler) Status(c *gin.Context) {
 		"updated_at":  session.UpdatedAt,
 	}, svc.SecretKey)
 }
+
+// Confirm marks a top-up session as confirmed and credits the balance idempotently.
+// Body: { "session_id": "uuid" }
+func (h *TopupHandler) Confirm(c *gin.Context) {
+	svc := middleware.GetService(c)
+	var req struct {
+		SessionID string `json:"session_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		EncryptedJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()}, svc.SecretKey)
+		return
+	}
+	session, err := h.topupSvc.Confirm(c.Request.Context(), req.SessionID)
+	if err != nil {
+		EncryptedJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()}, svc.SecretKey)
+		return
+	}
+	EncryptedJSON(c, http.StatusOK, session, svc.SecretKey)
+}

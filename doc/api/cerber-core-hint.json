@@ -1,0 +1,65 @@
+{
+  "name": "cerber-core",
+  "generated_at": "2026-05-17",
+  "description": "CERBER CORE billing API: encrypted user registration, balance lookup, topup methods, topup session creation and confirmation.",
+  "project_references": {
+    "client": "src/cerber_bot/integrations/cerber_core.py",
+    "service": "src/cerber_bot/services/payments.py",
+    "tests": "tests/test_payment_service.py"
+  },
+  "reference": {
+    "base_urls": {
+      "default": "http://localhost:8080"
+    },
+    "authentication": {
+      "api_key_header": "X-API-Key",
+      "service_secret": "AES-GCM-256 key, Base64 32 bytes",
+      "user_identifier": "encrypted_user_hash = AES-GCM(secret_key, SHA-256(telegram_id))"
+    },
+    "money_format": {
+      "topup_base_currency": "USDT",
+      "amount_precision": "2 decimals in bot, core stores numeric(18,8)"
+    },
+    "endpoints": {
+      "user_add": "POST /api/v1/user/add",
+      "balance_get": "GET /api/v1/balance",
+      "topup_methods": "GET /api/v1/topup/methods",
+      "topup_create": "POST /api/v1/topup/create",
+      "topup_status": "GET /api/v1/topup/status",
+      "topup_confirm": "POST /api/v1/topup/confirm"
+    },
+    "error_codes": {
+      "400": "bad request or cannot decrypt encrypted_user_hash",
+      "401": "missing or invalid X-API-Key",
+      "500": "internal server error"
+    }
+  },
+  "current_project_state": {
+    "implemented": [
+      "core exposes encrypted user/balance/topup endpoints",
+      "bot integrates via BillingClient-compatible CERBER Core client"
+    ],
+    "not_implemented_yet": [
+      "provider-native webhooks fully moved into core",
+      "wallet history and balance source fully switched to core"
+    ],
+    "existing_env_vars": [
+      "CERBER_CORE_ENABLED",
+      "CERBER_CORE_BASE_URL",
+      "CERBER_CORE_API_KEY",
+      "CERBER_CORE_SECRET_KEY",
+      "CERBER_CORE_TOPUP_METHOD_CODE"
+    ]
+  },
+  "implementation_rules": [
+    "All encrypted API responses are wrapped as {\"data\": \"Base64(nonce|ciphertext|tag)\"}.",
+    "Use SHA-256(telegram_id) as user_hash before AES-GCM encryption.",
+    "Use X-API-Key for all core API calls.",
+    "Treat topup confirm as idempotent."
+  ],
+  "copilot_prompt_lines": [
+    "CERBER Core использует X-API-Key и AES-GCM для encrypted_user_hash и encrypted response envelope.",
+    "user_hash в core = hex SHA-256 от telegram_id, без передачи raw user id в API.",
+    "Для платежей bot может использовать session.id из core как provider order_id/payload и подтверждать session через /api/v1/topup/confirm."
+  ]
+}

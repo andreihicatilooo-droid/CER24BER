@@ -32,5 +32,6 @@ v1.GET("/balance", balanceH.Get)
 v1.GET("/topup/methods", topupH.ListMethods)
 v1.POST("/topup/create", topupH.Create)
 v1.GET("/topup/status", topupH.Status)
+	v1.POST("/topup/confirm", topupH.Confirm)
 }
 }

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from cerber_bot.config import Settings, load_settings
 from cerber_bot.db.session import create_engine, create_session_factory, ensure_database_parent, init_database
+from cerber_bot.integrations.cerber_core import CerberCoreClient
 from cerber_bot.integrations.giftapi import GiftApiClient
 from cerber_bot.integrations.getmytg import GetMyTGClient
 from cerber_bot.integrations.nbox_service import NboxService
@@ -38,6 +39,7 @@ class AppContainer:
     exchange_rate_service: ExchangeRateService
     admin_event_service: AdminEventService
     gift_api_service: GiftApiService
+    cerber_core_client: CerberCoreClient | None
     getmytg_client: GetMyTGClient | None
     tgaccounts_service: TgAccountService | None
     deal_service: DealService
@@ -72,6 +74,14 @@ class AppContainer:
             locale=resolved_settings.giftapi_locale,
         )
         gift_api_service = GiftApiService(giftapi_client)
+        cerber_core_client: CerberCoreClient | None = None
+        if resolved_settings.cerber_core_enabled:
+            cerber_core_client = CerberCoreClient(
+                base_url=resolved_settings.cerber_core_base_url,
+                http_client=http_client,
+                api_key=resolved_settings.cerber_core_api_key,
+                secret_key=resolved_settings.cerber_core_secret_key,
+            )
         getmytg_client: GetMyTGClient | None = None
         if resolved_settings.getmytg_api_key:
             getmytg_client = GetMyTGClient(
@@ -123,6 +133,8 @@ class AppContainer:
             method=resolved_settings.nicepay_method,
             stars_enabled=resolved_settings.stars_enabled,
             stars_to_usd_rate=resolved_settings.stars_to_usd_rate,
+            cerber_core_client=cerber_core_client,
+            cerber_core_topup_method_code=resolved_settings.cerber_core_topup_method_code,
         )
         store_service = StoreService(
             session_factory=session_factory,
@@ -157,6 +169,7 @@ class AppContainer:
                 moderator_ids=resolved_settings.moderator_ids,
             ),
             gift_api_service=gift_api_service,
+            cerber_core_client=cerber_core_client,
             getmytg_client=getmytg_client,
             tgaccounts_service=tgaccounts_service,
             deal_service=deal_service,

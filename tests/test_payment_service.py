@@ -10,6 +10,7 @@ from cerber_bot.db.repositories.payments import WalletPaymentRepository
 from cerber_bot.db.repositories.users import UserRepository
 from cerber_bot.db.repositories.wallet import WalletTransactionRepository
 from cerber_bot.db.session import create_engine, create_session_factory, init_database
+from cerber_bot.integrations.cerber_core import CerberCoreTopupSession
 from cerber_bot.services.exchange import WalletQuote
 from cerber_bot.services.payments import PaymentService
 
@@ -81,7 +82,48 @@ class StubExchangeRateService:
         )
 
 
-def build_payment_service(session_factory) -> PaymentService:
+class StubCerberCoreClient:
+    def __init__(self) -> None:
+        self.created_sessions: list[tuple[int, Decimal, str]] = []
+        self.confirmed_sessions: list[str] = []
+        self.session_id = "11111111-1111-1111-1111-111111111111"
+
+    async def create_topup_session(self, *, telegram_id: int, amount_usdt: Decimal, method_code: str) -> CerberCoreTopupSession:
+        self.created_sessions.append((telegram_id, amount_usdt, method_code))
+        return CerberCoreTopupSession(
+            id=self.session_id,
+            service_id="svc-1",
+            user_hash="hash-1",
+            method_id="method-1",
+            amount_usdt=amount_usdt,
+            amount_rub=amount_usdt * Decimal("90.00"),
+            rate=Decimal("90.00"),
+            status="pending",
+            payment_url="",
+            requisites={},
+            created_at="2026-05-17T00:00:00Z",
+            updated_at="2026-05-17T00:00:00Z",
+        )
+
+    async def confirm_topup(self, session_id: str) -> CerberCoreTopupSession:
+        self.confirmed_sessions.append(session_id)
+        return CerberCoreTopupSession(
+            id=session_id,
+            service_id="svc-1",
+            user_hash="hash-1",
+            method_id="method-1",
+            amount_usdt=Decimal("25.00"),
+            amount_rub=Decimal("2250.00"),
+            rate=Decimal("90.00"),
+            status="confirmed",
+            payment_url="",
+            requisites={},
+            created_at="2026-05-17T00:00:00Z",
+            updated_at="2026-05-17T00:00:01Z",
+        )
+
+
+def build_payment_service(session_factory, *, cerber_core_client=None) -> PaymentService:
     return PaymentService(
         session_factory=session_factory,
         nicepay_client=StubNicePayClient(),
@@ -95,6 +137,8 @@ def build_payment_service(session_factory) -> PaymentService:
         success_url="https://example.com/success",
         fail_url="https://example.com/fail",
         method="paypal_usd",
+        cerber_core_client=cerber_core_client,
+        cerber_core_topup_method_code="card_ru",
     )
 
 
@@ -234,5 +278,39 @@ async def test_payment_service_marks_error_callback_without_credit(tmp_path: Pat
     assert len(transactions) == 0
     assert payment is not None
     assert payment.status == "error"
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_payment_service_uses_cerber_core_session_payload_and_confirms_it(tmp_path: Path) -> None:
+    database_url = f"sqlite+aiosqlite:///{(tmp_path / 'payments-core.db').as_posix()}"
+    engine = create_engine(database_url)
+    session_factory = create_session_factory(engine)
+    await init_database(engine)
+
+    core_client = StubCerberCoreClient()
+    service = build_payment_service(session_factory, cerber_core_client=core_client)
+    telegram_user = build_user()
+
+    payment_link = await service.create_top_up_link(telegram_user, Decimal("25.00"))
+    callback_result = await service.process_callback(
+        {
+            "result": "success",
+            "payment_id": payment_link.payment_id,
+            "merchant_id": "merchant-1",
+            "order_id": payment_link.payload,
+            "amount": str(payment_link.amount_minor_units),
+            "amount_currency": payment_link.currency,
+            "method": "paypal_usd",
+            "hash": "valid-hash",
+        }
+    )
+
+    assert payment_link.payload == core_client.session_id
+    assert service.nicepay_client.created_payments[0][0] == core_client.session_id
+    assert core_client.created_sessions == [(telegram_user.id, Decimal("25.00"), "card_ru")]
+    assert core_client.confirmed_sessions == [core_client.session_id]
+    assert callback_result.balance_after == Decimal("25.00")
 
     await engine.dispose()
