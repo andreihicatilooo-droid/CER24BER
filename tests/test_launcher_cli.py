@@ -5,15 +5,33 @@ from pathlib import Path
 import pytest
 
 from cerber_launcher import cli
-from cerber_launcher.runtime import ComponentStatus, LauncherRuntimeError
+from cerber_launcher.runtime import ComponentStatus, LauncherRuntimeError, expand_component_names
+
+
+def _patch_component_basics(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli,
+        "component_status",
+        lambda component: ComponentStatus(component, cli.COMPONENT_SPECS[component].label, False, None, "not started"),
+    )
+    monkeypatch.setattr(cli, "ensure_component_ready", lambda component: None)
+    monkeypatch.setattr(cli, "build_component_command", lambda component: ["python", "-m", component])
 
 
 def test_parser_includes_management_commands() -> None:
     help_text = cli._build_parser().format_help()
 
     assert "serve" in help_text
+    assert "menu" in help_text
+    assert "bots" in help_text
+    assert "tunnels" in help_text
     assert "doctor" in help_text
     assert "logs" in help_text
+
+
+def test_expand_component_names_supports_group_aliases() -> None:
+    assert expand_component_names(["bots"]) == ["shop", "admin", "ceer"]
+    assert expand_component_names(["tunnels"]) == ["tunnel"]
 
 
 def test_doctor_returns_error_for_blocked_component(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -36,6 +54,64 @@ def test_doctor_returns_error_for_blocked_component(monkeypatch: pytest.MonkeyPa
     assert "shop blocked" in output
 
 
+def test_status_prints_component_table_with_indicators(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _patch_component_basics(monkeypatch)
+    log_path = tmp_path / "shop.log"
+    error_path = tmp_path / "shop.err"
+    log_path.write_text("started\n", encoding="utf-8")
+    error_path.write_text("OSError: port busy\n", encoding="utf-8")
+
+    monkeypatch.setitem(cli.LOGS, "shop", log_path)
+    monkeypatch.setitem(cli.LOGS, "shop_err", error_path)
+
+    exit_code = cli.main(["status", "shop"])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Компонент" in output
+    assert "Логи" in output
+    assert "Ошибки" in output
+    assert "cerber_bot" in output
+    assert "YES" in output
+    assert "OSError: port busy" in output
+
+
+def test_bots_command_lists_only_bots(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    _patch_component_basics(monkeypatch)
+
+    exit_code = cli.main(["bots"])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "cerber_bot" in output
+    assert "cerber_admin" in output
+    assert "ceer_bot" in output
+    assert "cloudflared" not in output
+
+
+def test_status_does_not_mark_warning_as_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _patch_component_basics(monkeypatch)
+    error_path = tmp_path / "admin.err"
+    error_path.write_text("WARNING: sleep and retry\n", encoding="utf-8")
+
+    monkeypatch.setitem(cli.LOGS, "admin_err", error_path)
+
+    exit_code = cli.main(["status", "admin"])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "cerber_admin" in output
+    assert "NO" in output
+
+
 def test_logs_prints_tail(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     log_path = tmp_path / "launcher.log"
     log_path.write_text("line-1\nline-2\nline-3\n", encoding="utf-8")
@@ -48,6 +124,32 @@ def test_logs_prints_tail(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsy
     assert "line-1" not in output
     assert "line-2" in output
     assert "line-3" in output
+
+
+def test_menu_can_open_component_and_show_logs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _patch_component_basics(monkeypatch)
+    log_path = tmp_path / "shop.log"
+    error_path = tmp_path / "shop.err"
+    log_path.write_text("boot ok\n", encoding="utf-8")
+    error_path.write_text("", encoding="utf-8")
+
+    monkeypatch.setitem(cli.LOGS, "shop", log_path)
+    monkeypatch.setitem(cli.LOGS, "shop_err", error_path)
+    responses = iter(["1", "log", "back", "quit"])
+    monkeypatch.setattr(cli, "_read_menu_input", lambda prompt: next(responses))
+    monkeypatch.setattr(cli, "_pause", lambda: None)
+
+    exit_code = cli.main(["menu"])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "CERBER launcher" in output
+    assert "Компонент: cerber_bot" in output
+    assert "boot ok" in output
 
 
 def test_serve_runs_server_with_default_targets(monkeypatch: pytest.MonkeyPatch) -> None:

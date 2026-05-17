@@ -58,6 +58,8 @@ COMPONENT_SPECS: dict[str, ComponentSpec] = {
 }
 
 COMPONENT_ORDER = ("shop", "admin", "ceer", "tunnel")
+BOT_COMPONENTS = ("shop", "admin", "ceer")
+TUNNEL_COMPONENTS = ("tunnel",)
 
 
 def default_start_targets() -> list[str]:
@@ -73,8 +75,6 @@ def expand_component_names(components: list[str] | None, *, default: list[str] |
     if not components:
         return list(default or [])
     normalized = [item.lower() for item in components]
-    if "all" in normalized:
-        return list(COMPONENT_ORDER)
     result: list[str] = []
     aliases = {
         "bot": "shop",
@@ -83,7 +83,19 @@ def expand_component_names(components: list[str] | None, *, default: list[str] |
         "ceer": "ceer",
         "tunnel": "tunnel",
     }
+    groups = {
+        "all": COMPONENT_ORDER,
+        "bots": BOT_COMPONENTS,
+        "tunnels": TUNNEL_COMPONENTS,
+    }
     for item in normalized:
+        members = groups.get(item)
+        if members is not None:
+            for member in members:
+                if member not in result:
+                    result.append(member)
+            continue
+
         mapped = aliases.get(item)
         if mapped is None:
             raise LauncherRuntimeError(f"Неизвестный компонент: {item}")
