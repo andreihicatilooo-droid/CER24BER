@@ -71,7 +71,7 @@ ENV_SECTIONS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
 ## Переменные-исключения (не нужны в ENV_SECTIONS)
 
 Следующие технические переменные **не выводятся** в wizard'е и не требуют записи в `ENV_SECTIONS`:
-- `NICEPAY_SUCCESS_URL`, `NICEPAY_FAIL_URL`, `NICEPAY_WEBHOOK_HOST`, `NICEPAY_WEBHOOK_PATH`
+- `NICEPAY_SUCCESS_URL`, `NICEPAY_FAIL_URL`
 - `PAYMENTS_TITLE`, `PAYMENTS_DESCRIPTION`
 - `WEB_HOST`
 - Переменные с TODO/заглушками (`REST_PROVIDER_URL`, `WAREHOUSE_PROVIDER_URL` — только если не активны)

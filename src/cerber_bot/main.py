@@ -1,8 +1,8 @@
 """Точка входа CERBER Telegram Bot.
 
 Создаёт основного бота и (опционально) административного бота,
-подключает все роутеры, запускает NicePay webhook-сервер
-и polling-циклы aiogram.  Запуск: ``python -m cerber_bot``.
+подключает все роутеры, запускает web-приложение FastAPI
+и polling-циклы aiogram. Запуск: ``python -m cerber_bot``.
 """
 
 import asyncio
@@ -27,7 +27,6 @@ from cerber_bot.handlers.start import build_start_router
 from cerber_bot.handlers.storefront import build_storefront_router
 from cerber_bot.handlers.tgaccounts import build_tgaccounts_router
 from cerber_bot.log_config import setup_logging
-from cerber_bot.nicepay_webhook import NicePayWebhookServer
 from cerber_bot.web.app import create_web_app
 
 
@@ -46,7 +45,6 @@ async def run() -> None:
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
 
-    webhook_server = NicePayWebhookServer(container=container, bot=bot)
     dispatcher = Dispatcher(storage=MemoryStorage())
     dispatcher.include_router(build_start_router(container))
     dispatcher.include_router(build_storefront_router(container))
@@ -57,7 +55,6 @@ async def run() -> None:
 
     try:
         await reset_webhook_with_retry(bot)
-        await webhook_server.start()
 
         web_server = None
         if container.settings.web_enabled:
@@ -93,7 +90,6 @@ async def run() -> None:
             error,
         )
     finally:
-        await webhook_server.stop()
         await bot.session.close()
         await container.close()
 

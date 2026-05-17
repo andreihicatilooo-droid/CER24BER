@@ -59,9 +59,6 @@ class Settings(BaseSettings):
     nicepay_method: str | None = Field(default=None, alias="NICEPAY_METHOD")
     nicepay_success_url: str | None = Field(default=None, alias="NICEPAY_SUCCESS_URL")
     nicepay_fail_url: str | None = Field(default=None, alias="NICEPAY_FAIL_URL")
-    nicepay_webhook_host: str = Field(default="0.0.0.0", alias="NICEPAY_WEBHOOK_HOST")
-    nicepay_webhook_port: int = Field(default=8080, alias="NICEPAY_WEBHOOK_PORT")
-    nicepay_webhook_path: str = Field(default="/webhooks/nicepay", alias="NICEPAY_WEBHOOK_PATH")
     rukassa_base_url: str = Field(default="https://lk.rukassa.io/api/v1", alias="RUKASSA_BASE_URL")
     rukassa_shop_id: int | None = Field(default=None, alias="RUKASSA_SHOP_ID")
     rukassa_token: str | None = Field(default=None, alias="RUKASSA_TOKEN")
@@ -74,13 +71,6 @@ class Settings(BaseSettings):
     def _empty_str_to_none_int(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():
             return None
-        return value
-
-    @field_validator("nicepay_webhook_port", mode="before")
-    @classmethod
-    def _empty_str_nicepay_port(cls, value: object) -> object:
-        if isinstance(value, str) and not value.strip():
-            return 8080
         return value
 
     @field_validator("web_port", mode="before")

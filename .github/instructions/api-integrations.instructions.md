@@ -12,7 +12,7 @@ applyTo: "src/cerber_bot/integrations/**"
 
 | Сервис | Hint-файл | Применять при работе с |
 |---|---|---|
-| NicePay (платежи) | `doc/api/nicepayapi.md` | `integrations/nicepay.py`, `services/payments.py`, `nicepay_webhook.py` |
+| NicePay (платежи) | `doc/api/nicepayapi.md` | `integrations/nicepay.py`, `services/payments.py`, `web/routes/nicepay.py` |
 | GiftAPI (каталог, заказы) | `doc/api/giftapi-hint.md` | `integrations/giftapi.py`, `services/giftapi.py`, `providers/giftapi_catalog.py` |
 
 ## Когда читать hint-файл

@@ -166,7 +166,7 @@ class MyPayClient:
 
 ### Шаг 3. Добавьте webhook-обработчик
 
-По аналогии с `nicepay_webhook.py`, создайте HTTP-endpoint для callback нового шлюза.  Подключите его в `main.py` рядом с `NicePayWebhookServer`.
+Создайте FastAPI-маршрут в `src/cerber_bot/web/routes/` для callback нового шлюза и подключите его в `src/cerber_bot/web/app.py` рядом с другими webhook-роутами.
 
 ---
 

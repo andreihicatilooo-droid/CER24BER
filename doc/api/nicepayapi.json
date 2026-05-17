@@ -29,7 +29,7 @@
     "config": "src/cerber_bot/config.py",
     "nicepay_client": "src/cerber_bot/integrations/nicepay.py",
     "payment_service": "src/cerber_bot/services/payments.py",
-    "webhook_server": "src/cerber_bot/nicepay_webhook.py",
+    "webhook_route": "src/cerber_bot/web/routes/nicepay.py",
     "signature_tests": "tests/test_nicepay_client.py"
   },
   "reference": {
@@ -425,10 +425,7 @@
         "NICEPAY_SECRET",
         "NICEPAY_METHOD",
         "NICEPAY_SUCCESS_URL",
-        "NICEPAY_FAIL_URL",
-        "NICEPAY_WEBHOOK_HOST",
-        "NICEPAY_WEBHOOK_PORT",
-        "NICEPAY_WEBHOOK_PATH"
+        "NICEPAY_FAIL_URL"
       ]
     },
     "implementation_rules": [
@@ -446,7 +443,7 @@
     "Базовый URL по умолчанию: https://nicepay.io.",
     "Все суммы передаются в minor units: центы или копейки. 35.40 USD передаётся как 3540.",
     "В проекте уже реализован рабочий классический flow создания платежа, callback-валидация и зачисление средств после подтверждённого callback.",
-    "При изменениях переиспользуй существующие модули src/cerber_bot/integrations/nicepay.py, src/cerber_bot/services/payments.py, src/cerber_bot/nicepay_webhook.py и настройки из src/cerber_bot/config.py.",
+    "При изменениях переиспользуй существующие модули src/cerber_bot/integrations/nicepay.py, src/cerber_bot/services/payments.py, src/cerber_bot/web/routes/nicepay.py и настройки из src/cerber_bot/config.py.",
     "Для денег внутри доменной логики используй Decimal, а в Nicepay отправляй целые minor units.",
     "Для callback и payout handler делай обработку идемпотентной, потому что Nicepay повторяет запрос через 1 минуту, если не получил ответ.",
     "Классический платёж создаётся через POST /public/api/payment с merchant_id, secret, order_id, customer или account, amount, currency и опциональными description, method, success_url, fail_url.",

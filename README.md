@@ -39,13 +39,11 @@
 ```text
 src/cerber_bot/
 │
-├── main.py                   # Точка входа: bot + dispatcher + webhook-сервер
+├── main.py                   # Точка входа: bot + dispatcher + FastAPI web app
 ├── container.py              # Сборка зависимостей (AppContainer)
 ├── config.py                 # Настройки из .env через pydantic-settings
 ├── texts.py                  # Централизованные тексты интерфейса
 ├── log_config.py             # Настройка логгера
-├── nicepay_webhook.py        # HTTP-сервер для callback NicePay
-│
 ├── handlers/
 │   ├── start.py              # /start — регистрация + приветствие
 │   ├── storefront.py         # Витрина: категории, товары, поиск, кошелёк, заказы
@@ -129,7 +127,6 @@ python -m cerber_bot
 | `GIFTAPI_SECRET` | — | — | Секрет GiftAPI (для создания заказов) |
 | `NICEPAY_MERCHANT_ID` | — | — | Merchant ID NicePay |
 | `NICEPAY_SECRET` | — | — | Секрет NicePay |
-| `NICEPAY_WEBHOOK_PORT` | — | `8080` | Порт webhook-сервера |
 | `PAYMENTS_CURRENCY` | — | `USD` | Валюта платежей NicePay |
 | `PAYMENTS_MIN_AMOUNT` | — | `5.00` | Минимум пополнения |
 | `PAYMENTS_MAX_AMOUNT` | — | `500.00` | Максимум пополнения |
@@ -209,7 +206,7 @@ python -m cerber_bot
 1. Пользователь выбирает сумму (+10 / +25 / +50 / +100 или произвольную).
 2. Бот создаёт pending-платёж в БД и запрашивает у NicePay ссылку.
 3. Пользователь переходит по ссылке и оплачивает.
-4. NicePay отправляет callback на `NICEPAY_WEBHOOK_PATH`.
+4. NicePay отправляет callback на публичный URL `{WEB_BASE_URL}/webhooks/nicepay`.
 5. Бот проверяет подпись, сумму, валюту и зачисляет средства.
 6. Пользователь получает уведомление в Telegram.
 
@@ -368,7 +365,7 @@ pytest
 
 1. Создать и настроить мерчанта NicePay.
 2. Указать `NICEPAY_MERCHANT_ID` и `NICEPAY_SECRET` в `.env`.
-3. Настроить callback URL мерчанта на публичный путь `NICEPAY_WEBHOOK_PATH` вашего сервера.
+3. Настроить callback URL мерчанта на публичный путь `{WEB_BASE_URL}/webhooks/nicepay` вашего сервера.
 4. Если валюты отличаются, убедиться, что работает `EXCHANGE_RATE_API_URL` или задан `FALLBACK_USDT_RUB_RATE`.
 
 ### Споры и выводы не доходят до модератора
