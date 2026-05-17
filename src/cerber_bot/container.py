@@ -166,9 +166,6 @@ class AppContainer:
             user_service=user_service,
         )
 
-    def build_user_service(self) -> UserService:
-        return self.user_service
-
     async def close(self) -> None:
         await self.nicepay_http_client.aclose()
         await self.http_client.aclose()

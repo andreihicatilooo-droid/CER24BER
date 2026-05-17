@@ -555,7 +555,7 @@ def build_admin_router(container: AppContainer, *, user_bot: Bot | None = None) 
         identifier = (message.text or "").strip()
         await state.clear()
 
-        user = await container.build_user_service().find_user(identifier)
+        user = await container.user_service.find_user(identifier)
         if user is None:
             await message.answer(ADMIN_TEXT.USER_NOT_FOUND)
             return
@@ -590,7 +590,7 @@ def build_admin_router(container: AppContainer, *, user_bot: Bot | None = None) 
             await callback.answer()
             return
 
-        user = await container.build_user_service().get_profile(telegram_id)
+        user = await container.user_service.get_profile(telegram_id)
         if user is None:
             await callback.answer(ADMIN_TEXT.USER_NOT_FOUND, show_alert=True)
             return
@@ -638,7 +638,7 @@ def build_admin_router(container: AppContainer, *, user_bot: Bot | None = None) 
             delta = abs(delta)
 
         try:
-            old_balance, updated = await container.build_user_service().adjust_balance(
+            old_balance, updated = await container.user_service.adjust_balance(
                 telegram_id,
                 delta=delta,
                 admin_id=message.from_user.id,
@@ -667,7 +667,7 @@ def build_admin_router(container: AppContainer, *, user_bot: Bot | None = None) 
             return
         await callback.answer(ADMIN_TEXT.CALLBACK_WAIT)
 
-        stats = await container.build_user_service().get_stats()
+        stats = await container.user_service.get_stats()
         text = "\n".join([
             ADMIN_TEXT.STATS_TITLE,
             ADMIN_TEXT.STATS_TOTAL.format(count=stats.total),

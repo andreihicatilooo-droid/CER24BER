@@ -63,7 +63,7 @@ def build_tgaccounts_router(container: AppContainer) -> Router:
             await callback.answer()
             return
 
-        await container.build_user_service().register_or_update(callback.from_user)
+        await container.user_service.register_or_update(callback.from_user)
         await state.clear()
         await send_screen(
             message,

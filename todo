@@ -278,7 +278,7 @@ _Обновлено: 2026-05-17_
       📂 Файлы: `texts.py`
       ⚠️ Риск: иначе AttributeError в admin.py
       ✅ Готово когда: admin-бот не падает при открытии несуществующей сделки
-- [ ] Сделать `user_service` полем AppContainer (container.py)
+- [x] Сделать `user_service` полем AppContainer (container.py) — _2026-05-17_
       📂 Файлы: `container.py`, `handlers/start.py`, `handlers/menu.py`, `handlers/admin.py`
       ⚠️ Риск: заменить все вызовы `build_user_service()` на `user_service`
       ✅ Готово когда: сервис создаётся один раз
@@ -321,6 +321,7 @@ _Обновлено: 2026-05-17_
 
 ## ✅ Выполнено
 
+- [x] Сделать `user_service` полем AppContainer (container.py) — _2026-05-17_
 - [x] Добавить `CALLBACK_DEAL_NOT_FOUND` в `DEAL_HANDLER_TEXT` (texts.py) — _2026-05-17_
 - [x] [7/8] Хэндлер tgaccounts — FSM и навигация — _2026-05-10_
 - [x] Удалить start.ps1 и убрать упоминания из документации — _2026-04-22_
