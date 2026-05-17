@@ -129,12 +129,6 @@ _Обновлено: 2026-05-17_
 
 #### 🔗 Цепочка «Развитие AI-контура CERBER» — строго по порядку
 
-- [ ] [2/5] Добавить агента CERBER Discovery
-      📂 Файлы: `.github/agents/discovery.agent.md` (новый), `.github/agents/router.agent.md`
-      🔗 После: «[1/5] Зафиксировать роли CERBER, Router и Discovery»
-      ⚠️ Риск: если Discovery начнёт строить TODO или выбирать архитектуру реализации, он задублирует Planner и Architect
-      ✅ Готово когда: Discovery умеет превращать сырую идею в 2-4 направления развития и передавать задачу дальше в Planner, Architect, Interface или Executor
-
 - [ ] [3/5] Добавить универсального агента CERBER
       📂 Файлы: `.github/agents/cerber.agent.md` (новый), `.github/agents/router.agent.md`
       🔗 После: «[1/5] Зафиксировать роли CERBER, Router и Discovery»
@@ -266,6 +260,7 @@ _Обновлено: 2026-05-17_
 
 ## ✅ Выполнено
 
+- [x] [2/5] Добавить агента CERBER Discovery — _2026-05-17_
 - [x] [1/5] Зафиксировать роли CERBER, Router и Discovery — _2026-05-17_
 - [x] Удалить дублирующий NicePay webhook (aiohttp): убрать `nicepay_webhook.py`, удалить запуск из `main.py`, убрать поля из `config.py` и `.env.example` — _2026-05-17_
 - [x] Открывать launcher TUI в отдельном терминале и обновлять экран после каждого действия — _2026-05-17_
