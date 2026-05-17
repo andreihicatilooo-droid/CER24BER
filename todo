@@ -127,6 +127,34 @@ _Обновлено: 2026-05-17_
 
 ---
 
+#### 🔗 Цепочка «Развитие AI-контура CERBER» — строго по порядку
+
+- [ ] [2/5] Добавить агента CERBER Discovery
+      📂 Файлы: `.github/agents/discovery.agent.md` (новый), `.github/agents/router.agent.md`
+      🔗 После: «[1/5] Зафиксировать роли CERBER, Router и Discovery»
+      ⚠️ Риск: если Discovery начнёт строить TODO или выбирать архитектуру реализации, он задублирует Planner и Architect
+      ✅ Готово когда: Discovery умеет превращать сырую идею в 2-4 направления развития и передавать задачу дальше в Planner, Architect, Interface или Executor
+
+- [ ] [3/5] Добавить универсального агента CERBER
+      📂 Файлы: `.github/agents/cerber.agent.md` (новый), `.github/agents/router.agent.md`
+      🔗 После: «[1/5] Зафиксировать роли CERBER, Router и Discovery»
+      ⚠️ Риск: если CERBER получит слишком широкую роль без правил handoff, он начнёт перетягивать на себя задачи специализированных агентов
+      ✅ Готово когда: CERBER уточняет запрос, определяет тип задачи, вызывает нужных агентов и инструменты и остаётся универсальным user-facing помощником
+
+- [ ] [4/5] Провести аудит tools и skills для AI
+      📂 Файлы: `.github/agents/cerber.agent.md`, `.github/agents/discovery.agent.md`, `.github/skills/`, `.github/copilot-instructions.md`
+      🔗 После: «[2/5] Добавить агента CERBER Discovery»
+      ⚠️ Риск: лишние tools снизят управляемость, а недостающие skills не позволят CERBER быть реальным помощником и руками пользователя
+      ✅ Готово когда: для CERBER и Discovery определён минимально достаточный toolset и список обязательных и опциональных skills
+
+- [ ] [5/5] Добавить ideation workflow и проверить маршрутизацию
+      📂 Файлы: `.github/skills/idea-to-brief/SKILL.md` (новый), `.github/agents/router.agent.md`, `.github/agents/cerber.agent.md`, `.github/agents/discovery.agent.md`
+      🔗 После: «[3/5] Добавить универсального агента CERBER»
+      ⚠️ Риск: без smoke-check сценариев новый workflow будет формально описан, но нестабилен на реальных неоднозначных запросах
+      ✅ Готово когда: CERBER и Discovery работают по единому ideation-flow, а ручная проверка неоднозначных prompt-сценариев подтверждает корректную маршрутизацию
+
+---
+
 #### 🔗 Цепочка «FAQ в боте» — строго по порядку
 
 - [x] [1/2] Тексты FAQ в texts.py — _2026-04-15_
@@ -238,6 +266,7 @@ _Обновлено: 2026-05-17_
 
 ## ✅ Выполнено
 
+- [x] [1/5] Зафиксировать роли CERBER, Router и Discovery — _2026-05-17_
 - [x] Удалить дублирующий NicePay webhook (aiohttp): убрать `nicepay_webhook.py`, удалить запуск из `main.py`, убрать поля из `config.py` и `.env.example` — _2026-05-17_
 - [x] Открывать launcher TUI в отдельном терминале и обновлять экран после каждого действия — _2026-05-17_
 - [x] Расширить cerber_launcher консольным статусом и интерактивным меню управления — _2026-05-17_
