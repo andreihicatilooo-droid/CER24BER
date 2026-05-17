@@ -93,8 +93,8 @@ Tests use temporary SQLite DBs (`tmp_path`), stub clients (e.g., `StubNicePayCli
 
 - **Language**: Always respond in Russian. Code, identifiers, and file paths remain in their original language.
 - **AI contour tool policy**: `CERBER` stays on the minimal toolset `read + search + agent`; `CERBER Discovery` stays on `read + search` only. Do not widen these toolsets without a specific task proving the current scope is insufficient.
-- **AI contour skill policy**: there are no always-on skills for `CERBER` or `CERBER Discovery`. `plan-to-todo` is conditionally mandatory only after `CERBER Planner` has already produced an approved plan that must be written into a TODO contour.
-- **Skill availability**: until a dedicated ideation skill exists in `.github/skills/`, `CERBER` and `CERBER Discovery` must not pretend that such a skill already exists; raw-idea work stays inside the agents themselves.
+- **AI contour skill policy**: there are no always-on skills for `CERBER` or `CERBER Discovery`. `idea-to-brief` is the optional shared ideation workflow for raw ideas and vague product requests; `plan-to-todo` is conditionally mandatory only after `CERBER Planner` has already produced an approved plan that must be written into a TODO contour.
+- **Skill availability**: when `idea-to-brief` is present in `.github/skills/`, `CERBER` and `CERBER Discovery` should use it as a shared idea → brief workflow, but they must still stay functional without pretending that any skill is always-on.
 - **Commit summary**: After any file edits, append a commit message block at the very end of the response:
 
 ```
