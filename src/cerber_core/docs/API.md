@@ -198,6 +198,61 @@ X-API-Key: <api_key>
 
 ---
 
+### 3.2. Идемпотентная корректировка баланса
+
+**`POST /api/v1/balance/adjust`**
+
+Применяет изменение баланса в USDT и использует `operation_id` как идемпотентный ключ в рамках сервиса.
+
+**Заголовки:**
+```
+X-API-Key: <api_key>
+Content-Type: application/json
+```
+
+**Тело запроса (plaintext перед шифрованием):**
+```json
+{
+  "encrypted_user_hash": "<AES-GCM-256( user_hash, secret_key )>",
+  "delta_usdt": -7.5,
+  "tx_type": "withdrawal",
+  "description": "admin adjustment",
+  "operation_id": "admin-adjust:chat:message:user"
+}
+```
+
+**Поля:**
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `encrypted_user_hash` | string | AES-GCM-256( user_hash, secret_key ) |
+| `delta_usdt` | number | Положительное или отрицательное изменение баланса в USDT. `0` запрещён |
+| `tx_type` | string | Один из `topup`, `transfer`, `withdrawal` |
+| `description` | string | Человекочитаемое описание операции |
+| `operation_id` | string | Идемпотентный ключ операции, уникальный в рамках `service_id` |
+
+**Ответ `200 OK` (расшифровать `data`):**
+```json
+{
+  "balance_usdt": 42.5,
+  "balance_rub": 3825.0,
+  "rate_usdt_rub": 90.0
+}
+```
+
+**Ошибки:**
+
+| HTTP | Причина |
+|------|---------|
+| 400  | Невалидное тело / не удалось расшифровать `encrypted_user_hash` / `delta_usdt = 0` / неверный `tx_type` |
+| 401  | Неверный `X-API-Key` |
+| 409  | Недостаточно средств для отрицательной корректировки |
+| 500  | Внутренняя ошибка |
+
+Повторный вызов с тем же `operation_id` не должен применять изменение повторно и возвращает текущее состояние баланса.
+
+---
+
 ### 4. Список методов пополнения
 
 **`GET /api/v1/topup/methods`**

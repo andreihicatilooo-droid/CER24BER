@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/cerber/billing/internal/middleware"
+	"github.com/cerber/billing/internal/model"
 	"github.com/cerber/billing/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -72,4 +74,49 @@ func (h *BalanceHandler) History(c *gin.Context) {
 		return
 	}
 	EncryptedJSON(c, http.StatusOK, transactions, svc.SecretKey)
+}
+
+// Adjust applies an idempotent balance mutation in USDT and returns the current balance.
+// Body: { "encrypted_user_hash": "...", "delta_usdt": 10.0, "tx_type": "topup", "description": "...", "operation_id": "..." }
+func (h *BalanceHandler) Adjust(c *gin.Context) {
+	svc := middleware.GetService(c)
+	var req struct {
+		EncryptedUserHash string  `json:"encrypted_user_hash" binding:"required"`
+		DeltaUSDT         float64 `json:"delta_usdt" binding:"required"`
+		TxType            string  `json:"tx_type" binding:"required"`
+		Description       string  `json:"description"`
+		OperationID       string  `json:"operation_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		EncryptedJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()}, svc.SecretKey)
+		return
+	}
+	if req.DeltaUSDT == 0 {
+		EncryptedJSON(c, http.StatusBadRequest, gin.H{"error": "delta_usdt must not be zero"}, svc.SecretKey)
+		return
+	}
+	userHash, err := service.DecryptUserHash(req.EncryptedUserHash, svc.SecretKey)
+	if err != nil {
+		EncryptedJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()}, svc.SecretKey)
+		return
+	}
+
+	result, err := h.balanceSvc.Adjust(
+		c.Request.Context(),
+		svc.ID,
+		userHash,
+		req.DeltaUSDT,
+		model.TxType(req.TxType),
+		req.Description,
+		req.OperationID,
+	)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, service.ErrInsufficientFunds) {
+			status = http.StatusConflict
+		}
+		EncryptedJSON(c, status, gin.H{"error": err.Error()}, svc.SecretKey)
+		return
+	}
+	EncryptedJSON(c, http.StatusOK, result, svc.SecretKey)
 }

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+from decimal import Decimal
 
 import httpx
 import pytest
@@ -71,3 +72,53 @@ async def test_cerber_core_client_lists_transactions() -> None:
     assert captured["limit"] == "5"
     assert captured["offset"] == "10"
     assert captured["encrypted_user_hash"]
+
+
+@pytest.mark.asyncio
+async def test_cerber_core_client_adjusts_balance() -> None:
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["api_key"] = request.headers.get("X-API-Key")
+        captured["payload"] = json.loads(request.content.decode("utf-8"))
+        return httpx.Response(
+            status_code=200,
+            json={
+                "data": encrypt_payload(
+                    {
+                        "balance_usdt": 42.5,
+                        "balance_rub": 3825.0,
+                        "rate_usdt_rub": 90.0,
+                    }
+                )
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = CerberCoreClient(
+            base_url="https://core.example",
+            http_client=http_client,
+            api_key="api-key-1",
+            secret_key=SECRET_KEY_B64,
+        )
+        balance = await client.adjust_balance(
+            123456789,
+            delta_usdt=Decimal("-7.50"),
+            tx_type="withdrawal",
+            description="admin adjustment",
+            operation_id="admin-adjust:1",
+        )
+
+    assert balance.balance_usdt == pytest.approx(42.5)
+    assert balance.balance_rub == pytest.approx(3825.0)
+    assert captured["path"] == "/api/v1/balance/adjust"
+    assert captured["api_key"] == "api-key-1"
+    payload = captured["payload"]
+    assert isinstance(payload, dict)
+    assert payload["delta_usdt"] == -7.5
+    assert payload["tx_type"] == "withdrawal"
+    assert payload["description"] == "admin adjustment"
+    assert payload["operation_id"] == "admin-adjust:1"
+    assert payload["encrypted_user_hash"]

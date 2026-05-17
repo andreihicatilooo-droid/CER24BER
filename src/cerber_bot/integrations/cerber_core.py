@@ -140,6 +140,35 @@ class CerberCoreClient:
             raise CerberCoreError("CERBER Core вернул неожиданный ответ по истории транзакций.")
         return tuple(_to_transaction(item) for item in payload if isinstance(item, dict))
 
+    async def adjust_balance(
+        self,
+        telegram_id: int,
+        *,
+        delta_usdt: Decimal,
+        tx_type: str,
+        description: str,
+        operation_id: str,
+    ) -> CerberCoreBalance:
+        encrypted_user_hash = self._encrypt_user_hash(telegram_id)
+        payload = await self._request(
+            "POST",
+            "/api/v1/balance/adjust",
+            json_body={
+                "encrypted_user_hash": encrypted_user_hash,
+                "delta_usdt": float(delta_usdt),
+                "tx_type": tx_type,
+                "description": description,
+                "operation_id": operation_id,
+            },
+        )
+        if not isinstance(payload, dict):
+            raise CerberCoreError("CERBER Core вернул неожиданный ответ при корректировке баланса.")
+        return CerberCoreBalance(
+            balance_usdt=_to_decimal(payload.get("balance_usdt")),
+            balance_rub=_to_decimal(payload.get("balance_rub")),
+            rate_usdt_rub=_to_decimal(payload.get("rate_usdt_rub")),
+        )
+
     async def list_topup_methods(self, *, force_refresh: bool = False) -> tuple[CerberCoreTopupMethod, ...]:
         if self._methods_by_code is not None and not force_refresh:
             return tuple(self._methods_by_code.values())

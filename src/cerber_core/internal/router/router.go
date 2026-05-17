@@ -30,6 +30,7 @@ func Setup(
 		v1.POST("/user/add", userH.Add)
 		v1.GET("/balance", balanceH.Get)
 		v1.GET("/balance/history", balanceH.History)
+		v1.POST("/balance/adjust", balanceH.Adjust)
 		v1.GET("/topup/methods", topupH.ListMethods)
 		v1.POST("/topup/create", topupH.Create)
 		v1.GET("/topup/status", topupH.Status)

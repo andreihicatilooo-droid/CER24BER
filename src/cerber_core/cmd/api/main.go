@@ -37,23 +37,23 @@ func main() {
 	// ─── Repositories ─────────────────────────────────────────────────────────
 	// billing-db: services, users (user_hash registry), balances, topup, exchange
 	// users-db:   PII (email, password_hash) — not used by billing API
-	serviceRepo  := repository.NewServiceRepo(billingDB)
-	userRepo     := repository.NewUserRepo(billingDB)
-	balanceRepo  := repository.NewBalanceRepo(billingDB)
-	txRepo       := repository.NewTransactionRepo(billingDB)
-	topupRepo    := repository.NewTopupRepo(billingDB)
+	serviceRepo := repository.NewServiceRepo(billingDB)
+	userRepo := repository.NewUserRepo(billingDB)
+	balanceRepo := repository.NewBalanceRepo(billingDB)
+	txRepo := repository.NewTransactionRepo(billingDB)
+	topupRepo := repository.NewTopupRepo(billingDB)
 	exchangeRepo := repository.NewExchangeRepo(billingDB)
 
 	// ─── Services ─────────────────────────────────────────────────────────────
-	authSvc    := service.NewAuthService(serviceRepo, cfg.MasterAESKey, cfg.MasterHMACKey)
-	balanceSvc := service.NewBalanceService(balanceRepo, txRepo, exchangeRepo)
-	topupSvc   := service.NewTopupService(topupRepo, balanceSvc, exchangeRepo)
+	authSvc := service.NewAuthService(serviceRepo, cfg.MasterAESKey, cfg.MasterHMACKey)
+	balanceSvc := service.NewBalanceService(billingDB, userRepo, balanceRepo, txRepo, exchangeRepo)
+	topupSvc := service.NewTopupService(topupRepo, balanceSvc, exchangeRepo)
 
 	// ─── Handlers ─────────────────────────────────────────────────────────────
-	adminH   := handler.NewAdminHandler(authSvc)
-	userH    := handler.NewUserHandler(userRepo)
+	adminH := handler.NewAdminHandler(authSvc)
+	userH := handler.NewUserHandler(userRepo)
 	balanceH := handler.NewBalanceHandler(balanceSvc)
-	topupH   := handler.NewTopupHandler(topupSvc)
+	topupH := handler.NewTopupHandler(topupSvc)
 
 	r := gin.Default()
 	router.Setup(r, cfg.AdminKey, authSvc, adminH, userH, balanceH, topupH)

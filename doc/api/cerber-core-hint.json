@@ -24,6 +24,7 @@
       "user_add": "POST /api/v1/user/add",
       "balance_get": "GET /api/v1/balance",
       "balance_history": "GET /api/v1/balance/history",
+      "balance_adjust": "POST /api/v1/balance/adjust",
       "topup_methods": "GET /api/v1/topup/methods",
       "topup_create": "POST /api/v1/topup/create",
       "topup_status": "GET /api/v1/topup/status",
@@ -39,6 +40,7 @@
     "implemented": [
       "core exposes encrypted user/balance/topup endpoints",
       "core exposes encrypted wallet history endpoint",
+      "core exposes idempotent balance adjust endpoint with operation_id",
       "bot integrates via BillingClient-compatible CERBER Core client"
     ],
     "not_implemented_yet": [
@@ -58,10 +60,12 @@
     "Use SHA-256(telegram_id) as user_hash before AES-GCM encryption.",
     "Use X-API-Key for all core API calls.",
     "Treat topup confirm as idempotent."
+    ,"Treat balance adjust as idempotent by operation_id within service scope."
   ],
   "copilot_prompt_lines": [
     "CERBER Core использует X-API-Key и AES-GCM для encrypted_user_hash и encrypted response envelope.",
     "user_hash в core = hex SHA-256 от telegram_id, без передачи raw user id в API.",
-    "Для платежей bot может использовать session.id из core как provider order_id/payload и подтверждать session через /api/v1/topup/confirm."
+    "Для платежей bot может использовать session.id из core как provider order_id/payload и подтверждать session через /api/v1/topup/confirm.",
+    "Корректировки баланса в core должны идти через /api/v1/balance/adjust и стабильный operation_id для идемпотентности."
   ]
 }

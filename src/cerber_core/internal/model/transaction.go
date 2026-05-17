@@ -16,6 +16,7 @@ type Transaction struct {
 	ID          string    `db:"id"          json:"id"`
 	ServiceID   string    `db:"service_id"  json:"service_id"`
 	UserHash    string    `db:"user_hash"   json:"user_hash"`
+	OperationID string    `db:"operation_id" json:"operation_id"`
 	Type        TxType    `db:"type"        json:"type"`
 	AmountUSDT  float64   `db:"amount_usdt" json:"amount_usdt"`
 	AmountRUB   float64   `db:"amount_rub"  json:"amount_rub"`

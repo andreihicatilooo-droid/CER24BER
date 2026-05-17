@@ -321,6 +321,7 @@ _Обновлено: 2026-05-17_
 
 ## ✅ Выполнено
 
+- [x] Добавить идемпотентный balance adjust endpoint в CERBER Core и client API — _2026-05-17_
 - [x] Добавить wallet history endpoint в CERBER Core и client-метод в bot — _2026-05-17_
 - [x] Промежуточный cutover платежей: CERBER Core topup-сессии + confirm в bot/core — _2026-05-17_
 - [x] Проверить дублирование adjust_balance (services/store.py, services/users.py) — _2026-05-17_
