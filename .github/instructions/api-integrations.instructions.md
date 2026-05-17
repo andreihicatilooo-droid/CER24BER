@@ -5,15 +5,15 @@ applyTo: "src/cerber_bot/integrations/**"
 
 # Правила работы с внешними API
 
-Папка `doc/api/` содержит AI-friendly hint-файлы для каждого подключённого сервиса.
-**Перед написанием кода интеграции — прочитай соответствующий hint-файл.**
+Папка `doc/api/` содержит AI-friendly Markdown-файлы документации для каждого подключённого сервиса.
+**Перед написанием кода интеграции — прочитай соответствующий .md файл или `doc/api/README.md`.**
 
 ## Карта hint-файлов
 
 | Сервис | Hint-файл | Применять при работе с |
 |---|---|---|
-| NicePay (платежи) | `doc/api/nicepayapi.json` | `integrations/nicepay.py`, `services/payments.py`, `nicepay_webhook.py` |
-| GiftAPI (каталог, заказы) | `doc/api/giftapi-hint.json` | `integrations/giftapi.py`, `services/giftapi.py`, `providers/giftapi_catalog.py` |
+| NicePay (платежи) | `doc/api/nicepayapi.md` | `integrations/nicepay.py`, `services/payments.py`, `nicepay_webhook.py` |
+| GiftAPI (каталог, заказы) | `doc/api/giftapi-hint.md` | `integrations/giftapi.py`, `services/giftapi.py`, `providers/giftapi_catalog.py` |
 
 ## Когда читать hint-файл
 
@@ -23,43 +23,27 @@ applyTo: "src/cerber_bot/integrations/**"
 - При обработке вебхуков / callback'ов
 - При добавлении нового провайдера каталога
 
-## Формат hint-файла (стандарт проекта)
+## Формат документации API (стандарт проекта)
 
-Каждый `*-hint.json` или `*api.json` в папке `doc/api/` должен содержать:
+Каждый Markdown-файл в папке `doc/api/` должен начинаться с блока TL;DR, который ИИ считывает в первую очередь:
 
-```json
-{
-  "name": "service-name",
-  "generated_at": "YYYY-MM-DD",
-  "description": "Краткое описание для AI",
-  "project_references": {
-    "client": "src/cerber_bot/integrations/...",
-    "service": "src/cerber_bot/services/...",
-    "tests": "tests/test_..."
-  },
-  "reference": {
-    "base_urls": {},
-    "authentication": {},
-    "money_format": {},
-    "endpoints": {},
-    "error_codes": {}
-  },
-  "current_project_state": {
-    "implemented": [],
-    "not_implemented_yet": [],
-    "existing_env_vars": []
-  },
-  "implementation_rules": [],
-  "copilot_prompt_lines": []
-}
+```markdown
+# Название API
+
+> ⚠️ **ВАЖНЫЕ ПРАВИЛА (TL;DR):**
+> 1. Краткий факт о валюте
+> 2. Краткий факт об авторизации (HMAC и т.п.)
+
+## Привязка к проекту
+- **client**: `src/cerber_bot/integrations/...`
 ```
 
 ## Как добавить hint-файл для нового сервиса
 
-1. Создать `doc/api/{service}-hint.json` по шаблону выше.
+1. Создать `doc/api/{service}.md` по стандартам Markdown.
 2. Заполнить `reference` из документации API сервиса.
 3. Заполнить `project_references` путями к файлам в проекте.
-4. Написать `copilot_prompt_lines` — список ключевых фактов на русском для быстрой загрузки в контекст.
+4. Добавить блок `> ⚠️ ВАЖНЫЕ ПРАВИЛА` — список ключевых фактов на русском для быстрой загрузки в контекст.
 5. Добавить запись в таблицу «Карта hint-файлов» выше.
 
 ## Правила реализации интеграций (общие)
