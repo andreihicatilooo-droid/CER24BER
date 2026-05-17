@@ -32,6 +32,10 @@ dev = [
     "pytest-asyncio>=0.23,<1.0",
 ]
 
+[project.scripts]
+cerber-launcher = "cerber_launcher.cli:main"
+cerber-server = "cerber_launcher.server:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
