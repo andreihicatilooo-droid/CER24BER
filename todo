@@ -282,7 +282,7 @@ _Обновлено: 2026-05-17_
       📂 Файлы: `container.py`, `handlers/start.py`, `handlers/menu.py`, `handlers/admin.py`
       ⚠️ Риск: заменить все вызовы `build_user_service()` на `user_service`
       ✅ Готово когда: сервис создаётся один раз
-- [ ] Проверить дублирование adjust_balance (services/store.py, services/users.py)
+- [x] Проверить дублирование adjust_balance (services/store.py, services/users.py) — _2026-05-17_
       📂 Файлы: `services/store.py`, `services/users.py`
       ⚠️ Риск: возможно, одна из реализаций лишняя
       ✅ Готово когда: нет дублирующих adjust_balance
@@ -321,6 +321,7 @@ _Обновлено: 2026-05-17_
 
 ## ✅ Выполнено
 
+- [x] Проверить дублирование adjust_balance (services/store.py, services/users.py) — _2026-05-17_
 - [x] Сделать `user_service` полем AppContainer (container.py) — _2026-05-17_
 - [x] Добавить `CALLBACK_DEAL_NOT_FOUND` в `DEAL_HANDLER_TEXT` (texts.py) — _2026-05-17_
 - [x] [7/8] Хэндлер tgaccounts — FSM и навигация — _2026-05-10_

@@ -18,7 +18,7 @@ from cerber_bot.integrations.giftapi import (
     GiftSkuDetail,
 )
 from cerber_bot.services.exchange import WalletQuote
-from cerber_bot.services.store import InsufficientBalanceError, StoreService, StoreServiceError
+from cerber_bot.services.store import StoreService
 
 
 class StubGiftApiClient:
@@ -244,47 +244,6 @@ async def test_store_service_top_up_and_purchase_updates_wallet_and_orders(tmp_p
     assert orders_page.total_items == 1
     assert len(orders) == 1
     assert orders[0].product_name == "Apple Gift Card 10"
-
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_store_service_manual_balance_adjustment_updates_wallet(tmp_path: Path) -> None:
-    database_url = f"sqlite+aiosqlite:///{(tmp_path / 'manual-balance.db').as_posix()}"
-    engine = create_engine(database_url)
-    session_factory = create_session_factory(engine)
-    await init_database(engine)
-
-    service = StoreService(
-        session_factory=session_factory,
-        gift_api_service=StubGiftApiService(),
-        gift_api_client=StubGiftApiClient(),
-        exchange_rate_service=StubExchangeRateService(),
-        cache_ttl_seconds=60,
-    )
-    telegram_user = User(
-        id=987654321,
-        is_bot=False,
-        first_name="Dev",
-        last_name="User",
-        username="XRAYOG",
-        language_code="ru",
-    )
-
-    wallet_after_credit = await service.adjust_balance(telegram_user, Decimal("40.00"), transaction_type="manual_credit")
-    wallet_after_debit = await service.adjust_balance(telegram_user, Decimal("-15.50"), transaction_type="manual_debit")
-
-    assert wallet_after_credit.balance == Decimal("40.00")
-    assert wallet_after_debit.balance == Decimal("24.50")
-    assert wallet_after_debit.recent_transactions[0].transaction_type == "manual_debit"
-    assert wallet_after_debit.recent_transactions[0].amount == Decimal("-15.50")
-    assert wallet_after_debit.recent_transactions[1].transaction_type == "manual_credit"
-
-    with pytest.raises(InsufficientBalanceError):
-        await service.adjust_balance(telegram_user, Decimal("-50.00"), transaction_type="manual_debit")
-
-    with pytest.raises(StoreServiceError):
-        await service.adjust_balance(telegram_user, Decimal("0.00"), transaction_type="manual_credit")
 
     await engine.dispose()
 

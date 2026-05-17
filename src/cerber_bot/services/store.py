@@ -499,61 +499,6 @@ class StoreService:
 
         return await self.get_wallet_snapshot(telegram_user.id)
 
-    async def adjust_balance(
-        self,
-        telegram_user: TelegramUserObject,
-        amount: Decimal,
-        *,
-        transaction_type: str = "manual_adjustment",
-        description: str | None = None,
-    ) -> WalletSnapshot:
-        normalized_amount = normalize_money_amount(amount)
-        if normalized_amount == Decimal("0.00"):
-            raise StoreServiceError(STORE_SERVICE_TEXT.BALANCE_ADJUSTMENT_NON_ZERO)
-
-        async with self.session_factory() as session:
-            user_repository = UserRepository(session)
-            wallet_repository = WalletTransactionRepository(session)
-            user, _ = await user_repository.get_or_create(
-                telegram_id=telegram_user.id,
-                username=telegram_user.username,
-                first_name=telegram_user.first_name,
-                last_name=telegram_user.last_name,
-                language_code=telegram_user.language_code,
-                is_bot=telegram_user.is_bot,
-                balance_currency=self.wallet_currency,
-            )
-
-            wallet_currency = user.balance_currency or self.wallet_currency
-            available_balance = Decimal(str(user.balance))
-            required_amount = abs(normalized_amount)
-            if normalized_amount < Decimal("0.00") and available_balance < required_amount:
-                raise InsufficientBalanceError(available_balance, required_amount, wallet_currency)
-
-            user.balance_currency = wallet_currency
-            user.balance = available_balance + normalized_amount
-            user.updated_at = user.last_seen_at
-
-            amount_text = format_money(required_amount, wallet_currency)
-            transaction_description = description
-            if transaction_description is None:
-                transaction_description = (
-                    STORE_SERVICE_TEXT.manual_credit_description(amount_text)
-                    if normalized_amount > Decimal("0.00")
-                    else STORE_SERVICE_TEXT.manual_debit_description(amount_text)
-                )
-
-            await wallet_repository.add(
-                telegram_id=telegram_user.id,
-                transaction_type=transaction_type,
-                amount=normalized_amount,
-                currency=wallet_currency,
-                description=transaction_description,
-            )
-            await session.commit()
-
-        return await self.get_wallet_snapshot(telegram_user.id)
-
     async def get_orders_page(self, telegram_id: int, page: int, per_page: int = 6) -> tuple[tuple[StoreOrderCard, ...], PageInfo]:
         async with self.session_factory() as session:
             order_repository = UserOrderRepository(session)
