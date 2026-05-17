@@ -65,6 +65,14 @@ class TgCountryDetails:
     discount_percent: int | None
 
 
+@dataclass(slots=True, frozen=True)
+class TgAccountWebhookResult:
+    purchase: TgAccountPurchase | None
+    result_type: str
+    should_notify: bool
+    error_message: str | None = None
+
+
 class TgAccountService:
     def __init__(
         self,
@@ -258,6 +266,97 @@ class TgAccountService:
 
             await session.commit()
             return purchase
+
+    async def process_webhook(
+        self,
+        *,
+        getmytg_purchase_id: int,
+        result_type: str,
+        country_code: str,
+        phone_number: str | None,
+        verification_code: str | None = None,
+        verification_password: str | None = None,
+        error_message: str | None = None,
+    ) -> TgAccountWebhookResult:
+        normalized_result = result_type.strip().lower()
+        if normalized_result not in {"success", "failed"}:
+            raise TgAccountServiceError(f"Неизвестный результат webhook GetMyTG: {result_type}")
+
+        target_status = "SUCCESS" if normalized_result == "success" else "ERROR"
+        normalized_country_code = country_code.strip().upper()
+
+        async with self.session_factory() as session:
+            repository = TgAccountRepository(session)
+            purchase = await repository.get_by_getmytg_id(getmytg_purchase_id)
+            if purchase is None:
+                return TgAccountWebhookResult(
+                    purchase=None,
+                    result_type=normalized_result,
+                    should_notify=False,
+                    error_message=error_message,
+                )
+
+            previous_status = (purchase.status or "").strip().upper()
+            previous_phone = purchase.phone_number
+            previous_code = purchase.verification_code
+            previous_password = purchase.verification_password
+
+            if previous_status == "REFUND":
+                return TgAccountWebhookResult(
+                    purchase=purchase,
+                    result_type=normalized_result,
+                    should_notify=False,
+                    error_message=error_message,
+                )
+
+            if previous_status in {"SUCCESS", "ERROR"} and previous_status != target_status:
+                return TgAccountWebhookResult(
+                    purchase=purchase,
+                    result_type=normalized_result,
+                    should_notify=False,
+                    error_message=error_message,
+                )
+
+            country_changed = bool(normalized_country_code and purchase.country_code != normalized_country_code)
+            if country_changed:
+                purchase.country_code = normalized_country_code
+
+            needs_status_update = previous_status != target_status or (
+                phone_number is not None and previous_phone != phone_number
+            )
+            needs_verification_update = target_status == "SUCCESS" and (
+                previous_code != verification_code or previous_password != verification_password
+            )
+
+            if not needs_status_update and not needs_verification_update and not country_changed:
+                return TgAccountWebhookResult(
+                    purchase=purchase,
+                    result_type=normalized_result,
+                    should_notify=False,
+                    error_message=error_message,
+                )
+
+            if needs_status_update:
+                await repository.update_status(
+                    purchase,
+                    status=target_status,
+                    phone_number=phone_number,
+                )
+
+            if needs_verification_update:
+                await repository.update_verification(
+                    purchase,
+                    verification_code=verification_code,
+                    verification_password=verification_password,
+                )
+
+            await session.commit()
+            return TgAccountWebhookResult(
+                purchase=purchase,
+                result_type=normalized_result,
+                should_notify=needs_status_update or needs_verification_update,
+                error_message=error_message,
+            )
 
 
 def _unwrap_data(payload: dict[str, object]) -> dict[str, Any]:

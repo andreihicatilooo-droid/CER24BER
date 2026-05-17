@@ -14,6 +14,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from cerber_bot.container import AppContainer
 from cerber_bot.db.models import TgAccountPurchase
 from cerber_bot.handlers.menu import answer_callback_safely, extract_message
+from cerber_bot.integrations.getmytg import GetMyTGClient
 from cerber_bot.keyboards.tgaccounts import (
     TGACC_BUY_PREFIX,
     TGACC_CANCEL_BUY_ACTION,
@@ -388,7 +389,11 @@ def build_getmytg_callback_url(container: AppContainer) -> str | None:
         return None
     path = (container.settings.getmytg_webhook_path or "/webhooks/getmytg").strip() or "/webhooks/getmytg"
     normalized_path = path if path.startswith("/") else f"/{path}"
-    return f"{base_url}{normalized_path}"
+    callback_url = f"{base_url}{normalized_path}"
+    secret = (container.settings.getmytg_webhook_secret or "").strip()
+    if not secret:
+        return callback_url
+    return GetMyTGClient.sign_webhook_url(callback_url, secret)
 
 
 async def send_screen(
