@@ -77,6 +77,6 @@ func (s *BalanceService) Credit(ctx context.Context, serviceID, userHash string,
 	return s.txRepo.Create(ctx, t)
 }
 
-func (s *BalanceService) History(ctx context.Context, accountID string, limit, offset int) ([]model.Transaction, error) {
-	return s.txRepo.ListByAccount(ctx, accountID, limit, offset)
+func (s *BalanceService) History(ctx context.Context, serviceID, userHash string, limit, offset int) ([]model.Transaction, error) {
+	return s.txRepo.ListByUser(ctx, serviceID, userHash, limit, offset)
 }

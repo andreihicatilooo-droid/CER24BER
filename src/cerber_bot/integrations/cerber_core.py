@@ -57,6 +57,19 @@ class CerberCoreBalance:
     rate_usdt_rub: Decimal
 
 
+@dataclass(slots=True, frozen=True)
+class CerberCoreTransaction:
+    id: str
+    service_id: str
+    user_hash: str
+    type: str
+    amount_usdt: Decimal
+    amount_rub: Decimal
+    rate: Decimal
+    description: str
+    created_at: str
+
+
 class CerberCoreClient:
     def __init__(
         self,
@@ -105,6 +118,27 @@ class CerberCoreClient:
             balance_rub=_to_decimal(payload.get("balance_rub")),
             rate_usdt_rub=_to_decimal(payload.get("rate_usdt_rub")),
         )
+
+    async def list_transactions(
+        self,
+        telegram_id: int,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[CerberCoreTransaction, ...]:
+        encrypted_user_hash = self._encrypt_user_hash(telegram_id)
+        payload = await self._request(
+            "GET",
+            "/api/v1/balance/history",
+            params={
+                "encrypted_user_hash": encrypted_user_hash,
+                "limit": str(limit),
+                "offset": str(offset),
+            },
+        )
+        if not isinstance(payload, list):
+            raise CerberCoreError("CERBER Core вернул неожиданный ответ по истории транзакций.")
+        return tuple(_to_transaction(item) for item in payload if isinstance(item, dict))
 
     async def list_topup_methods(self, *, force_refresh: bool = False) -> tuple[CerberCoreTopupMethod, ...]:
         if self._methods_by_code is not None and not force_refresh:
@@ -291,4 +325,18 @@ def _to_topup_session(payload: dict[str, object]) -> CerberCoreTopupSession:
         requisites=requisites,
         created_at=str(payload.get("created_at") or ""),
         updated_at=str(payload.get("updated_at") or ""),
+    )
+
+
+def _to_transaction(payload: dict[str, object]) -> CerberCoreTransaction:
+    return CerberCoreTransaction(
+        id=str(payload.get("id") or ""),
+        service_id=str(payload.get("service_id") or ""),
+        user_hash=str(payload.get("user_hash") or ""),
+        type=str(payload.get("type") or ""),
+        amount_usdt=_to_decimal(payload.get("amount_usdt")),
+        amount_rub=_to_decimal(payload.get("amount_rub")),
+        rate=_to_decimal(payload.get("rate")),
+        description=str(payload.get("description") or ""),
+        created_at=str(payload.get("created_at") or ""),
     )

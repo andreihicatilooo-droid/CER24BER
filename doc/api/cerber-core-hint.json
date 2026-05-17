@@ -5,7 +5,7 @@
   "project_references": {
     "client": "src/cerber_bot/integrations/cerber_core.py",
     "service": "src/cerber_bot/services/payments.py",
-    "tests": "tests/test_payment_service.py"
+    "tests": "tests/test_payment_service.py, tests/test_cerber_core_client.py"
   },
   "reference": {
     "base_urls": {
@@ -23,6 +23,7 @@
     "endpoints": {
       "user_add": "POST /api/v1/user/add",
       "balance_get": "GET /api/v1/balance",
+      "balance_history": "GET /api/v1/balance/history",
       "topup_methods": "GET /api/v1/topup/methods",
       "topup_create": "POST /api/v1/topup/create",
       "topup_status": "GET /api/v1/topup/status",
@@ -37,6 +38,7 @@
   "current_project_state": {
     "implemented": [
       "core exposes encrypted user/balance/topup endpoints",
+      "core exposes encrypted wallet history endpoint",
       "bot integrates via BillingClient-compatible CERBER Core client"
     ],
     "not_implemented_yet": [

@@ -152,6 +152,52 @@ X-API-Key: <api_key>
 
 ---
 
+### 3.1. История транзакций пользователя
+
+**`GET /api/v1/balance/history?encrypted_user_hash=<value>&limit=20&offset=0`**
+
+Возвращает историю транзакций пользователя в рамках текущего сервиса.
+
+**Заголовки:**
+```
+X-API-Key: <api_key>
+```
+
+**Query-параметры:**
+
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| `encrypted_user_hash` | string | AES-GCM-256( user_hash, secret_key ) → Base64 |
+| `limit` | int | Количество записей, от 1 до 100. По умолчанию `20` |
+| `offset` | int | Смещение для пагинации. По умолчанию `0` |
+
+**Ответ `200 OK` (расшифровать `data`):**
+```json
+[
+  {
+    "id": "uuid-транзакции",
+    "service_id": "uuid-сервиса",
+    "user_hash": "e3b0c44298...",
+    "type": "topup",
+    "amount_usdt": 50.0,
+    "amount_rub": 4500.0,
+    "rate": 90.0,
+    "description": "Topup confirmed",
+    "created_at": "2026-05-17T10:00:00Z"
+  }
+]
+```
+
+**Ошибки:**
+
+| HTTP | Причина |
+|------|---------|
+| 400  | Не удалось расшифровать `encrypted_user_hash` / невалидные `limit` или `offset` |
+| 401  | Неверный `X-API-Key` |
+| 500  | Внутренняя ошибка |
+
+---
+
 ### 4. Список методов пополнения
 
 **`GET /api/v1/topup/methods`**
