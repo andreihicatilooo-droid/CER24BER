@@ -129,12 +129,6 @@ _Обновлено: 2026-05-17_
 
 #### 🔗 Цепочка «Развитие AI-контура CERBER» — строго по порядку
 
-- [ ] [3/5] Добавить универсального агента CERBER
-      📂 Файлы: `.github/agents/cerber.agent.md` (новый), `.github/agents/router.agent.md`
-      🔗 После: «[1/5] Зафиксировать роли CERBER, Router и Discovery»
-      ⚠️ Риск: если CERBER получит слишком широкую роль без правил handoff, он начнёт перетягивать на себя задачи специализированных агентов
-      ✅ Готово когда: CERBER уточняет запрос, определяет тип задачи, вызывает нужных агентов и инструменты и остаётся универсальным user-facing помощником
-
 - [ ] [4/5] Провести аудит tools и skills для AI
       📂 Файлы: `.github/agents/cerber.agent.md`, `.github/agents/discovery.agent.md`, `.github/skills/`, `.github/copilot-instructions.md`
       🔗 После: «[2/5] Добавить агента CERBER Discovery»
@@ -260,6 +254,7 @@ _Обновлено: 2026-05-17_
 
 ## ✅ Выполнено
 
+- [x] [3/5] Добавить универсального агента CERBER — _2026-05-17_
 - [x] [2/5] Добавить агента CERBER Discovery — _2026-05-17_
 - [x] [1/5] Зафиксировать роли CERBER, Router и Discovery — _2026-05-17_
 - [x] Удалить дублирующий NicePay webhook (aiohttp): убрать `nicepay_webhook.py`, удалить запуск из `main.py`, убрать поля из `config.py` и `.env.example` — _2026-05-17_
