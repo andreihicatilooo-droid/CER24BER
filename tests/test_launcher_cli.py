@@ -197,3 +197,61 @@ def test_serve_runs_server_with_default_targets(monkeypatch: pytest.MonkeyPatch)
 
     assert exit_code == 7
     assert captured == [["shop", "admin"]]
+
+
+def test_supervisor_start_tunnel_updates_web_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    expected_url = "https://fresh-url.trycloudflare.com"
+    captured: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        launcher_supervisor,
+        "start_component",
+        lambda component: ComponentStatus(component, cli.COMPONENT_SPECS[component].label, True, 12345, "running"),
+    )
+    monkeypatch.setattr(launcher_supervisor.LauncherSupervisor, "wait_for_tunnel_url", lambda self: expected_url)
+    monkeypatch.setattr(launcher_supervisor, "set_env", lambda key, value: captured.append((key, value)))
+
+    supervisor = launcher_supervisor.LauncherSupervisor()
+    statuses = supervisor.start_components(["tunnel"])
+
+    assert statuses[0].running is True
+    assert captured == [("WEB_BASE_URL", expected_url)]
+
+
+def test_supervisor_start_tunnel_clears_stale_trycloudflare_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        launcher_supervisor,
+        "start_component",
+        lambda component: ComponentStatus(component, cli.COMPONENT_SPECS[component].label, True, 12345, "running"),
+    )
+    monkeypatch.setattr(launcher_supervisor.LauncherSupervisor, "wait_for_tunnel_url", lambda self: None)
+    monkeypatch.setattr(launcher_supervisor, "get_env", lambda key, default="": "https://old.trycloudflare.com")
+    monkeypatch.setattr(launcher_supervisor, "set_env", lambda key, value: captured.append((key, value)))
+
+    supervisor = launcher_supervisor.LauncherSupervisor()
+    statuses = supervisor.start_components(["tunnel"])
+
+    assert statuses[0].running is True
+    assert captured == [("WEB_BASE_URL", "")]
+
+
+def test_supervisor_restart_tunnel_clears_stale_trycloudflare_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        launcher_supervisor,
+        "start_component",
+        lambda component: ComponentStatus(component, cli.COMPONENT_SPECS[component].label, True, 54321, "running"),
+    )
+    monkeypatch.setattr(launcher_supervisor, "terminate_component", lambda component: None)
+    monkeypatch.setattr(launcher_supervisor.LauncherSupervisor, "wait_for_tunnel_url", lambda self: None)
+    monkeypatch.setattr(launcher_supervisor, "get_env", lambda key, default="": "https://old.trycloudflare.com")
+    monkeypatch.setattr(launcher_supervisor, "set_env", lambda key, value: captured.append((key, value)))
+
+    supervisor = launcher_supervisor.LauncherSupervisor()
+    statuses = supervisor.restart_components(["tunnel"])
+
+    assert statuses[0].running is True
+    assert captured == [("WEB_BASE_URL", "")]

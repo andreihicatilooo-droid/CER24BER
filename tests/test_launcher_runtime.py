@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 from pathlib import Path
 
 from cerber_launcher import runtime
@@ -26,12 +25,11 @@ def test_build_component_command_uses_unbuffered_python(monkeypatch) -> None:
     assert ceer[1:3] == ["-u", "-m"]
 
 
-def test_spawn_component_windows_detached_uses_live_console_wrapper(monkeypatch, tmp_path) -> None:
+def test_spawn_component_windows_detached_starts_python_directly(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(runtime, "ensure_component_ready", lambda component: None)
     monkeypatch.setattr(runtime, "build_component_command", lambda component: ["C:/venv/python.exe", "-u", "-m", "cerber_bot"])
     monkeypatch.setattr(runtime, "python_executable", lambda: Path("C:/venv/python.exe"), raising=False)
     monkeypatch.setattr(runtime.os, "name", "nt", raising=False)
-    monkeypatch.setattr(runtime.shutil, "which", lambda name: "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe")
 
     monkeypatch.setitem(runtime.LOGS, "shop", tmp_path / "shop.log")
     monkeypatch.setitem(runtime.LOGS, "shop_err", tmp_path / "shop.err")
@@ -51,19 +49,16 @@ def test_spawn_component_windows_detached_uses_live_console_wrapper(monkeypatch,
     spawned = runtime.spawn_component("shop", detached=True)
 
     assert spawned.process.pid == 4242
-    wrapped = captured["command"]
     kwargs = captured["kwargs"]
-    assert isinstance(wrapped, list)
-    assert "-EncodedCommand" in wrapped
+    assert captured["command"] == ["C:/venv/python.exe", "-u", "-m", "cerber_bot"]
     assert kwargs.get("creationflags") == (512 | 16)
+    assert kwargs.get("cwd") is not None
+    env = kwargs.get("env")
+    assert isinstance(env, dict)
+    assert env["CERBER_LOG_FILE"] == str(tmp_path / "shop.log")
+    assert env["CERBER_ERROR_LOG_FILE"] == str(tmp_path / "shop.err")
     assert "stdout" not in kwargs
     assert "stderr" not in kwargs
-
-    encoded_script = wrapped[wrapped.index("-EncodedCommand") + 1]
-    script = base64.b64decode(encoded_script).decode("utf-16le")
-    assert "RedirectStandardOutput = $true" in script
-    assert "RedirectStandardError = $true" in script
-    assert "PYTHONUNBUFFERED" in script
 
 
 def test_build_component_command_for_tunnel(monkeypatch) -> None:
@@ -73,3 +68,32 @@ def test_build_component_command_for_tunnel(monkeypatch) -> None:
     command = runtime.build_component_command("tunnel")
 
     assert command == ["C:/tools/cloudflared.exe", "tunnel", "--url", "http://localhost:9099"]
+
+
+def test_spawn_tunnel_truncates_previous_log(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(runtime, "ensure_component_ready", lambda component: None)
+    monkeypatch.setattr(runtime, "build_component_command", lambda component: ["cloudflared", "tunnel", "--url", "http://localhost:8088"])
+    monkeypatch.setattr(runtime.os, "name", "posix", raising=False)
+
+    tunnel_log = tmp_path / "tunnel.log"
+    tunnel_log.write_text("stale line\n", encoding="utf-8")
+    monkeypatch.setitem(runtime.LOGS, "tunnel", tunnel_log)
+
+    captured: dict[str, object] = {}
+
+    def _fake_popen(command, **kwargs):
+        captured["kwargs"] = kwargs
+        return _DummyProcess(5555)
+
+    monkeypatch.setattr(runtime.subprocess, "Popen", _fake_popen)
+
+    spawned = runtime.spawn_component("tunnel", detached=False)
+
+    assert spawned.process.pid == 5555
+    assert tunnel_log.read_text(encoding="utf-8") == ""
+
+    stdout_handle = captured["kwargs"]["stdout"]
+    stderr_handle = captured["kwargs"]["stderr"]
+    stdout_handle.close()
+    if stderr_handle is not stdout_handle:
+        stderr_handle.close()

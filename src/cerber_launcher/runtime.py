@@ -12,8 +12,11 @@ from cerber_launcher.shared import (
     ENV_FILE,
     LOGS,
     PROJECT_ROOT,
+    RUN_DIR,
+    RUN_DIR,
     get_env,
     launcher_log,
+    ensure_runtime_dirs,
     python_executable,
     read_pid_file,
     remove_pid_file,
@@ -139,12 +142,21 @@ def ensure_component_ready(component: str) -> None:
 
 
 def spawn_component(component: str, *, detached: bool) -> SpawnedComponent:
+    ensure_runtime_dirs()
     ensure_component_ready(component)
     spec = COMPONENT_SPECS[component]
     command = build_component_command(component)
 
+    if component == "tunnel":
+        # Сбрасываем лог предыдущих запусков, чтобы URL/ошибки в статусе
+        # относились к текущему процессу cloudflared.
+        try:
+            LOGS[spec.log_key].write_text("", encoding="utf-8")
+        except OSError:
+            pass
+
     if os.name == "nt" and detached:
-        return _spawn_component_windows_live_console(component, spec, command)
+        return _spawn_component_windows_detached(component, spec, command)
 
     stdout_handle = LOGS[spec.log_key].open("a", encoding="utf-8")
     stderr_handle = stdout_handle if spec.error_log_key is None else LOGS[spec.error_log_key].open("a", encoding="utf-8")
@@ -179,16 +191,44 @@ def spawn_component(component: str, *, detached: bool) -> SpawnedComponent:
     )
 
 
+def _spawn_component_windows_detached(component: str, spec: ComponentSpec, command: list[str]) -> SpawnedComponent:
+    """Запускает компонент в отдельной консоли Windows без wrapper-скрипта."""
+    if component in BOT_COMPONENTS:
+        env = os.environ.copy()
+        env["CERBER_LOG_FILE"] = str(LOGS[spec.log_key])
+        if spec.error_log_key is not None:
+            env["CERBER_ERROR_LOG_FILE"] = str(LOGS[spec.error_log_key])
+
+        creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+        process = subprocess.Popen(
+            command,
+            cwd=str(PROJECT_ROOT),
+            env=env,
+            creationflags=creationflags,
+        )
+        return SpawnedComponent(
+            key=component,
+            process=process,
+            stdout_handle=subprocess.DEVNULL,
+            stderr_handle=None,
+            command=command,
+        )
+
+    return _spawn_component_windows_live_console(component, spec, command)
+
+
 def _spawn_component_windows_live_console(component: str, spec: ComponentSpec, command: list[str]) -> SpawnedComponent:
     powershell = shutil.which("powershell.exe") or "powershell.exe"
     stdout_path = str(LOGS[spec.log_key])
     stderr_path = stdout_path if spec.error_log_key is None else str(LOGS[spec.error_log_key])
+    inner_pid_file = str(RUN_DIR / f"{component}.inner.pid")
     encoded_script = _encode_powershell_command(
         _build_live_log_powershell_script(
             command=command,
             working_dir=str(PROJECT_ROOT),
             stdout_path=stdout_path,
             stderr_path=stderr_path,
+            inner_pid_path=inner_pid_file,
         )
     )
 
@@ -216,7 +256,7 @@ def _spawn_component_windows_live_console(component: str, spec: ComponentSpec, c
     )
 
 
-def _build_live_log_powershell_script(*, command: list[str], working_dir: str, stdout_path: str, stderr_path: str) -> str:
+def _build_live_log_powershell_script(*, command: list[str], working_dir: str, stdout_path: str, stderr_path: str, inner_pid_path: str) -> str:
     command_lines = [
         "$psi.FileName = " + _quote_ps_literal(command[0]),
     ]
@@ -237,6 +277,7 @@ def _build_live_log_powershell_script(*, command: list[str], working_dir: str, s
             "$psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8",
             "$stdoutPath = " + _quote_ps_literal(stdout_path),
             "$stderrPath = " + _quote_ps_literal(stderr_path),
+            "$innerPidPath = " + _quote_ps_literal(inner_pid_path),
             "$stdoutWriter = [System.IO.StreamWriter]::new($stdoutPath, $true, [System.Text.UTF8Encoding]::new($false))",
             "$stderrWriter = [System.IO.StreamWriter]::new($stderrPath, $true, [System.Text.UTF8Encoding]::new($false))",
             f"if ($psi.FileName -eq {_quote_ps_literal(python_cmd)}) {{ $psi.Environment['PYTHONUNBUFFERED'] = '1' }}",
@@ -259,6 +300,8 @@ def _build_live_log_powershell_script(*, command: list[str], working_dir: str, s
             "$process.add_OutputDataReceived($onOut)",
             "$process.add_ErrorDataReceived($onErr)",
             "$null = $process.Start()",
+            # Записать реальный PID дочернего процесса для отслеживания лаунчером
+            "$process.Id | Out-File -FilePath $innerPidPath -Encoding utf8 -NoNewline",
             "$process.BeginOutputReadLine()",
             "$process.BeginErrorReadLine()",
             "$process.WaitForExit()",
@@ -279,25 +322,85 @@ def _encode_powershell_command(script: str) -> str:
     return base64.b64encode(script.encode("utf-16le")).decode("ascii")
 
 
+def _read_inner_pid(component: str, timeout: float = 3.0) -> int | None:
+    """Ждёт появления файла с реальным PID дочернего процесса и читает его."""
+    path = RUN_DIR / f"{component}.inner.pid"
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.exists():
+            try:
+                pid = int(path.read_text(encoding="utf-8").strip())
+                path.unlink(missing_ok=True)
+                return pid
+            except (ValueError, OSError):
+                pass
+        time.sleep(0.1)
+    return None
+
+
+def _resolve_windows_child_pid(parent_pid: int, expected_name: str, timeout: float = 10.0) -> int | None:
+    """Пытается найти PID дочернего процесса по родительскому PID через WMI."""
+    deadline = time.monotonic() + timeout
+    quoted_name = expected_name.replace("'", "''")
+    while time.monotonic() < deadline:
+        script = (
+            "$child = Get-CimInstance Win32_Process | "
+            f"Where-Object {{ $_.ParentProcessId -eq {parent_pid} -and $_.Name -ieq '{quoted_name}' }} | "
+            "Sort-Object CreationDate | Select-Object -Last 1"
+            "; if ($child) { [Console]::Out.WriteLine($child.ProcessId) }"
+        )
+        try:
+            result = subprocess.run(
+                ["powershell.exe", "-NoLogo", "-NoProfile", "-Command", script],
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=False,
+            )
+        except Exception:
+            time.sleep(0.2)
+            continue
+
+        output = result.stdout.strip()
+        if output.isdigit():
+            return int(output)
+        time.sleep(0.2)
+    return None
+
+
 def start_component(component: str) -> ComponentStatus:
     current = component_status(component)
     if current.running:
         return current
 
     spawned = spawn_component(component, detached=True)
+    actual_pid = spawned.process.pid
+
+    if os.name == "nt" and component not in BOT_COMPONENTS:
+        expected_name = os.path.basename(spawned.command[0])
+        child_pid = _resolve_windows_child_pid(spawned.process.pid, expected_name, timeout=10.0)
+        if child_pid is not None:
+            actual_pid = child_pid
+        else:
+            # Читаем реальный PID из файла, если WMI не дал результат.
+            # Это предотвращает «двойной старт» при потере PowerShell-PID.
+            inner = _read_inner_pid(component, timeout=3.0)
+            if inner is not None:
+                actual_pid = inner
+
     try:
-        write_pid_file(component, spawned.process.pid, spawned.command)
+        write_pid_file(component, actual_pid, spawned.command)
     finally:
         if hasattr(spawned.stdout_handle, "close"):
             spawned.stdout_handle.close()
         if spawned.stderr_handle is not None:
             spawned.stderr_handle.close()
 
-    launcher_log(f"{component} started pid={spawned.process.pid}")
+    launcher_log(f"{component} started pid={actual_pid}")
     spec = COMPONENT_SPECS[component]
     if os.name == "nt":
-        return ComponentStatus(component, spec.label, True, spawned.process.pid, "запущен (логи в отдельной консоли)")
-    return ComponentStatus(component, spec.label, True, spawned.process.pid, "started")
+        return ComponentStatus(component, spec.label, True, actual_pid, "запущен (логи в отдельной консоли)")
+    return ComponentStatus(component, spec.label, True, actual_pid, "started")
 
 
 def _pid_from_file(component: str) -> int | None:

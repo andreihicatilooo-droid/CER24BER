@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from collections import deque
 from pathlib import Path
 
@@ -20,10 +21,11 @@ from cerber_launcher.runtime import (
     start_component,
     terminate_component,
 )
-from cerber_launcher.shared import LOGS
+from cerber_launcher.shared import LOGS, get_env, set_env
 
 
 ERROR_PATTERN = re.compile(r"(traceback|exception|error|fatal|failed|critical|ошиб)", re.IGNORECASE)
+TUNNEL_URL_PATTERN = re.compile(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com")
 
 
 class LauncherSupervisor:
@@ -37,7 +39,10 @@ class LauncherSupervisor:
         return expand_component_names(raw_components, default=default)
 
     def start_components(self, components: list[str]) -> list[ComponentStatus]:
-        return [start_component(component) for component in components]
+        statuses = [start_component(component) for component in components]
+        self._sync_tunnel_env_after_start(components)
+
+        return statuses
 
     def stop_components(self, components: list[str]) -> list[ComponentStatus]:
         return [terminate_component(component) for component in components]
@@ -47,7 +52,21 @@ class LauncherSupervisor:
         for component in components:
             terminate_component(component)
             statuses.append(start_component(component))
+        self._sync_tunnel_env_after_start(components)
         return statuses
+
+    def _sync_tunnel_env_after_start(self, components: list[str]) -> None:
+        if "tunnel" not in components:
+            return
+
+        tunnel_url = self.wait_for_tunnel_url()
+        if tunnel_url:
+            self.update_tunnel_url_in_env(tunnel_url)
+            return
+
+        current_web_base_url = get_env("WEB_BASE_URL", "").strip()
+        if "trycloudflare.com" in current_web_base_url:
+            self.update_tunnel_url_in_env("")
 
     def collect_component_overviews(self, components: list[str]) -> list[ComponentOverview]:
         return [self.build_component_overview(component) for component in components]
@@ -80,6 +99,35 @@ class LauncherSupervisor:
             detail=detail,
             command=command,
         )
+
+    def tunnel_url_from_log(self) -> str | None:
+        """Извлекает актуальный URL тоннеля из лог-файла cloudflared (последнее вхождение)."""
+        log_path = LOGS.get("tunnel")
+        if not log_path or not log_path.exists():
+            return None
+        try:
+            lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+            for line in reversed(lines):
+                match = TUNNEL_URL_PATTERN.search(line)
+                if match:
+                    return match.group(0)
+        except OSError:
+            return None
+        return None
+
+    def wait_for_tunnel_url(self, timeout_seconds: float = 12.0) -> str | None:
+        """Ждёт появления URL cloudflared в логе ограниченное время."""
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            url = self.tunnel_url_from_log()
+            if url:
+                return url
+            time.sleep(0.3)
+        return None
+
+    def update_tunnel_url_in_env(self, url: str) -> None:
+        """Записывает URL тоннеля в .env как WEB_BASE_URL."""
+        set_env("WEB_BASE_URL", url)
 
     def build_summary(self, components: list[str]) -> LauncherSummary:
         overviews = self.collect_component_overviews(components)
