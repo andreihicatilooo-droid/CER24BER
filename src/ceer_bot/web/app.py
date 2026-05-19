@@ -30,7 +30,7 @@ def create_web_app(container: "AppContainer") -> FastAPI:
 
     webapps_root = Path(__file__).resolve().parents[1] / "webapps"
     app.mount("/mini/ttt", StaticFiles(directory=webapps_root / "ttt", html=True), name="mini_ttt")
-    app.mount("/mini/durak", StaticFiles(directory=webapps_root / "durak-node" / "public", html=True), name="mini_durak")
+    app.mount("/mini/durak", StaticFiles(directory=webapps_root / "durak", html=True), name="mini_durak")
 
     app.include_router(build_ttt_router(container))
     app.include_router(build_durak_router(container))
