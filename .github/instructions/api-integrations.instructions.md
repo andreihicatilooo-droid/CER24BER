@@ -1,12 +1,13 @@
 ---
-description: "Use when working on API integrations: NicePay payments, GiftAPI catalog and orders, or adding a new external service. Load the corresponding hint file from doc/api/ before writing any integration code. Apply when editing integrations/, services/, or adding new providers."
-applyTo: "src/cerber_bot/integrations/**"
+description: "Use when working on API integrations: NicePay payments, GiftAPI catalog and orders, or adding a new external service. Load the corresponding hint file from doc/api/ before writing any integration code. Apply when editing integrations/, integration-facing services/web routes, or adding new providers."
+applyTo: "src/cerber_bot/{integrations/**,services/{giftapi,payments,store,tgaccounts}.py,web/routes/{getmytg,nicepay,rukassa}.py}"
 ---
 
 # Правила работы с внешними API
 
 Папка `doc/api/` содержит AI-friendly Markdown-файлы документации для каждого подключённого сервиса.
 **Перед написанием кода интеграции — прочитай соответствующий .md файл или `doc/api/README.md`.**
+Инструкция распространяется не только на клиентов в `integrations/`, но и на integration-facing orchestration в `services/` и `web/routes/`.
 
 ## Карта hint-файлов
 

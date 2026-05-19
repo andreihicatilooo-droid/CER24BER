@@ -1,0 +1,9 @@
+{
+  "pid": 22132,
+  "command": [
+    "G:\\CER24BER\\.venv\\Scripts\\python.exe",
+    "-m",
+    "cerber_admin"
+  ],
+  "started_at": "2026-05-17T21:05:11.358914+00:00"
+}

@@ -18,6 +18,7 @@
 - [GiftAPI-раздел](#giftapi-раздел)
 - [Провайдеры каталога](#провайдеры-каталога)
 - [Тесты](#тесты)
+- [AI contour maintenance](#ai-contour-maintenance)
 - [Расширение приложения](#расширение-приложения)
 
 ---
@@ -318,6 +319,12 @@ pytest
 - Витрина: поиск, пагинация, покупка, manual balance
 - Регистрация пользователей
 - Web-приложение: авторизация, маршруты, редиректы (smoke-тесты)
+
+## AI contour maintenance
+
+- AI-кастомизации проекта лежат в `.github/agents/`, `.github/skills/`, `.github/prompts/`, `.github/hooks/`, `.github/instructions/` и в `.github/copilot-instructions.md`.
+- После правок в AI-контуре сначала синхронизируйте соседние surfaces через `sync-ai-policy` / `sync-ai-contour`, если менялись role boundaries, wording или operator-docs touchpoints.
+- Закрывайте такой change-set одним repeatable smoke-check через `smoke-ai-customizations`; hooks здесь остаются только guard/reminder-слоем, а связанную запись в `todo` держите в том же workflow.
 
 ## Расширение приложения
 

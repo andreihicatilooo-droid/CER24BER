@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,10 +13,12 @@ import (
 )
 
 type TopupService struct {
-	topupRepo   *repository.TopupRepo
-	balanceSvc  *BalanceService
+	topupRepo    *repository.TopupRepo
+	balanceSvc   *BalanceService
 	exchangeRepo *repository.ExchangeRepo
 }
+
+var ErrTopupNotFound = errors.New("topup session not found")
 
 func NewTopupService(topupRepo *repository.TopupRepo, balanceSvc *BalanceService, exchangeRepo *repository.ExchangeRepo) *TopupService {
 	return &TopupService{topupRepo: topupRepo, balanceSvc: balanceSvc, exchangeRepo: exchangeRepo}
@@ -67,12 +70,19 @@ func (s *TopupService) CreateSession(ctx context.Context, serviceID, userHash, m
 
 // GetStatus returns the current status of a top-up session.
 func (s *TopupService) GetStatus(ctx context.Context, sessionID string) (*model.TopupSession, error) {
-	return s.topupRepo.FindSessionByID(ctx, sessionID)
+	session, err := s.topupRepo.FindSessionByID(ctx, sessionID)
+	if err != nil {
+		if err.Error() == "topup session not found" {
+			return nil, ErrTopupNotFound
+		}
+		return nil, err
+	}
+	return session, nil
 }
 
 // Confirm is called by a webhook / manual check to credit the user balance.
 func (s *TopupService) Confirm(ctx context.Context, sessionID string) (*model.TopupSession, error) {
-	session, err := s.topupRepo.FindSessionByID(ctx, sessionID)
+	session, err := s.GetStatus(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +94,73 @@ func (s *TopupService) Confirm(ctx context.Context, sessionID string) (*model.To
 	}
 	session.Status = model.TopupConfirmed
 	if err = s.balanceSvc.Credit(ctx, session.ServiceID, session.UserHash,
-		session.AmountUSDT, model.TxTopup, "topup:" +sessionID); err != nil {
+		session.AmountUSDT, model.TxTopup, "topup:"+sessionID); err != nil {
+		return nil, err
+	}
+	return session, nil
+}
+
+func (s *TopupService) Fail(ctx context.Context, sessionID string) (*model.TopupSession, error) {
+	session, err := s.GetStatus(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session.Status == model.TopupFailed {
+		return session, nil
+	}
+	if session.Status == model.TopupConfirmed {
+		return nil, errors.New("cannot fail confirmed payment")
+	}
+	if err = s.topupRepo.UpdateSessionStatus(ctx, sessionID, model.TopupFailed); err != nil {
+		return nil, err
+	}
+	session.Status = model.TopupFailed
+	return session, nil
+}
+
+func (s *TopupService) HandleWebhook(ctx context.Context, sessionID string, status model.TopupStatus) (*model.TopupSession, error) {
+	switch status {
+	case model.TopupConfirmed:
+		return s.Confirm(ctx, sessionID)
+	case model.TopupFailed, model.TopupExpired:
+		session, err := s.GetStatus(ctx, sessionID)
+		if err != nil {
+			return nil, err
+		}
+		if session.Status == model.TopupConfirmed {
+			return nil, errors.New("cannot override confirmed payment")
+		}
+		if session.Status == status {
+			return session, nil
+		}
+		if err = s.topupRepo.UpdateSessionStatus(ctx, sessionID, status); err != nil {
+			return nil, err
+		}
+		session.Status = status
+		return session, nil
+	default:
+		return nil, errors.New("unsupported webhook status")
+	}
+}
+
+func (s *TopupService) Refund(ctx context.Context, sessionID string, operationID string, description string) (*model.TopupSession, error) {
+	session, err := s.GetStatus(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session.Status != model.TopupConfirmed {
+		return nil, errors.New("only confirmed payment can be refunded")
+	}
+	_, err = s.balanceSvc.Adjust(
+		ctx,
+		session.ServiceID,
+		session.UserHash,
+		-session.AmountUSDT,
+		model.TxWithdraw,
+		description,
+		operationID,
+	)
+	if err != nil {
 		return nil, err
 	}
 	return session, nil

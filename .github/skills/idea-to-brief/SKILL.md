@@ -18,6 +18,7 @@ argument-hint: "Опиши сырую идею, смутный запрос ил
 
 - Это не always-on skill: **CERBER** и **CERBER Discovery** подключают его только там, где задача ещё не оформилась в конкретный execution-, planning- или architecture-запрос.
 - **CERBER Router** не запускает этот skill сам. Router использует его как ориентир для маршрутизации: смутный user-facing запрос отправляет в **CERBER**, явную сырую идею или brainstorm-запрос отправляет в **CERBER Discovery**.
+- `sync-ai-contour` и `smoke-ai-customizations` не конкурируют с этим skill: они обслуживают синхронизацию и проверку AI-кастомизаций после правок, а не ideation-flow.
 - Если задача уже достаточно конкретна, не растягивай ideation: сразу называй следующий агент.
 - `plan-to-todo` не заменяет этот skill: сначала идея должна стать brief, и только потом может появиться план для TODO.
 

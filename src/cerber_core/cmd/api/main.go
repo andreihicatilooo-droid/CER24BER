@@ -50,7 +50,7 @@ func main() {
 	topupSvc := service.NewTopupService(topupRepo, balanceSvc, exchangeRepo)
 
 	// ─── Handlers ─────────────────────────────────────────────────────────────
-	adminH := handler.NewAdminHandler(authSvc)
+	adminH := handler.NewAdminHandler(authSvc, balanceSvc, topupSvc)
 	userH := handler.NewUserHandler(userRepo)
 	balanceH := handler.NewBalanceHandler(balanceSvc)
 	topupH := handler.NewTopupHandler(topupSvc)

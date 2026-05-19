@@ -1,19 +1,23 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
+	"github.com/cerber/billing/internal/model"
 	"github.com/cerber/billing/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
 // AdminHandler handles privileged operations (service creation).
 type AdminHandler struct {
-	authSvc *service.AuthService
+	authSvc    *service.AuthService
+	balanceSvc *service.BalanceService
+	topupSvc   *service.TopupService
 }
 
-func NewAdminHandler(authSvc *service.AuthService) *AdminHandler {
-	return &AdminHandler{authSvc: authSvc}
+func NewAdminHandler(authSvc *service.AuthService, balanceSvc *service.BalanceService, topupSvc *service.TopupService) *AdminHandler {
+	return &AdminHandler{authSvc: authSvc, balanceSvc: balanceSvc, topupSvc: topupSvc}
 }
 
 // CreateService provisions a new API consumer with api_key + secret_key.
@@ -40,4 +44,67 @@ func (h *AdminHandler) CreateService(c *gin.Context) {
 		"secret_key": rawSecretKey,
 		"note":       "Store api_key and secret_key securely — they will not be shown again.",
 	})
+}
+
+func (h *AdminHandler) AdjustBalance(c *gin.Context) {
+	var req struct {
+		ServiceID   string  `json:"service_id" binding:"required"`
+		UserHash    string  `json:"user_hash" binding:"required"`
+		DeltaUSDT   float64 `json:"delta_usdt" binding:"required"`
+		TxType      string  `json:"tx_type" binding:"required"`
+		Description string  `json:"description"`
+		OperationID string  `json:"operation_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	result, err := h.balanceSvc.Adjust(
+		c.Request.Context(),
+		req.ServiceID,
+		req.UserHash,
+		req.DeltaUSDT,
+		model.TxType(req.TxType),
+		req.Description,
+		req.OperationID,
+	)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, service.ErrInsufficientFunds) {
+			status = http.StatusConflict
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func (h *AdminHandler) ConfirmPayment(c *gin.Context) {
+	paymentID := c.Param("payment_id")
+	if paymentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payment_id is required"})
+		return
+	}
+	session, err := h.topupSvc.Confirm(c.Request.Context(), paymentID)
+	if err != nil {
+		status := mapPaymentErrorToStatus(err)
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, session)
+}
+
+func (h *AdminHandler) FailPayment(c *gin.Context) {
+	paymentID := c.Param("payment_id")
+	if paymentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payment_id is required"})
+		return
+	}
+	session, err := h.topupSvc.Fail(c.Request.Context(), paymentID)
+	if err != nil {
+		status := mapPaymentErrorToStatus(err)
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, session)
 }

@@ -1,15 +1,16 @@
 ---
 description: "Use when editing .env.example or launcher.py. Enforces sync between .env.example variables and ENV_SECTIONS in launcher.py. Apply when adding, removing, or renaming environment variables."
-applyTo: ".env.example"
+applyTo: "{.env.example,launcher.py}"
 ---
 
 # Синхронизация .env.example ↔ launcher.py
 
-При любом изменении `.env.example` **обязательно** синхронизировать `launcher.py`.
+При любом изменении `.env.example` или `launcher.py` **обязательно** синхронизировать вторую сторону.
 
 ## Правило
 
 Каждая переменная в `.env.example` должна быть описана в `ENV_SECTIONS` в `launcher.py` (строка ~509), и наоборот — переменные из `ENV_SECTIONS` должны присутствовать в `.env.example`.
+Если изменение началось со стороны `launcher.py`, проверь и синхронизируй `.env.example` тем же change-set, а не отдельным follow-up.
 
 ## Структура ENV_SECTIONS
 

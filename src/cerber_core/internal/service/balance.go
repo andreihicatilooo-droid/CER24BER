@@ -149,6 +149,187 @@ func (s *BalanceService) Adjust(
 	return s.GetBalance(ctx, serviceID, userHash)
 }
 
+func (s *BalanceService) Hold(
+	ctx context.Context,
+	serviceID string,
+	userHash string,
+	amountUSDT float64,
+	description string,
+	operationID string,
+) (*BalanceResult, error) {
+	if amountUSDT <= 0 {
+		return nil, errors.New("amount_usdt must be > 0")
+	}
+	return s.Adjust(ctx, serviceID, userHash, -amountUSDT, model.TxTransfer, description, operationID)
+}
+
+func (s *BalanceService) Unblock(
+	ctx context.Context,
+	serviceID string,
+	userHash string,
+	amountUSDT float64,
+	description string,
+	operationID string,
+) (*BalanceResult, error) {
+	if amountUSDT <= 0 {
+		return nil, errors.New("amount_usdt must be > 0")
+	}
+	return s.Adjust(ctx, serviceID, userHash, amountUSDT, model.TxTransfer, description, operationID)
+}
+
+func (s *BalanceService) CreateWithdrawal(
+	ctx context.Context,
+	serviceID string,
+	userHash string,
+	amountUSDT float64,
+	description string,
+	operationID string,
+) (*BalanceResult, error) {
+	if amountUSDT <= 0 {
+		return nil, errors.New("amount_usdt must be > 0")
+	}
+	return s.Adjust(ctx, serviceID, userHash, -amountUSDT, model.TxWithdraw, description, operationID)
+}
+
+func (s *BalanceService) CancelWithdrawal(
+	ctx context.Context,
+	serviceID string,
+	userHash string,
+	amountUSDT float64,
+	description string,
+	operationID string,
+) (*BalanceResult, error) {
+	if amountUSDT <= 0 {
+		return nil, errors.New("amount_usdt must be > 0")
+	}
+	return s.Adjust(ctx, serviceID, userHash, amountUSDT, model.TxTransfer, description, operationID)
+}
+
+func (s *BalanceService) Transfer(
+	ctx context.Context,
+	serviceID string,
+	fromUserHash string,
+	toUserHash string,
+	amountUSDT float64,
+	description string,
+	operationID string,
+) (*BalanceResult, *BalanceResult, error) {
+	if amountUSDT <= 0 {
+		return nil, nil, errors.New("amount_usdt must be > 0")
+	}
+	if operationID == "" {
+		return nil, nil, errors.New("operation_id is required")
+	}
+	if fromUserHash == toUserHash {
+		return nil, nil, errors.New("from and to user must differ")
+	}
+	if err := s.ensureBillingUser(ctx, fromUserHash); err != nil {
+		return nil, nil, err
+	}
+	if err := s.ensureBillingUser(ctx, toUserHash); err != nil {
+		return nil, nil, err
+	}
+
+	rate, err := s.exchangeRepo.GetRate(ctx, "USDT", "RUB")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tx, err := s.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO service_balances (id, service_id, user_hash, balance_usdt, updated_at)
+		 VALUES ($1, $2, $3, $4, $5)
+		 ON CONFLICT (service_id, user_hash) DO NOTHING`,
+		uuid.NewString(), serviceID, fromUserHash, 0.0, time.Now(),
+	)
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, nil, err
+	}
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO service_balances (id, service_id, user_hash, balance_usdt, updated_at)
+		 VALUES ($1, $2, $3, $4, $5)
+		 ON CONFLICT (service_id, user_hash) DO NOTHING`,
+		uuid.NewString(), serviceID, toUserHash, 0.0, time.Now(),
+	)
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, nil, err
+	}
+
+	result, err := tx.ExecContext(ctx,
+		`UPDATE service_balances
+		 SET balance_usdt = balance_usdt - $1, updated_at = NOW()
+		 WHERE service_id = $2 AND user_hash = $3 AND balance_usdt - $1 >= 0`,
+		amountUSDT, serviceID, fromUserHash,
+	)
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, nil, err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, nil, err
+	}
+	if rowsAffected == 0 {
+		_ = tx.Rollback()
+		return nil, nil, ErrInsufficientFunds
+	}
+
+	_, err = tx.ExecContext(ctx,
+		`UPDATE service_balances
+		 SET balance_usdt = balance_usdt + $1, updated_at = NOW()
+		 WHERE service_id = $2 AND user_hash = $3`,
+		amountUSDT, serviceID, toUserHash,
+	)
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, nil, err
+	}
+
+	amountRUB := amountUSDT * rate.Rate
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO transactions (id, service_id, user_hash, operation_id, type, amount_usdt, amount_rub, rate, description, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10),
+		        ($11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
+		uuid.NewString(), serviceID, fromUserHash, operationID+":out", model.TxTransfer, amountUSDT, amountRUB, rate.Rate, description, time.Now(),
+		uuid.NewString(), serviceID, toUserHash, operationID+":in", model.TxTransfer, amountUSDT, amountRUB, rate.Rate, description, time.Now(),
+	)
+	if err != nil {
+		_ = tx.Rollback()
+		if isDuplicateOperationError(err) {
+			fromBalance, fromErr := s.GetBalance(ctx, serviceID, fromUserHash)
+			toBalance, toErr := s.GetBalance(ctx, serviceID, toUserHash)
+			if fromErr != nil {
+				return nil, nil, fromErr
+			}
+			if toErr != nil {
+				return nil, nil, toErr
+			}
+			return fromBalance, toBalance, nil
+		}
+		return nil, nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, nil, err
+	}
+	fromBalance, err := s.GetBalance(ctx, serviceID, fromUserHash)
+	if err != nil {
+		return nil, nil, err
+	}
+	toBalance, err := s.GetBalance(ctx, serviceID, toUserHash)
+	if err != nil {
+		return nil, nil, err
+	}
+	return fromBalance, toBalance, nil
+}
+
 // Credit adds USDT to a user's balance and records the transaction.
 func (s *BalanceService) Credit(ctx context.Context, serviceID, userHash string, amountUSDT float64, txType model.TxType, description string) error {
 	if err := s.ensureBillingUser(ctx, userHash); err != nil {

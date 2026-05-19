@@ -1,0 +1,34 @@
+# Секреты и локальное окружение
+.env
+.env.*
+!.env.example
+
+# Базы данных и кэш
+data/
+logs/
+*.db
+*.sqlite
+*.log
+
+# Python
+.venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Go
+src/cerber_core/bin/
+vendor/
+coverage.out
+
+# IDE и ОС
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

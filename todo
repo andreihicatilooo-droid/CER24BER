@@ -1,49 +1,6 @@
 # CERBER — TODO
 _Обновлено: 2026-05-18_
 
-> Без тега — задачи `cerber_bot` и общие проектные задачи. `[admin]` — задачи `cerber_admin`. История и новые задачи CEER ведутся в `src/ceer_bot/TODO.md`.
-
----
-
-## 🔴 Высокий приоритет
-
-#### 🔗 Цепочка «Аккаунты Telegram — GetMyTG» — строго по порядку
-
-- [x] [6/8] Клавиатуры раздела «Аккаунты Telegram» — _2026-04-22_
-      📂 Файлы: `keyboards/tgaccounts.py` (новый), `keyboards/main_menu.py`
-      🔗 После: [5/8]
-      **Что делать:**
-      - Prefix callback_data: `tgacc`
-      - Кнопки: список стран с пагинацией, карточка страны (флаг + название + цена + доступность), кнопка «Купить», «Мои покупки», «Получить код», «Возврат», «Назад»
-      - Добавить кнопку «📱 Аккаунты TG» в главное меню `build_main_menu()`
-      ⚠️ Риск: callback_data с JSON-payload: ограничение 64 байта в aiogram — использовать короткие ключи (`cc` вместо `country_code`)
-      ✅ Готово когда: все кнопки созданы; callback_data ≤ 64 байт
-
-- [x] [7/8] Хэндлер tgaccounts — FSM и навигация — _2026-05-10_
-      📂 Файлы: `handlers/tgaccounts.py` (новый), `handlers/__init__.py`
-      🔗 После: [6/8]
-      **Что делать:**
-      - `build_tgaccounts_router(container: AppContainer) -> Router`
-      - Экраны: каталог стран (пагинация), карточка страны (детали + цена со скидкой), подтверждение покупки (FSM), экран «Мои покупки», карточка покупки + статус, кнопка «Получить код» (показать номер + код + пароль), «Возврат»
-      - Регистрировать в `main.py` аналогично другим роутерам
-      - Все тексты — только в `texts.py`
-      ⚠️ Риск: `request_code` может занять 5-30 сек — показать «⏳ Получаем код...» до `await`, затем отредактировать сообщение
-      ⚠️ Риск: `callback.answer()` истекает — вызывать ДО длинных API-запросов
-      ✅ Готово когда: полный флоу работает: каталог → карточка → покупка → «Получить код» → показ кода
-
-- [x] [8/8] Webhook-эндпоинт GetMyTG в FastAPI — _2026-05-17_
-      📂 Файлы: `web/routes/getmytg.py` (новый), `web/app.py`
-      🔗 После: [7/8]
-      **Что делать:**
-      - `POST /webhooks/getmytg` — принимает `WebhookSuccessPayload` и `WebhookFailedPayload`
-      - Верифицировать подпись через `GETMYTG_WEBHOOK_SECRET` если задан
-      - При SUCCESS: обновить `TgAccountPurchase.status` + сохранить `verification_code`, `verification_password`; уведомить пользователя в Telegram
-      - При FAILED: обновить статус в ERROR; уведомить пользователя
-      - Регистрировать роутер в `web/app.py`
-      ⚠️ Риск: `bot` доступен в `web/app.py` через `app.state.bot` — не None при старте
-      ⚠️ Риск: идемпотентность — повторный webhook с тем же purchase_id не должен задваивать уведомления; проверять текущий статус перед обновлением
-      ✅ Готово когда: POST /webhooks/getmytg → 200; статус в БД обновлён; Telegram-уведомление получено
-
 ---
 
 ## 🟠 Высокий приоритет (старые задачи)
@@ -77,11 +34,6 @@ _Обновлено: 2026-05-18_
 
 #### 🔗 Цепочка «Рефакторинг платёжного слоя» — строго по порядку
 
-
-- [ ] [1/8] Финализировать API-контракт биллинга в Go
-      📂 Файлы: `src/cerber_core/internal/router/router.go`, `src/cerber_core/internal/service/balance.go`, `src/cerber_core/internal/service/payment.go`, `src/cerber_core/internal/handler/balance.go`, `src/cerber_core/internal/handler/payment.go`, `src/cerber_core/internal/handler/admin.go`
-      ⚠️ Риск: неполный контракт сохранит локальные мутации баланса в Python и сорвёт единый cutover
-      ✅ Готово когда: контракт покрывает balance/history, payment create/status/webhook, hold/unblock/transfer, withdrawal lifecycle, refund и admin-операции
 
 - [ ] [2/8] Исправить схему и SQL репозиториев cerber_core
       📂 Файлы: `src/cerber_core/migrations/001_init.sql`, `src/cerber_core/internal/repository/transaction.go`, `src/cerber_core/internal/repository/account.go`, `src/cerber_core/internal/model/transaction.go`, `src/cerber_core/internal/model/account.go`
@@ -124,6 +76,16 @@ _Обновлено: 2026-05-18_
       🔗 После: «[7/8] Выполнить полный cutover webhook и UI на Go»
       ⚠️ Риск: преждевременное удаление legacy-слоя сломает платежные сценарии до финального cutover
       ✅ Готово когда: runtime не зависит от локальных WalletPayment/WalletTransaction, интеграционные тесты проходят на Go billing API
+
+#### 🔗 Цепочка «Развитие AI-контура CERBER» — строго по порядку
+
+- [ ] [5/5] Добавить ideation workflow и проверить маршрутизацию
+      📂 Файлы: `.github/skills/idea-to-brief/SKILL.md` (новый), `.github/agents/router.agent.md`, `.github/agents/cerber.agent.md`, `.github/agents/discovery.agent.md`
+      🔗 После: «[3/5] Добавить универсального агента CERBER»
+      ⚠️ Риск: без smoke-check сценариев новый workflow будет формально описан, но нестабилен на реальных неоднозначных запросах
+      ✅ Готово когда: CERBER и Discovery работают по единому ideation-flow, а ручная проверка неоднозначных prompt-сценариев подтверждает корректную маршрутизацию
+
+#### 🔗 Цепочка «Управление AI-кастомизациями CERBER» — строго по порядку
 
 ---
 
@@ -238,7 +200,14 @@ _Обновлено: 2026-05-18_
 
 ## ✅ Выполнено
 
-- [x] [5/5] Добавить ideation workflow и проверить маршрутизацию — _2026-05-18_
+- [x] [1/8] Финализировать API-контракт биллинга в Go — _2026-05-18_
+- [x] [7/7] Собрать repeatable smoke-check и финально синхронизировать policy/docs — _2026-05-18_
+- [x] [6/7] Ввести минимальный hook/control контур для AI-кастомизаций — _2026-05-18_
+- [x] [5/7] Добавить workspace prompts как operator-команды — _2026-05-18_
+- [x] [4/7] Добавить reusable skills для управления контуром — _2026-05-18_
+- [x] [3/7] Перевести frontmatter root-агентов на минимальный control surface — _2026-05-18_
+- [x] [2/7] Починить coverage instruction-слоя и добавить правило для AI-кастомизаций — _2026-05-18_
+- [x] [1/7] Зафиксировать control-matrix root-агентов — _2026-05-18_
 - [x] [4/5] Провести аудит tools и skills для AI — _2026-05-17_
 - [x] [3/5] Добавить универсального агента CERBER — _2026-05-17_
 - [x] [2/5] Добавить агента CERBER Discovery — _2026-05-17_

@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "py -3 .github/hooks/ai-customization-hook.py PreToolUse",
+        "timeout": 5
+      }
+    ],
+    "PostToolUse": [
+      {
+        "type": "command",
+        "command": "py -3 .github/hooks/ai-customization-hook.py PostToolUse",
+        "timeout": 5
+      }
+    ]
+  }
+}
