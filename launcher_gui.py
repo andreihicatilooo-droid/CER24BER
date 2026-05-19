@@ -13,5 +13,4 @@ from cerber_launcher.cli import main
 
 
 if __name__ == "__main__":
-    print("GUI launcher удалён. Используйте CLI: python launcher.py --help", file=sys.stderr)
-    raise SystemExit(main())
+    raise SystemExit(main(["ui", *sys.argv[1:]]))

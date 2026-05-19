@@ -27,12 +27,14 @@ from cerber_launcher.runtime import (
 )
 from cerber_launcher.server import run_server
 from cerber_launcher.shared import ENV_FILE, LOGS, PROJECT_ROOT, get_env, init_env_file, launcher_log, python_executable, read_env_lines, set_env, unset_env
+from cerber_launcher.supervisor import LauncherSupervisor
 
 
 DEFAULT_LOG_LINES = 20
 MENU_LOG_LINES = 40
 ERROR_PATTERN = re.compile(r"(traceback|exception|error|fatal|failed|critical|ошиб)", re.IGNORECASE)
-MENU_LAUNCH_ARGS = ("menu", "--inline")
+MENU_LAUNCH_ARGS = ("ui",)
+_SUPERVISOR = LauncherSupervisor()
 
 
 @dataclass(slots=True, frozen=True)
@@ -77,6 +79,8 @@ def main(argv: list[str] | None = None) -> int:
             return _handle_doctor(args)
         if args.command == "logs":
             return _handle_logs(args)
+        if args.command == "ui":
+            return _handle_ui(args)
         if args.command == "menu":
             return _handle_menu(args)
         if args.command == "env":
@@ -125,7 +129,9 @@ def _build_parser() -> argparse.ArgumentParser:
     logs_parser.add_argument("--lines", type=_positive_int, default=DEFAULT_LOG_LINES, help="Сколько последних строк вывести")
     logs_parser.add_argument("--errors", action="store_true", help="Показать только error-логи")
 
-    menu_parser = subparsers.add_parser("menu", help="Открыть интерактивное меню управления")
+    subparsers.add_parser("ui", help="Открыть современный launcher dashboard")
+
+    menu_parser = subparsers.add_parser("menu", help="Открыть launcher dashboard в отдельном терминале")
     menu_parser.add_argument("--inline", action="store_true", help=argparse.SUPPRESS)
 
     env_parser = subparsers.add_parser("env", help="Управление .env из CLI")
@@ -148,34 +154,33 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _supervisor() -> LauncherSupervisor:
+    return _SUPERVISOR
+
+
 def _default_targets(with_tunnel: bool = False) -> list[str]:
-    targets = default_start_targets()
-    if with_tunnel and "tunnel" not in targets:
-        targets.append("tunnel")
-    return targets
+    return _supervisor().default_targets(with_tunnel=with_tunnel)
 
 
 def _resolve_targets(raw_components: list[str], *, default: list[str]) -> list[str]:
-    return expand_component_names(raw_components, default=default)
+    return _supervisor().resolve_targets(raw_components, default=default)
 
 
 def _handle_start(args: argparse.Namespace) -> int:
     targets = _resolve_targets(args.components, default=_default_targets(with_tunnel=args.with_tunnel))
-    _print_statuses([start_component(component) for component in targets])
+    _print_statuses(_supervisor().start_components(targets))
     return 0
 
 
 def _handle_stop(args: argparse.Namespace) -> int:
     targets = _resolve_targets(args.components, default=list(COMPONENT_ORDER))
-    _print_statuses([terminate_component(component) for component in targets])
+    _print_statuses(_supervisor().stop_components(targets))
     return 0
 
 
 def _handle_restart(args: argparse.Namespace) -> int:
     targets = _resolve_targets(args.components, default=_default_targets(with_tunnel=args.with_tunnel))
-    for component in targets:
-        terminate_component(component)
-    _print_statuses([start_component(component) for component in targets])
+    _print_statuses(_supervisor().restart_components(targets))
     return 0
 
 
@@ -211,10 +216,25 @@ def _handle_logs(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_ui(_: argparse.Namespace) -> int:
+    return _run_dashboard()
+
+
 def _handle_menu(args: argparse.Namespace) -> int:
     if args.inline:
         return _run_menu()
     return _open_menu_terminal_or_run_inline()
+
+
+def _run_dashboard() -> int:
+    try:
+        from cerber_launcher.ui import launch_dashboard
+    except ModuleNotFoundError as error:
+        if error.name == "textual":
+            raise LauncherRuntimeError("Textual не установлен. Обновите зависимости проекта и попробуйте снова.") from error
+        raise
+
+    return launch_dashboard()
 
 
 def _print_doctor(components: list[str]) -> int:
@@ -285,32 +305,18 @@ def _collect_component_overviews(components: list[str]) -> list[ComponentOvervie
 
 
 def _build_component_overview(component: str) -> ComponentOverview:
-    status = component_status(component)
-    enabled, readiness_detail, command = _readiness_snapshot(component)
-    has_logs = any(_path_has_content(path) for _, path in _log_paths_for_target(component))
-    error_summary = _component_error_summary(component)
-    has_errors = error_summary is not None
-
-    if not enabled and status.running:
-        detail = f"{status.detail}; {readiness_detail}"
-    elif not enabled:
-        detail = readiness_detail
-    elif error_summary:
-        detail = error_summary
-    else:
-        detail = status.detail
-
+    overview = _supervisor().build_component_overview(component)
     return ComponentOverview(
-        key=component,
-        label=COMPONENT_SPECS[component].label,
-        kind="tunnel" if component in TUNNEL_COMPONENTS else "bot",
-        enabled=enabled,
-        running=status.running,
-        pid=status.pid,
-        has_logs=has_logs,
-        has_errors=has_errors,
-        detail=detail,
-        command=command,
+        key=overview.key,
+        label=overview.label,
+        kind=overview.kind,
+        enabled=overview.enabled,
+        running=overview.running,
+        pid=overview.pid,
+        has_logs=overview.has_logs,
+        has_errors=overview.has_errors,
+        detail=overview.detail,
+        command=overview.command,
     )
 
 
@@ -372,10 +378,10 @@ def _print_statuses(statuses) -> None:
 
 def _open_menu_terminal_or_run_inline() -> int:
     if _launch_menu_terminal():
-        print("CERBER launcher UI открыт в отдельном терминале.")
+        print("CERBER launcher dashboard открыт в отдельном терминале.")
         return 0
-    print("Не удалось открыть отдельный терминал. Интерфейс запущен в текущем окне.")
-    return _run_menu()
+    print("Не удалось открыть отдельный терминал. Dashboard запущен в текущем окне.")
+    return _run_dashboard()
 
 
 def _launch_menu_terminal() -> bool:
@@ -455,6 +461,8 @@ def _run_menu() -> int:
             return 0
         if choice in {"", "refresh", "r"}:
             continue
+        if choice == "dashboard":
+            return _run_dashboard()
         if choice == "start":
             message = _run_menu_action(_default_targets(), "start")
             continue
@@ -481,7 +489,7 @@ def _run_menu() -> int:
             if 0 <= index < len(COMPONENT_ORDER):
                 _run_component_menu(COMPONENT_ORDER[index])
                 continue
-        message = "Неизвестная команда. Используйте номер, start, stop, restart, bots, tunnels, doctor, logs или quit."
+        message = "Неизвестная команда. Используйте номер, start, stop, restart, dashboard, bots, tunnels, doctor, logs или quit."
 
 
 def _run_component_menu(component: str) -> None:
@@ -523,14 +531,11 @@ def _run_component_menu(component: str) -> None:
 def _run_menu_action(components: list[str], action: str) -> str:
     try:
         if action == "start":
-            statuses = [start_component(component) for component in components]
+            statuses = _supervisor().start_components(components)
         elif action == "stop":
-            statuses = [terminate_component(component) for component in components]
+            statuses = _supervisor().stop_components(components)
         elif action == "restart":
-            statuses = []
-            for component in components:
-                terminate_component(component)
-                statuses.append(start_component(component))
+            statuses = _supervisor().restart_components(components)
         else:
             raise LauncherRuntimeError(f"Неизвестное действие: {action}")
         return _format_action_statuses(action, statuses)
@@ -563,71 +568,19 @@ def _positive_int(value: str) -> int:
 
 
 def _resolve_log_targets(raw_targets: list[str]) -> list[str]:
-    if not raw_targets:
-        raw_targets = ["launcher", *COMPONENT_ORDER]
-
-    normalized = [item.lower() for item in raw_targets]
-    groups = {
-        "all": ("launcher", *COMPONENT_ORDER),
-        "bots": BOT_COMPONENTS,
-        "tunnels": TUNNEL_COMPONENTS,
-    }
-    aliases = {
-        "launcher": "launcher",
-        "bot": "shop",
-        "shop": "shop",
-        "admin": "admin",
-        "ceer": "ceer",
-        "tunnel": "tunnel",
-    }
-
-    targets: list[str] = []
-    for item in normalized:
-        members = groups.get(item)
-        if members is not None:
-            for member in members:
-                if member not in targets:
-                    targets.append(member)
-            continue
-
-        mapped = aliases.get(item)
-        if mapped is None:
-            raise LauncherRuntimeError(f"Неизвестная цель логов: {item}")
-        if mapped not in targets:
-            targets.append(mapped)
-    return targets
+    return _supervisor().resolve_log_targets(raw_targets)
 
 
 def _log_paths_for_target(target: str) -> list[tuple[str, Path]]:
-    entries = _primary_log_paths_for_target(target)
-    if target == "launcher":
-        return entries
-
-    spec = COMPONENT_SPECS[target]
-    if spec.error_log_key is not None:
-        error_path = LOGS[spec.error_log_key]
-        if error_path != entries[0][1]:
-            entries.append((f"{spec.label}:stderr", error_path))
-    return entries
+    return _supervisor().log_paths_for_target(target)
 
 
 def _primary_log_paths_for_target(target: str) -> list[tuple[str, Path]]:
-    if target == "launcher":
-        return [("launcher", LOGS["launcher"])]
-
-    spec = COMPONENT_SPECS[target]
-    return [(spec.label, LOGS[spec.log_key])]
+    return _supervisor().primary_log_paths_for_target(target)
 
 
 def _error_log_paths_for_target(target: str) -> list[tuple[str, Path]]:
-    if target == "launcher":
-        return [("launcher", LOGS["launcher"])]
-
-    spec = COMPONENT_SPECS[target]
-    if spec.error_log_key is not None:
-        error_path = LOGS[spec.error_log_key]
-        return [(f"{spec.label}:stderr", error_path)]
-    return _primary_log_paths_for_target(target)
+    return _supervisor().error_log_paths_for_target(target)
 
 
 def _print_logs_for_targets(targets: list[str], lines: int, *, error_only: bool = False) -> None:
@@ -659,7 +612,7 @@ def _print_log_entries(entries: list[tuple[str, Path]], lines: int) -> None:
 def _render_main_menu_screen(message: str | None) -> None:
     _clear_terminal()
     overviews = _collect_component_overviews(list(COMPONENT_ORDER))
-    _render_header("Главная панель", "Управление ботами и туннелями CERBER")
+    _render_header("Главная панель", "Legacy-меню launcher-а. Для современного режима используйте dashboard.")
     _print_summary_panel(overviews)
     if message:
         _print_panel("Последнее действие", [message])
@@ -667,6 +620,7 @@ def _render_main_menu_screen(message: str | None) -> None:
         "Главное меню",
         [
             "1-4: открыть карточку компонента",
+            "dashboard: открыть новый Textual dashboard",
             "start: запустить стандартный набор ботов",
             "stop: остановить все компоненты",
             "restart: перезапустить все компоненты",
@@ -792,36 +746,20 @@ def _presence_marker(value: bool) -> str:
 
 
 def _path_has_content(path: Path) -> bool:
-    return path.exists() and path.stat().st_size > 0
+    return _supervisor().path_has_content(path)
 
 
 def _last_nonempty_line(path: Path) -> str | None:
-    for line in reversed(_tail_lines(path, 120)):
-        text = line.strip()
-        if text:
-            return _shorten(text, 96)
-    return None
+    return _supervisor().last_nonempty_line(path)
 
 
 def _last_matching_line(path: Path) -> str | None:
-    for line in reversed(_tail_lines(path, 120)):
-        text = line.strip()
-        if text and ERROR_PATTERN.search(text):
-            return _shorten(text, 96)
-    return None
+    return _supervisor().last_matching_line(path)
 
 
 def _shorten(value: str, limit: int) -> str:
-    if len(value) <= limit:
-        return value
-    return value[: limit - 3].rstrip() + "..."
+    return _supervisor().shorten(value, limit)
 
 
 def _tail_lines(path: Path, limit: int) -> list[str]:
-    if not path.exists():
-        return []
-    buffer: deque[str] = deque(maxlen=limit)
-    with path.open("r", encoding="utf-8", errors="replace") as stream:
-        for line in stream:
-            buffer.append(line.rstrip("\n"))
-    return list(buffer)
+    return _supervisor().tail_lines(path, limit)

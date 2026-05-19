@@ -5,23 +5,25 @@ from pathlib import Path
 import pytest
 
 from cerber_launcher import cli
+from cerber_launcher import supervisor as launcher_supervisor
 from cerber_launcher.runtime import ComponentStatus, LauncherRuntimeError, expand_component_names
 
 
 def _patch_component_basics(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        cli,
+        launcher_supervisor,
         "component_status",
         lambda component: ComponentStatus(component, cli.COMPONENT_SPECS[component].label, False, None, "not started"),
     )
-    monkeypatch.setattr(cli, "ensure_component_ready", lambda component: None)
-    monkeypatch.setattr(cli, "build_component_command", lambda component: ["python", "-m", component])
+    monkeypatch.setattr(launcher_supervisor, "ensure_component_ready", lambda component: None)
+    monkeypatch.setattr(launcher_supervisor, "build_component_command", lambda component: ["python", "-m", component])
 
 
 def test_parser_includes_management_commands() -> None:
     help_text = cli._build_parser().format_help()
 
     assert "serve" in help_text
+    assert "ui" in help_text
     assert "menu" in help_text
     assert "bots" in help_text
     assert "tunnels" in help_text
@@ -43,7 +45,7 @@ def test_main_without_args_opens_menu_in_new_terminal(monkeypatch: pytest.Monkey
 
     assert exit_code == 0
     assert opened == [True]
-    assert "открыт в отдельном терминале" in output
+    assert "dashboard открыт в отдельном терминале" in output
 
 
 def test_expand_component_names_supports_group_aliases() -> None:
@@ -53,7 +55,7 @@ def test_expand_component_names_supports_group_aliases() -> None:
 
 def test_doctor_returns_error_for_blocked_component(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     monkeypatch.setattr(
-        cli,
+        launcher_supervisor,
         "component_status",
         lambda component: ComponentStatus(component, cli.COMPONENT_SPECS[component].label, False, None, "not started"),
     )
@@ -61,7 +63,7 @@ def test_doctor_returns_error_for_blocked_component(monkeypatch: pytest.MonkeyPa
     def _blocked(component: str) -> None:
         raise LauncherRuntimeError(f"{component} blocked")
 
-    monkeypatch.setattr(cli, "ensure_component_ready", _blocked)
+    monkeypatch.setattr(launcher_supervisor, "ensure_component_ready", _blocked)
 
     exit_code = cli.main(["doctor", "shop"])
     output = capsys.readouterr().out
@@ -143,6 +145,17 @@ def test_logs_prints_tail(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsy
     assert "line-3" in output
 
 
+def test_ui_command_runs_dashboard(monkeypatch: pytest.MonkeyPatch) -> None:
+    called: list[bool] = []
+
+    monkeypatch.setattr(cli, "_run_dashboard", lambda: called.append(True) or 0)
+
+    exit_code = cli.main(["ui"])
+
+    assert exit_code == 0
+    assert called == [True]
+
+
 def test_menu_can_open_component_and_show_logs(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -171,7 +184,7 @@ def test_menu_can_open_component_and_show_logs(
 
 
 def test_serve_runs_server_with_default_targets(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(cli, "default_start_targets", lambda: ["shop", "admin"])
+    monkeypatch.setattr(cli._SUPERVISOR, "default_targets", lambda with_tunnel=False: ["shop", "admin"])
     captured: list[list[str]] = []
 
     def _run_server(targets: list[str]) -> int:
