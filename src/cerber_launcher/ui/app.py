@@ -3,7 +3,7 @@ from __future__ import annotations
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Grid, Horizontal, Vertical
+from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Footer, Header, RichLog, Static
 
 from cerber_launcher.logstream import LogRecord, LogStreamCursor
@@ -73,26 +73,28 @@ class LauncherDashboardApp(App[None]):
         layout: grid;
         grid-size: 2 1;
         grid-columns: 7fr 5fr;
-        padding: 1 2;
+        padding: 0 1;
         height: 1fr;
     }
 
     #left-pane {
         margin-right: 1;
         height: 1fr;
+        overflow-y: auto;
+        padding-right: 1;
     }
 
     #right-pane {
         border: round #3b82f6;
         background: #111827;
-        padding: 1;
+        padding: 0 1;
         height: 1fr;
     }
 
     #hero {
         border: round #3b82f6;
         background: #111827;
-        padding: 1 2;
+        padding: 0 1;
         margin-bottom: 1;
         height: auto;
     }
@@ -100,7 +102,7 @@ class LauncherDashboardApp(App[None]):
     #summary {
         border: round #10b981;
         background: #0f172a;
-        padding: 1 2;
+        padding: 0 1;
         margin-bottom: 1;
         height: auto;
     }
@@ -117,8 +119,8 @@ class LauncherDashboardApp(App[None]):
     ComponentCard {
         border: round #334155;
         background: #0f172a;
-        padding: 1;
-        min-height: 15;
+        padding: 0 1;
+        min-height: 11;
     }
 
     ComponentCard.running {
@@ -140,18 +142,18 @@ class LauncherDashboardApp(App[None]):
     .component-title {
         text-style: bold;
         color: #e2e8f0;
-        margin-bottom: 1;
+        margin-bottom: 0;
     }
 
     .component-meta {
         color: #93c5fd;
-        margin-bottom: 1;
+        margin-bottom: 0;
     }
 
     .component-detail {
         color: #cbd5e1;
-        height: 5;
-        margin-bottom: 1;
+        height: 3;
+        margin-bottom: 0;
     }
 
     .component-actions {
@@ -166,7 +168,7 @@ class LauncherDashboardApp(App[None]):
     #global-actions {
         border: round #334155;
         background: #111827;
-        padding: 1;
+        padding: 0 1;
         height: auto;
     }
 
@@ -183,7 +185,7 @@ class LauncherDashboardApp(App[None]):
 
     #log-subtitle {
         color: #94a3b8;
-        margin-bottom: 1;
+        margin-bottom: 0;
         height: auto;
     }
 
@@ -200,6 +202,10 @@ class LauncherDashboardApp(App[None]):
         Binding("s", "start_defaults", "Старт"),
         Binding("x", "stop_all", "Стоп всё"),
         Binding("ctrl+l", "focus_logs", "Логи"),
+        Binding("pageup", "scroll_menu_up", "Меню ↑"),
+        Binding("pagedown", "scroll_menu_down", "Меню ↓"),
+        Binding("home", "scroll_menu_top", "Меню в начало"),
+        Binding("end", "scroll_menu_bottom", "Меню в конец"),
     ]
 
     def __init__(self, supervisor: LauncherSupervisor | None = None) -> None:
@@ -211,9 +217,9 @@ class LauncherDashboardApp(App[None]):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Horizontal(id="workspace"):
-            with Vertical(id="left-pane"):
+            with VerticalScroll(id="left-pane"):
                 yield Static(
-                    "🚀 CERBER Launcher Dashboard\nСовременная панель управления компонентами shop / admin / ceer / tunnel с живыми логами.",
+                    "🚀 CERBER Launcher Dashboard\nУправление компонентами shop / admin / ceer / tunnel с живыми логами.\nPgUp/PgDn — прокрутка меню, Home/End — к началу или в конец.",
                     id="hero",
                 )
                 yield Static("", id="summary")
@@ -250,6 +256,18 @@ class LauncherDashboardApp(App[None]):
 
     def action_focus_logs(self) -> None:
         self.query_one("#log-view", RichLog).focus()
+
+    def action_scroll_menu_up(self) -> None:
+        self.query_one("#left-pane", VerticalScroll).scroll_page_up(animate=False)
+
+    def action_scroll_menu_down(self) -> None:
+        self.query_one("#left-pane", VerticalScroll).scroll_page_down(animate=False)
+
+    def action_scroll_menu_top(self) -> None:
+        self.query_one("#left-pane", VerticalScroll).scroll_home(animate=False)
+
+    def action_scroll_menu_bottom(self) -> None:
+        self.query_one("#left-pane", VerticalScroll).scroll_end(animate=False)
 
     def refresh_dashboard(self) -> None:
         overviews = self.supervisor.collect_component_overviews(list(COMPONENT_ORDER))
