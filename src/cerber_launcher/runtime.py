@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import os
 from dataclasses import dataclass
 import shutil
@@ -107,11 +108,11 @@ def expand_component_names(components: list[str] | None, *, default: list[str] |
 def build_component_command(component: str) -> list[str]:
     python_bin = str(python_executable())
     if component == "shop":
-        return [python_bin, "-m", "cerber_bot"]
+        return [python_bin, "-u", "-m", "cerber_bot"]
     if component == "admin":
-        return [python_bin, "-m", "cerber_admin"]
+        return [python_bin, "-u", "-m", "cerber_admin"]
     if component == "ceer":
-        return [python_bin, "-m", "ceer_bot"]
+        return [python_bin, "-u", "-m", "ceer_bot"]
     if component == "tunnel":
         cloudflared = shutil.which("cloudflared") or shutil.which("cloudflared.exe")
         if not cloudflared:
@@ -141,6 +142,9 @@ def spawn_component(component: str, *, detached: bool) -> SpawnedComponent:
     ensure_component_ready(component)
     spec = COMPONENT_SPECS[component]
     command = build_component_command(component)
+
+    if os.name == "nt" and detached:
+        return _spawn_component_windows_live_console(component, spec, command)
 
     stdout_handle = LOGS[spec.log_key].open("a", encoding="utf-8")
     stderr_handle = stdout_handle if spec.error_log_key is None else LOGS[spec.error_log_key].open("a", encoding="utf-8")
@@ -175,6 +179,106 @@ def spawn_component(component: str, *, detached: bool) -> SpawnedComponent:
     )
 
 
+def _spawn_component_windows_live_console(component: str, spec: ComponentSpec, command: list[str]) -> SpawnedComponent:
+    powershell = shutil.which("powershell.exe") or "powershell.exe"
+    stdout_path = str(LOGS[spec.log_key])
+    stderr_path = stdout_path if spec.error_log_key is None else str(LOGS[spec.error_log_key])
+    encoded_script = _encode_powershell_command(
+        _build_live_log_powershell_script(
+            command=command,
+            working_dir=str(PROJECT_ROOT),
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+        )
+    )
+
+    wrapped_command = [
+        powershell,
+        "-NoLogo",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-EncodedCommand",
+        encoded_script,
+    ]
+    creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+    process = subprocess.Popen(
+        wrapped_command,
+        cwd=str(PROJECT_ROOT),
+        creationflags=creationflags,
+    )
+    return SpawnedComponent(
+        key=component,
+        process=process,
+        stdout_handle=subprocess.DEVNULL,
+        stderr_handle=None,
+        command=command,
+    )
+
+
+def _build_live_log_powershell_script(*, command: list[str], working_dir: str, stdout_path: str, stderr_path: str) -> str:
+    command_lines = [
+        "$psi.FileName = " + _quote_ps_literal(command[0]),
+    ]
+    for argument in command[1:]:
+        command_lines.append("[void]$psi.ArgumentList.Add(" + _quote_ps_literal(argument) + ")")
+
+    python_cmd = str(python_executable())
+    return "\n".join(
+        [
+            "$ErrorActionPreference = 'Stop'",
+            "$psi = New-Object System.Diagnostics.ProcessStartInfo",
+            *command_lines,
+            "$psi.WorkingDirectory = " + _quote_ps_literal(working_dir),
+            "$psi.UseShellExecute = $false",
+            "$psi.RedirectStandardOutput = $true",
+            "$psi.RedirectStandardError = $true",
+            "$psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8",
+            "$psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8",
+            "$stdoutPath = " + _quote_ps_literal(stdout_path),
+            "$stderrPath = " + _quote_ps_literal(stderr_path),
+            "$stdoutWriter = [System.IO.StreamWriter]::new($stdoutPath, $true, [System.Text.UTF8Encoding]::new($false))",
+            "$stderrWriter = [System.IO.StreamWriter]::new($stderrPath, $true, [System.Text.UTF8Encoding]::new($false))",
+            f"if ($psi.FileName -eq {_quote_ps_literal(python_cmd)}) {{ $psi.Environment['PYTHONUNBUFFERED'] = '1' }}",
+            "$process = New-Object System.Diagnostics.Process",
+            "$process.StartInfo = $psi",
+            "$onOut = [System.Diagnostics.DataReceivedEventHandler]{",
+            "    param($sender, $eventArgs)",
+            "    if ($null -eq $eventArgs.Data) { return }",
+            "    Write-Host $eventArgs.Data",
+            "    $script:stdoutWriter.WriteLine($eventArgs.Data)",
+            "    $script:stdoutWriter.Flush()",
+            "}",
+            "$onErr = [System.Diagnostics.DataReceivedEventHandler]{",
+            "    param($sender, $eventArgs)",
+            "    if ($null -eq $eventArgs.Data) { return }",
+            "    Write-Host $eventArgs.Data -ForegroundColor Red",
+            "    $script:stderrWriter.WriteLine($eventArgs.Data)",
+            "    $script:stderrWriter.Flush()",
+            "}",
+            "$process.add_OutputDataReceived($onOut)",
+            "$process.add_ErrorDataReceived($onErr)",
+            "$null = $process.Start()",
+            "$process.BeginOutputReadLine()",
+            "$process.BeginErrorReadLine()",
+            "$process.WaitForExit()",
+            "$process.remove_OutputDataReceived($onOut)",
+            "$process.remove_ErrorDataReceived($onErr)",
+            "$stdoutWriter.Dispose()",
+            "$stderrWriter.Dispose()",
+            "exit $process.ExitCode",
+        ]
+    )
+
+
+def _quote_ps_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _encode_powershell_command(script: str) -> str:
+    return base64.b64encode(script.encode("utf-16le")).decode("ascii")
+
+
 def start_component(component: str) -> ComponentStatus:
     current = component_status(component)
     if current.running:
@@ -184,12 +288,15 @@ def start_component(component: str) -> ComponentStatus:
     try:
         write_pid_file(component, spawned.process.pid, spawned.command)
     finally:
-        spawned.stdout_handle.close()
+        if hasattr(spawned.stdout_handle, "close"):
+            spawned.stdout_handle.close()
         if spawned.stderr_handle is not None:
             spawned.stderr_handle.close()
 
     launcher_log(f"{component} started pid={spawned.process.pid}")
     spec = COMPONENT_SPECS[component]
+    if os.name == "nt":
+        return ComponentStatus(component, spec.label, True, spawned.process.pid, "запущен (логи в отдельной консоли)")
     return ComponentStatus(component, spec.label, True, spawned.process.pid, "started")
 
 

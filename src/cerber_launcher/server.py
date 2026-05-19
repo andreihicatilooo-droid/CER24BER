@@ -56,6 +56,7 @@ def run_server(targets: list[str]) -> int:
                 except Exception:
                     spawned.process.kill()
             remove_pid_file(spawned.key)
-            spawned.stdout_handle.close()
+            if hasattr(spawned.stdout_handle, "close"):
+                spawned.stdout_handle.close()
             if spawned.stderr_handle is not None:
                 spawned.stderr_handle.close()

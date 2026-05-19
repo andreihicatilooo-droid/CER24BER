@@ -169,6 +169,8 @@ def _resolve_targets(raw_components: list[str], *, default: list[str]) -> list[s
 def _handle_start(args: argparse.Namespace) -> int:
     targets = _resolve_targets(args.components, default=_default_targets(with_tunnel=args.with_tunnel))
     _print_statuses(_supervisor().start_components(targets))
+    if os.name == "nt" and targets:
+        print("Подсказка: для каждого запущенного компонента открывается отдельная консоль с live-логами.")
     return 0
 
 
