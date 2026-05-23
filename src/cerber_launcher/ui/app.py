@@ -213,6 +213,7 @@ class LauncherDashboardApp(App[None]):
         self.supervisor = supervisor or LauncherSupervisor()
         self.selected_log_target = "shop"
         self._log_cursor: LogStreamCursor | None = None
+        self._last_tunnel_url: str | None = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -272,6 +273,19 @@ class LauncherDashboardApp(App[None]):
     def refresh_dashboard(self) -> None:
         overviews = self.supervisor.collect_component_overviews(list(COMPONENT_ORDER))
         summary = self.supervisor.build_summary(list(COMPONENT_ORDER))
+
+        # Обновить URL тоннеля в .env если изменился
+        tunnel_url = self.supervisor.tunnel_url_from_log()
+        if tunnel_url and tunnel_url != self._last_tunnel_url:
+            self._last_tunnel_url = tunnel_url
+            self.supervisor.update_tunnel_url_in_env(tunnel_url)
+            self.notify(
+                f"Mini App URL обновлён: {tunnel_url}",
+                severity="information",
+                timeout=10,
+            )
+
+        tunnel_url_line = f"Mini App URL: {self._last_tunnel_url}" if self._last_tunnel_url else "Mini App URL: (тоннель не запущен)"
         summary_lines = [
             f"Всего компонентов: {summary.total_components}",
             f"Готово к запуску: {summary.enabled_components}",
@@ -279,6 +293,7 @@ class LauncherDashboardApp(App[None]):
             f"С живыми логами: {summary.components_with_logs}",
             f"С ошибками: {summary.components_with_errors}",
             f"Активный лог-поток: {self.selected_log_target}",
+            tunnel_url_line,
         ]
         self.query_one("#summary", Static).update("\n".join(summary_lines))
 

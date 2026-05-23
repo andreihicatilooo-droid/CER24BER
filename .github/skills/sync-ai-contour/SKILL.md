@@ -18,7 +18,7 @@ argument-hint: "Укажи, какие AI-кастомизации меняли�
 
 - Не для user-facing маршрутизации: запрос пользователя по-прежнему ведут **CERBER**, **CERBER Router** или профильный агент
 - Не для ideation-flow: сырые идеи ведёт `idea-to-brief`
-- Не для переноса согласованного плана в TODO: это `plan-to-todo`
+- Не для переноса уже сформированного TODO-ready списка задач в TODO: этим владеет `CERBER TODO`, который при необходимости использует `plan-to-todo`
 - Не для повторяемой проверки сценариев после правок: это `smoke-ai-customizations`
 - Не для single-entry operator command: если нужен отдельный slash-command, это уже prompt, а не этот skill
 - Не для финального закрытия change-set: после синхронизации остаётся отдельный repeatable smoke-check через `smoke-ai-customizations`

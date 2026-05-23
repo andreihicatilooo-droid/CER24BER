@@ -1,5 +1,5 @@
 # CERBER — TODO
-_Обновлено: 2026-05-18_
+_Обновлено: 2026-05-19_
 
 ---
 
@@ -35,47 +35,59 @@ _Обновлено: 2026-05-18_
 #### 🔗 Цепочка «Рефакторинг платёжного слоя» — строго по порядку
 
 
-- [ ] [2/8] Исправить схему и SQL репозиториев cerber_core
-      📂 Файлы: `src/cerber_core/migrations/001_init.sql`, `src/cerber_core/internal/repository/transaction.go`, `src/cerber_core/internal/repository/account.go`, `src/cerber_core/internal/model/transaction.go`, `src/cerber_core/internal/model/account.go`
-      🔗 После: «[1/8] Финализировать API-контракт биллинга в Go»
-      ⚠️ Риск: текущие запросы ListByAccount/ListByService ссылаются на несуществующие колонки; возможны падения в runtime
-      ✅ Готово когда: все SQL-запросы репозиториев выполняются на актуальной схеме без ошибок
+- [ ] [2/10] [core] Зафиксировать новый topup contract в CORE: provider/method capabilities + presentation/action model
+      📂 Файлы: `src/cerber_core/internal/model/payment.go`, `src/cerber_core/internal/service/payment.go`, `src/cerber_core/internal/handler/payment.go`, `src/cerber_core/internal/router/router.go`, `src/cerber_core/docs/`
+      🔗 После: «[1/10] Финализировать API-контракт биллинга в Go»
+      ⚠️ Риск: если сохранить NicePay/Rukassa-специфику в общем контракте, новый контур сразу станет vendor-locked и не выдержит connector-driven rollout
+      ✅ Готово когда: CORE возвращает единый topup contract с capabilities методов оплаты и generic presentation/action model для bot-side UX
 
-- [ ] [3/8] Реализовать провайдерный слой платежей в Go
-      📂 Файлы: `src/cerber_core/internal/service/payment.go`, `src/cerber_core/internal/repository/payment.go`, `src/cerber_core/internal/router/router.go`, `src/cerber_core/internal/handler/payment.go`
-      🔗 После: «[2/8] Исправить схему и SQL репозиториев cerber_core»
-      ⚠️ Риск: параллельная жизнь webhook-веток в Python и Go может дать двойную обработку платежей
-      ✅ Готово когда: NicePay Link/H2H и Rukassa полностью закрыты в Go, webhook приземляются в Go, есть идемпотентность
+- [ ] [3/10] [core] Расширить persistence-модель topup-сессий под orchestration и connector-driven state machine
+      📂 Файлы: `src/cerber_core/migrations/`, `src/cerber_core/internal/model/payment.go`, `src/cerber_core/internal/repository/payment.go`, `src/cerber_core/internal/repository/transaction.go`
+      🔗 После: «[2/10] [core] Зафиксировать новый topup contract в CORE: provider/method capabilities + presentation/action model»
+      ⚠️ Риск: без явной state machine и provider/method snapshot внутри сессии будут гонки статусов, проблемы идемпотентности и невозможность безопасного resume/reconcile
+      ✅ Готово когда: topup-сессии хранят connector-driven state, presentation/action snapshot, audit trail и позволяют CORE оркестрировать flow без bot-side state ownership
 
-- [ ] [4/8] Добавить reconciliation и метрики в core
-      📂 Файлы: `src/cerber_core/cmd/api/main.go`, `src/cerber_core/internal/service/payment.go`
-      🔗 После: «[3/8] Реализовать провайдерный слой платежей в Go»
-      ⚠️ Риск: без воркера зависнут pending-платежи; без метрик невозможно быстро локализовать деградации провайдеров
-      ✅ Готово когда: pending старше N минут сверяются воркером; есть метрики success rate, p95 latency и provider errors
+- [ ] [4/10] [core] Внедрить controlled connector registry и стандарт скриптов-коннекторов в CORE
+      📂 Файлы: `src/cerber_core/internal/service/payment.go`, `src/cerber_core/internal/repository/payment.go`, `src/cerber_core/internal/router/router.go`, `src/cerber_core/internal/config/config.go`, `src/cerber_core/internal/connectors/` (новый)
+      🔗 После: «[3/10] [core] Расширить persistence-модель topup-сессий под orchestration и connector-driven state machine»
+      ⚠️ Риск: если registry останется открытым и неуправляемым, production-контур превратится в набор ad-hoc интеграций без controlled rollout и безопасного feature gating
+      ✅ Готово когда: CORE поднимает controlled connector registry, а каждый провайдер подключается через единый scriptable connector contract с явными capability-флагами
 
-- [ ] [5/8] Внедрить BillingClient во всех Python-потребителях
-      📂 Файлы: `src/cerber_bot/container.py`, `src/cerber_bot/config.py`, `src/cerber_bot/services/payments.py`, `src/cerber_bot/services/store.py`, `src/cerber_bot/services/deals.py`, `src/cerber_bot/services/users.py`, `src/cerber_bot/services/tgaccounts.py`, `src/ceer_bot/services/users.py`
-      🔗 После: «[4/8] Добавить reconciliation и метрики в core»
-      ⚠️ Риск: mixed-state (часть мутаций локально, часть в Go) приведёт к расхождению балансов
-      ✅ Готово когда: новые операции `user.balance +=/-=` и `held_balance +=/-=` в runtime отсутствуют, все мутации идут через Go API
+- [ ] [5/10] [core] Перенести payment orchestration, webhook handling и confirm/fail semantics в CORE как единственный источник истины
+      📂 Файлы: `src/cerber_core/internal/service/payment.go`, `src/cerber_core/internal/handler/payment.go`, `src/cerber_core/internal/router/router.go`, `src/cerber_core/cmd/api/main.go`
+      🔗 После: «[4/10] [core] Внедрить controlled connector registry и стандарт скриптов-коннекторов в CORE»
+      ⚠️ Риск: параллельная жизнь webhook-логики в bot и CORE создаст двойную обработку topup-событий и расходящуюся confirm/fail семантику
+      ✅ Готово когда: orchestration и webhook-обработка живут только в CORE, а bot читает и подтверждает состояния через единый core contract
 
-- [ ] [admin] [6/8] Поднять admin-layer управления пополнениями
-      📂 Файлы: `src/cerber_core/internal/handler/admin.go`, `src/cerber_core/internal/router/router.go`, `src/cerber_bot/handlers/admin.py`, `src/cerber_admin/main.py`
-      🔗 После: «[5/8] Внедрить BillingClient во всех Python-потребителях»
-      ⚠️ Риск: ручные корректировки без audit-лога делают финансовые операции непрозрачными
-      ✅ Готово когда: есть список пополнений с фильтрами, mark paid/failed, direct credit/debit, лимиты и включение/отключение провайдеров
+- [ ] [6/10] [bot] Расширить `src/cerber_bot/integrations/cerber_core.py`, config и DI под presentation-driven E2E flow + feature flags
+      📂 Файлы: `src/cerber_bot/integrations/cerber_core.py`, `src/cerber_bot/container.py`, `src/cerber_bot/config.py`, `src/cerber_bot/services/payments.py`, `src/cerber_bot/services/store.py`
+      🔗 После: «[5/10] [core] Перенести payment orchestration, webhook handling и confirm/fail semantics в CORE как единственный источник истины»
+      ⚠️ Риск: mixed-state между legacy client calls и новым presentation-driven flow оставит bot в полусломанном промежуточном режиме
+      ✅ Готово когда: bot-side DI поднимает новый core client и feature flags для controlled rollout, а topup flow читается из CORE как presentation/action сценарий end-to-end
 
-- [ ] [7/8] Выполнить полный cutover webhook и UI на Go
-      📂 Файлы: `src/cerber_bot/nicepay_webhook.py`, `src/cerber_bot/web/routes/nicepay.py`, `src/cerber_bot/web/routes/rukassa.py`, `src/cerber_bot/handlers/storefront.py`, `src/cerber_bot/handlers/deals.py`, `src/cerber_bot/handlers/menu.py`, `src/cerber_bot/texts.py`
-      🔗 После: «[6/8] Поднять admin-layer управления пополнениями»
-      ⚠️ Риск: если старый Python-webhook останется активным, возможны дубликаты зачислений
-      ✅ Готово когда: webhook обрабатываются только в Go, UI читает баланс/историю/статусы только из Go API
+- [ ] [7/10] [bot] Переписать Telegram topup UX в `storefront` на generic presentation/action FSM без payment link как основного сценария
+      📂 Файлы: `src/cerber_bot/handlers/storefront.py`, `src/cerber_bot/keyboards/storefront.py`, `src/cerber_bot/texts.py`, `src/cerber_bot/services/payments.py`
+      🔗 После: «[6/10] [bot] Расширить `src/cerber_bot/integrations/cerber_core.py`, config и DI под presentation-driven E2E flow + feature flags»
+      ⚠️ Риск: прямое зашивание link-flow в FSM не даст включить QR/manual/app-switch сценарии и сорвёт цель унификации платёжного слоя
+      ✅ Готово когда: Telegram UX работает через generic presentation/action FSM, а payment link остаётся только как частный action, а не основной happy-path
 
-- [ ] [8/8] Закрыть техдолг и обновить тестовый контур
-      📂 Файлы: `src/cerber_bot/db/models.py`, `src/cerber_bot/db/session.py`, `src/cerber_bot/services/catalog.py`, `src/cerber_bot/integrations/base.py`, `src/cerber_bot/integrations/http.py`, `src/cerber_bot/integrations/registry.py`, `src/cerber_bot/integrations/schemas.py`, `tests/test_payment_service.py`, `tests/test_store_service.py`, `tests/test_deal_service.py`, `tests/test_user_service.py`
-      🔗 После: «[7/8] Выполнить полный cutover webhook и UI на Go»
-      ⚠️ Риск: преждевременное удаление legacy-слоя сломает платежные сценарии до финального cutover
-      ✅ Готово когда: runtime не зависит от локальных WalletPayment/WalletTransaction, интеграционные тесты проходят на Go billing API
+- [ ] [8/10] [core][bot] Изолировать legacy link-flow как временный fallback и вычистить bot-side ownership webhook’ов
+      📂 Файлы: `src/cerber_bot/handlers/storefront.py`, `src/cerber_bot/services/payments.py`, `src/cerber_bot/web/routes/nicepay.py`, `src/cerber_bot/web/routes/rukassa.py`, `src/cerber_core/internal/handler/payment.go`
+      🔗 После: «[7/10] [bot] Переписать Telegram topup UX в `storefront` на generic presentation/action FSM без payment link как основного сценария»
+      ⚠️ Риск: преждевременное удаление link-flow лишит безопасного rollback, а сохранение bot-side webhook ownership — сломает single source of truth
+      ✅ Готово когда: legacy link-flow включается только как explicit fallback по feature flag, а webhook ownership полностью закреплён за CORE
+
+- [ ] [9/10] [core][bot] Добить E2E тестовый контур: core contract, bot FSM, fallback и идемпотентность
+      📂 Файлы: `src/cerber_core/internal/handler/payment_test.go`, `src/cerber_core/internal/service/payment_test.go`, `tests/test_payment_service.py`, `tests/test_store_service.py`, `tests/test_web_app.py`
+      🔗 После: «[8/10] [core][bot] Изолировать legacy link-flow как временный fallback и вычистить bot-side ownership webhook’ов»
+      ⚠️ Риск: без сквозных тестов легко пропустить повторную доставку webhook, resume FSM после рестарта и деградацию fallback-сценария
+      ✅ Готово когда: покрыты contract-level и E2E сценарии нового topup contour, fallback-путь и идемпотентная повторная обработка событий
+
+- [ ] [10/10] [core][bot] Провести staged rollout и финальный cutover на новый payment contour
+      📂 Файлы: `src/cerber_core/internal/config/config.go`, `src/cerber_core/cmd/api/main.go`, `src/cerber_bot/config.py`, `src/cerber_bot/container.py`, `README.md`
+      🔗 После: «[9/10] [core][bot] Добить E2E тестовый контур: core contract, bot FSM, fallback и идемпотентность»
+      ⚠️ Риск: одномоментный cutover без staged rollout и наблюдаемости превратит платёжный слой в очень дорогой генератор сюрпризов
+      ✅ Готово когда: новый contour включается поэтапно, legacy fallback отключается после стабилизации, а production работает через CORE-first orchestration
 
 #### 🔗 Цепочка «Развитие AI-контура CERBER» — строго по порядку
 
@@ -106,6 +118,61 @@ _Обновлено: 2026-05-18_
       📂 Файлы: `texts.py`, `.env.example`
       ⚠️ Риск: payments_title/description — в config.py из .env, не в texts.py; не ломать format()-плейсхолдеры
       ✅ Готово когда: все пользовательские строки актуальны; нет английских вкраплений в UI
+
+#### 🔗 Цепочка «Capability-based провайдеры магазина» — строго по порядку
+
+- [ ] [1/9] Завести unified provider namespace и capability contract
+      📂 Файлы: `src/cerber_bot/providers/` (новый), `src/cerber_bot/container.py`, `src/cerber_bot/config.py`
+      ⚠️ Риск: переиспользование legacy provider-layer создаст два конкурирующих production-пути и размоет границы нового контракта
+      ✅ Готово когда: в runtime появился новый production-oriented namespace с contract/DTO/capabilities/registry, а legacy-слой не используется как базовый контракт
+
+- [ ] [2/9] Реализовать GiftAPI adapter поверх нового контракта
+      📂 Файлы: `src/cerber_bot/providers/giftapi/` (новый), `src/cerber_bot/integrations/giftapi.py`, `tests/test_giftapi_client.py`, `tests/test_giftapi_provider.py`
+      🔗 После: «[1/9] Завести unified provider namespace и capability contract»
+      ⚠️ Риск: нельзя протащить GiftAPI-специфичные категории/offers/orders/errors в общий интерфейс без нормализации
+      ✅ Готово когда: GiftAPI adapter отдаёт нормализованные категории, товары, SKU/offers, заказы, healthcheck и ошибки через новый unified contract
+
+- [ ] [3/9] Ввести provider registry и runtime config
+      📂 Файлы: `src/cerber_bot/providers/registry.py` (новый), `src/cerber_bot/container.py`, `src/cerber_bot/config.py`
+      🔗 После: «[2/9] Реализовать GiftAPI adapter поверх нового контракта»
+      ⚠️ Риск: до открытия multi-provider UX должен существовать ровно один активный GiftAPI provider instance без смены текущего пользовательского сценария
+      ✅ Готово когда: container/DI поднимает unified registry с одним активным GiftAPI provider instance, а storefront UX визуально не меняется
+
+- [ ] [4/9] Перевести StoreService на unified provider interface
+      📂 Файлы: `src/cerber_bot/services/store.py`, `src/cerber_bot/container.py`, `tests/test_store_service.py`, `tests/test_catalog_service.py`
+      🔗 После: «[3/9] Ввести provider registry и runtime config»
+      ⚠️ Риск: нельзя ломать публичный API `StoreService` и текущее storefront-поведение во время cutover с прямой GiftAPI-зависимости
+      ✅ Готово когда: `StoreService` работает через unified provider interface, а его публичный API и текущее поведение витрины остаются совместимыми
+
+- [ ] [5/9] Сделать каталог и заказы multi-provider-safe
+      📂 Файлы: `src/cerber_bot/db/models.py`, `src/cerber_bot/db/repositories/orders.py`, `src/cerber_bot/services/store.py`, `src/cerber_bot/handlers/storefront.py`, `tests/test_store_service.py`
+      🔗 После: «[4/9] Перевести StoreService на unified provider interface»
+      ⚠️ Риск: текущая предпосылка single-provider сломает order stats, callback refs и repository-логику при появлении второго провайдера
+      ✅ Готово когда: идентификаторы каталога и заказов безопасны для нескольких провайдеров, а статистика и callback refs больше не опираются на single-provider модель
+
+- [ ] [6/9] Добавить capability-aware visibility для refresh и admin
+      📂 Файлы: `src/cerber_bot/handlers/admin.py`, `src/cerber_bot/services/store.py`, `src/cerber_bot/texts.py`, `src/cerber_bot/container.py`
+      🔗 После: «[5/9] Сделать каталог и заказы multi-provider-safe»
+      ⚠️ Риск: до смены storefront UX нужно показывать только фактически доступные провайдеры, их health и capabilities, не раскрывая недоступные сценарии
+      ✅ Готово когда: refresh/admin-потоки отображают активные провайдеры, их health и capabilities без изменения текущего пользовательского UX витрины
+
+- [ ] [7/9] Подготовить GetMyTG synthetic provider в shadow-mode
+      📂 Файлы: `src/cerber_bot/providers/getmytg/` (новый), `src/cerber_bot/services/tgaccounts.py`, `tests/test_getmytg_client.py`, `tests/test_tgaccounts_service.py`
+      🔗 После: «[6/9] Добавить capability-aware visibility для refresh и admin»
+      ⚠️ Риск: unified read-side не должен ломать текущий `tgaccounts` flow и не должен преждевременно открывать storefront-покупку через GetMyTG
+      ✅ Готово когда: GetMyTG подключён в unified layer как synthetic provider в shadow-mode и используется только на read-side без регресса текущего tgaccounts flow
+
+- [ ] [8/9] Включить capability-aware storefront UX
+      📂 Файлы: `src/cerber_bot/handlers/storefront.py`, `src/cerber_bot/keyboards/storefront.py`, `src/cerber_bot/texts.py`, `tests/test_store_service.py`
+      🔗 После: «[7/9] Подготовить GetMyTG synthetic provider в shadow-mode»
+      ⚠️ Риск: нельзя убрать GiftAPI-only entrypoint без fallback, пока multi-provider navigation не стабилизирована в реальных сценариях
+      ✅ Готово когда: storefront UX учитывает capabilities, открывает multi-provider navigation и сохраняет fallback на GiftAPI-only сценарий до стабилизации
+
+- [ ] [9/9] Закрыть legacy provider-layer после стабилизации
+      📂 Файлы: `src/cerber_bot/services/catalog.py`, `src/cerber_bot/integrations/base.py`, `src/cerber_bot/integrations/schemas.py`, `src/cerber_bot/integrations/http.py`, `src/cerber_bot/integrations/registry.py`, `src/cerber_bot/integrations/providers/demo.py`, `src/cerber_bot/integrations/providers/giftapi_catalog.py`, `src/cerber_bot/integrations/providers/rest_catalog.py`, `src/cerber_bot/integrations/providers/warehouse_catalog.py`, `README.md`, `EXTENDING.md`
+      🔗 После: «[8/9] Включить capability-aware storefront UX»
+      ⚠️ Риск: преждевременное удаление legacy provider-layer оставит в репо два конкурирующих пути миграции и может сломать fallback до финальной стабилизации
+      ✅ Готово когда: legacy provider-layer удалён или закрыт, документация обновлена, а в репозитории остаётся только один актуальный production-путь для store providers
 
 #### 🔗 Цепочка «Популярные товары» — строго по порядку
 
@@ -149,10 +216,6 @@ _Обновлено: 2026-05-18_
       📂 Файлы: `main.py`, `nicepay_webhook.py`, `config.py`, `.env.example`
       ⚠️ Риск: если FastAPI webhook работает — удаление безопасно
       ✅ Готово когда: webhook только через FastAPI, все упоминания aiohttp удалены
-- [ ] Удалить весь провайдерный слой (9 файлов): `services/catalog.py`, `integrations/base.py`, `integrations/schemas.py`, `integrations/http.py`, `integrations/registry.py`, `integrations/providers/demo.py`, `integrations/providers/giftapi_catalog.py`, `integrations/providers/rest_catalog.py`, `integrations/providers/warehouse_catalog.py`
-      📂 Файлы: см. выше
-      ⚠️ Риск: не импортируются, удаление безопасно
-      ✅ Готово когда: grep по имени любого файла — пусто
 - [x] Добавить `CALLBACK_DEAL_NOT_FOUND` в `DEAL_HANDLER_TEXT` (texts.py) — _2026-05-17_
       📂 Файлы: `texts.py`
       ⚠️ Риск: иначе AttributeError в admin.py
@@ -200,7 +263,7 @@ _Обновлено: 2026-05-18_
 
 ## ✅ Выполнено
 
-- [x] [1/8] Финализировать API-контракт биллинга в Go — _2026-05-18_
+- [x] [1/10] Финализировать API-контракт биллинга в Go — _2026-05-18_
 - [x] [7/7] Собрать repeatable smoke-check и финально синхронизировать policy/docs — _2026-05-18_
 - [x] [6/7] Ввести минимальный hook/control контур для AI-кастомизаций — _2026-05-18_
 - [x] [5/7] Добавить workspace prompts как operator-команды — _2026-05-18_
