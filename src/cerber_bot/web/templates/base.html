@@ -19,6 +19,15 @@
             tg.expand();
             if (tg.setHeaderColor) tg.setHeaderColor('#000000');
             if (tg.setBackgroundColor) tg.setBackgroundColor('#000000');
+            
+            // Запрос полноэкранного режима (Telegram Bot API 7.7+)
+            if (tg.requestFullscreen) {
+                try {
+                    tg.requestFullscreen();
+                } catch (e) {
+                    console.warn("Fullscreen not supported or failed:", e);
+                }
+            }
         }
     })();
     </script>

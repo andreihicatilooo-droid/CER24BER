@@ -133,3 +133,13 @@ services:
       ADMIN_KEY:       ${ADMIN_KEY}
       MASTER_AES_KEY:  ${MASTER_AES_KEY}
       MASTER_HMAC_KEY: ${MASTER_HMAC_KEY}
+
+  # ─── cloudflared tunnel ───────────────────────────────────────────────────
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: cerber_tunnel
+    restart: unless-stopped
+    networks: [cerber_net]
+    command: tunnel --url http://bot:8088
+    depends_on:
+      - bot

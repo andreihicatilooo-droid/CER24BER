@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"math"
 	"time"
@@ -92,7 +93,8 @@ func (s *BalanceService) Adjust(
 		return nil, err
 	}
 
-	tx, err := s.db.BeginTxx(ctx, nil)
+	opts := &sql.TxOptions{Isolation: sql.LevelSerializable}
+	tx, err := s.db.BeginTxx(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -108,24 +110,30 @@ func (s *BalanceService) Adjust(
 		return nil, err
 	}
 
-	result, err := tx.ExecContext(ctx,
+	var currentBalance float64
+	err = tx.QueryRowContext(ctx,
+		`SELECT balance_usdt FROM service_balances WHERE service_id = $1 AND user_hash = $2 FOR UPDATE`,
+		serviceID, userHash,
+	).Scan(&currentBalance)
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+
+	if currentBalance+deltaUSDT < 0 {
+		_ = tx.Rollback()
+		return nil, ErrInsufficientFunds
+	}
+
+	_, err = tx.ExecContext(ctx,
 		`UPDATE service_balances
 		 SET balance_usdt = balance_usdt + $1, updated_at = NOW()
-		 WHERE service_id = $2 AND user_hash = $3 AND balance_usdt + $1 >= 0`,
+		 WHERE service_id = $2 AND user_hash = $3`,
 		deltaUSDT, serviceID, userHash,
 	)
 	if err != nil {
 		_ = tx.Rollback()
 		return nil, err
-	}
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if rowsAffected == 0 {
-		_ = tx.Rollback()
-		return nil, ErrInsufficientFunds
 	}
 
 	amountUSDT := math.Abs(deltaUSDT)
@@ -235,7 +243,8 @@ func (s *BalanceService) Transfer(
 		return nil, nil, err
 	}
 
-	tx, err := s.db.BeginTxx(ctx, nil)
+	opts := &sql.TxOptions{Isolation: sql.LevelSerializable}
+	tx, err := s.db.BeginTxx(ctx, opts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -261,24 +270,39 @@ func (s *BalanceService) Transfer(
 		return nil, nil, err
 	}
 
-	result, err := tx.ExecContext(ctx,
+	var currentFromBalance, currentToBalance float64
+	err = tx.QueryRowContext(ctx,
+		`SELECT balance_usdt FROM service_balances WHERE service_id = $1 AND user_hash = $2 FOR UPDATE`,
+		serviceID, fromUserHash,
+	).Scan(&currentFromBalance)
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, nil, err
+	}
+
+	err = tx.QueryRowContext(ctx,
+		`SELECT balance_usdt FROM service_balances WHERE service_id = $1 AND user_hash = $2 FOR UPDATE`,
+		serviceID, toUserHash,
+	).Scan(&currentToBalance)
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, nil, err
+	}
+
+	if currentFromBalance-amountUSDT < 0 {
+		_ = tx.Rollback()
+		return nil, nil, ErrInsufficientFunds
+	}
+
+	_, err = tx.ExecContext(ctx,
 		`UPDATE service_balances
 		 SET balance_usdt = balance_usdt - $1, updated_at = NOW()
-		 WHERE service_id = $2 AND user_hash = $3 AND balance_usdt - $1 >= 0`,
+		 WHERE service_id = $2 AND user_hash = $3`,
 		amountUSDT, serviceID, fromUserHash,
 	)
 	if err != nil {
 		_ = tx.Rollback()
 		return nil, nil, err
-	}
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, nil, err
-	}
-	if rowsAffected == 0 {
-		_ = tx.Rollback()
-		return nil, nil, ErrInsufficientFunds
 	}
 
 	_, err = tx.ExecContext(ctx,
@@ -335,14 +359,6 @@ func (s *BalanceService) Credit(ctx context.Context, serviceID, userHash string,
 	if err := s.ensureBillingUser(ctx, userHash); err != nil {
 		return err
 	}
-	// Ensure user has a balance row
-	if _, err := s.balanceRepo.FindOrCreate(ctx, serviceID, userHash); err != nil {
-		return err
-	}
-	if err := s.balanceRepo.AddUSDT(ctx, serviceID, userHash, amountUSDT); err != nil {
-		return err
-	}
-
 	rate, _ := s.exchangeRepo.GetRate(ctx, "USDT", "RUB")
 	var rubRate, amountRUB float64
 	if rate != nil {
@@ -350,19 +366,56 @@ func (s *BalanceService) Credit(ctx context.Context, serviceID, userHash string,
 		amountRUB = amountUSDT * rubRate
 	}
 
-	t := &model.Transaction{
-		ID:          uuid.NewString(),
-		ServiceID:   serviceID,
-		UserHash:    userHash,
-		OperationID: "",
-		Type:        txType,
-		AmountUSDT:  amountUSDT,
-		AmountRUB:   amountRUB,
-		Rate:        rubRate,
-		Description: description,
-		CreatedAt:   time.Now(),
+	opts := &sql.TxOptions{Isolation: sql.LevelSerializable}
+	tx, err := s.db.BeginTxx(ctx, opts)
+	if err != nil {
+		return err
 	}
-	return s.txRepo.Create(ctx, t)
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO service_balances (id, service_id, user_hash, balance_usdt, updated_at)
+		 VALUES ($1, $2, $3, $4, $5)
+		 ON CONFLICT (service_id, user_hash) DO NOTHING`,
+		uuid.NewString(), serviceID, userHash, 0.0, time.Now(),
+	)
+	if err != nil {
+		return err
+	}
+
+	var currentBalance float64
+	err = tx.QueryRowContext(ctx,
+		`SELECT balance_usdt FROM service_balances WHERE service_id = $1 AND user_hash = $2 FOR UPDATE`,
+		serviceID, userHash,
+	).Scan(&currentBalance)
+	if err != nil {
+		return err
+	}
+
+	if currentBalance+amountUSDT < 0 {
+		return ErrInsufficientFunds
+	}
+
+	_, err = tx.ExecContext(ctx,
+		`UPDATE service_balances
+		 SET balance_usdt = balance_usdt + $1, updated_at = NOW()
+		 WHERE service_id = $2 AND user_hash = $3`,
+		amountUSDT, serviceID, userHash,
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO transactions (id, service_id, user_hash, operation_id, type, amount_usdt, amount_rub, rate, description, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		uuid.NewString(), serviceID, userHash, "", txType, amountUSDT, amountRUB, rubRate, description, time.Now(),
+	)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (s *BalanceService) History(ctx context.Context, serviceID, userHash string, limit, offset int) ([]model.Transaction, error) {
