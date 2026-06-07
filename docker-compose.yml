@@ -19,19 +19,34 @@ services:
     container_name: cerber_bot_instance
     restart: unless-stopped
     networks: [cerber_net]
-    # In case bot is later configured to use core databases, this is useful
-    # depends_on:
-    #   - billing-db
-    #   - users-db
     ports:
-      - "8088:8088"   # Web UI for the bot
+      - "8088:8088"   # Web UI for the shop bot
     volumes:
       - bot_data:/app/data
     env_file:
       - .env
     environment:
-      # If WEB_ENABLED is true, ensuring it listens on all interfaces
       WEB_HOST: "0.0.0.0"
+
+  # ─── ceer-bot (Game Bot) ──────────────────────────────────────────────────
+  ceer-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    image: cerber-bot:latest
+    container_name: ceer_bot_instance
+    command: ["python", "-m", "ceer_bot"]
+    restart: unless-stopped
+    networks: [cerber_net]
+    ports:
+      - "8089:8089"   # Web UI for the game bot
+    volumes:
+      - bot_data:/app/data
+    env_file:
+      - .env
+    environment:
+      WEB_HOST: "0.0.0.0"
+      WEB_PORT: "8089"
 
   # ─── billing-db ─────────────────────────────────────────────────────────────
   billing-db:
