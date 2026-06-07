@@ -1,9 +1,0 @@
-{
-  "pid": 11328,
-  "command": [
-    "G:\\CER24BER\\.venv\\Scripts\\python.exe",
-    "-m",
-    "ceer_bot"
-  ],
-  "started_at": "2026-05-17T21:05:11.364882+00:00"
-}

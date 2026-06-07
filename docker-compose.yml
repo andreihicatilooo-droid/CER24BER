@@ -1,0 +1,120 @@
+# ─── Isolated bridge network ──────────────────────────────────────────────────
+networks:
+  cerber_net:
+    driver: bridge
+
+volumes:
+  billing_pgdata:
+  users_pgdata:
+  bot_data:
+
+services:
+
+  # ─── cerber-bot ─────────────────────────────────────────────────────────────
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    image: cerber-bot:latest
+    container_name: cerber_bot_instance
+    restart: unless-stopped
+    networks: [cerber_net]
+    # In case bot is later configured to use core databases, this is useful
+    # depends_on:
+    #   - billing-db
+    #   - users-db
+    ports:
+      - "8088:8088"   # Web UI for the bot
+    volumes:
+      - bot_data:/app/data
+    env_file:
+      - .env
+    environment:
+      # If WEB_ENABLED is true, ensuring it listens on all interfaces
+      WEB_HOST: "0.0.0.0"
+
+  # ─── billing-db ─────────────────────────────────────────────────────────────
+  billing-db:
+    image: postgres:16-alpine
+    container_name: cerber_billing_db
+    restart: unless-stopped
+    networks: [cerber_net]
+    environment:
+      POSTGRES_USER:     billing
+      POSTGRES_PASSWORD: ${BILLING_DB_PASSWORD}
+      POSTGRES_DB:       billing
+    # Port intentionally NOT exposed to host — only reachable inside cerber_net.
+    volumes:
+      - billing_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U billing"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # ─── users-db ───────────────────────────────────────────────────────────────
+  users-db:
+    image: postgres:16-alpine
+    container_name: cerber_users_db
+    restart: unless-stopped
+    networks: [cerber_net]
+    environment:
+      POSTGRES_USER:     usersvc
+      POSTGRES_PASSWORD: ${USERS_DB_PASSWORD}
+      POSTGRES_DB:       users
+    volumes:
+      - users_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U usersvc"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # ─── migrator ───────────────────────────────────────────────────────────────
+  migrator:
+    image: migrate/migrate:v4.17.0
+    container_name: cerber_migrator
+    networks: [cerber_net]
+    depends_on:
+      billing-db:
+        condition: service_healthy
+      users-db:
+        condition: service_healthy
+    volumes:
+      - ./src/cerber_core/migrations/billing:/migrations/billing:ro
+      - ./src/cerber_core/migrations/users:/migrations/users:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        migrate -path /migrations/billing -database "postgres://billing:$$BILLING_DB_PASSWORD@billing-db:5432/billing?sslmode=disable" up &&
+        migrate -path /migrations/users   -database "postgres://usersvc:$$USERS_DB_PASSWORD@users-db:5432/users?sslmode=disable"     up
+    environment:
+      BILLING_DB_PASSWORD: ${BILLING_DB_PASSWORD}
+      USERS_DB_PASSWORD:   ${USERS_DB_PASSWORD}
+    restart: "no"
+
+  # ─── API ────────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./src/cerber_core
+      dockerfile: Dockerfile
+    image: cerber-core:latest
+    container_name: cerber_api
+    restart: unless-stopped
+    networks: [cerber_net]
+    depends_on:
+      billing-db:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"   # Only port exposed to the host for the API
+    env_file:
+      - .env
+    environment:
+      BILLING_DATABASE_URL:     postgres://billing:${BILLING_DB_PASSWORD}@billing-db:5432/billing?sslmode=disable
+      USERS_DATABASE_URL:       postgres://usersvc:${USERS_DB_PASSWORD}@users-db:5432/users?sslmode=disable
+      SERVER_PORT:     "8080"
+      ADMIN_KEY:       ${ADMIN_KEY}
+      MASTER_AES_KEY:  ${MASTER_AES_KEY}
+      MASTER_HMAC_KEY: ${MASTER_HMAC_KEY}
