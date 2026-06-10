@@ -1,4 +1,4 @@
 .env
 cerbercore
-billing
+/billing
 *.exe

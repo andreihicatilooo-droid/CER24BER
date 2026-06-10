@@ -35,7 +35,7 @@ _Обновлено: 2026-05-18_
 #### 🔗 Цепочка «Рефакторинг платёжного слоя» — строго по порядку
 
 
-- [ ] [2/8] Исправить схему и SQL репозиториев cerber_core
+- [x] [2/8] Исправить схему и SQL репозиториев cerber_core — _2026-06-10_
       📂 Файлы: `src/cerber_core/migrations/001_init.sql`, `src/cerber_core/internal/repository/transaction.go`, `src/cerber_core/internal/repository/account.go`, `src/cerber_core/internal/model/transaction.go`, `src/cerber_core/internal/model/account.go`
       🔗 После: «[1/8] Финализировать API-контракт биллинга в Go»
       ⚠️ Риск: текущие запросы ListByAccount/ListByService ссылаются на несуществующие колонки; возможны падения в runtime
@@ -200,6 +200,7 @@ _Обновлено: 2026-05-18_
 
 ## ✅ Выполнено
 
+- [x] [2/8] Исправить схему и SQL репозиториев cerber_core — _2026-06-10_
 - [x] [1/8] Финализировать API-контракт биллинга в Go — _2026-05-18_
 - [x] [7/7] Собрать repeatable smoke-check и финально синхронизировать policy/docs — _2026-05-18_
 - [x] [6/7] Ввести минимальный hook/control контур для AI-кастомизаций — _2026-05-18_
