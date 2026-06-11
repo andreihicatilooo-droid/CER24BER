@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     cerber_core_api_key: str | None = Field(default=None, alias="CERBER_CORE_API_KEY")
     cerber_core_secret_key: str | None = Field(default=None, alias="CERBER_CORE_SECRET_KEY")
     cerber_core_topup_method_code: str = Field(default="card_ru", alias="CERBER_CORE_TOPUP_METHOD_CODE")
+    billing_mode: str = Field(default="local", alias="BILLING_MODE")
     nicepay_base_url: str = Field(default="https://nicepay.io", alias="NICEPAY_BASE_URL")
     nicepay_proxy: str = Field(default="", alias="NICEPAY_PROXY")
     nicepay_merchant_id: str | None = Field(default=None, alias="NICEPAY_MERCHANT_ID")
@@ -115,6 +116,27 @@ class Settings(BaseSettings):
     def withdrawal_networks(self) -> tuple[str, ...]:
         values = [chunk.strip().upper() for chunk in self.withdrawal_networks_raw.split(",") if chunk.strip()]
         return tuple(values) or ("TRC20",)
+
+    @property
+    def is_core_first_billing(self) -> bool:
+        return self.billing_mode.strip().lower() == "core_first"
+
+    def validate_billing_configuration(self) -> None:
+        """Fail-fast when Core-first is selected without Core credentials."""
+        if not self.is_core_first_billing:
+            return
+        missing: list[str] = []
+        if not (self.cerber_core_api_key or "").strip():
+            missing.append("CERBER_CORE_API_KEY")
+        if not (self.cerber_core_secret_key or "").strip():
+            missing.append("CERBER_CORE_SECRET_KEY")
+        if not (self.cerber_core_base_url or "").strip():
+            missing.append("CERBER_CORE_BASE_URL")
+        if missing:
+            joined = ", ".join(missing)
+            raise ValueError(
+                f"BILLING_MODE=core_first требует {joined}. Поднимите Core: docker compose up -d api billing-db users-db migrator"
+            )
 
 
 def load_settings() -> Settings:

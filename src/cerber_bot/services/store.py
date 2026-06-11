@@ -14,7 +14,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from decimal import Decimal
 from time import monotonic
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 from uuid import uuid4
 
 from aiogram.types import User as TelegramUserObject
@@ -27,7 +27,11 @@ from cerber_bot.db.repositories.wallet import WalletTransactionRepository
 from cerber_bot.integrations.giftapi import GiftApiError, GiftApiClient, GiftCategory, GiftPricelistItem, GiftProductDetail, GiftProductSummary
 from cerber_bot.services.exchange import ExchangeRateError, ExchangeRateService, WalletQuote
 from cerber_bot.services.giftapi import GiftApiOrderDraft, GiftApiService
+from cerber_bot.services.ledger import LedgerInsufficientFundsError, LedgerService
 from cerber_bot.texts import COMMON_TEXT, STORE_SERVICE_TEXT
+
+if TYPE_CHECKING:
+    from cerber_bot.services.wallet_read import WalletReadService
 
 
 logger = logging.getLogger(__name__)
@@ -218,6 +222,8 @@ class StoreService:
         exchange_rate_service: ExchangeRateService,
         cache_ttl_seconds: int = 120,
         wallet_currency: str = DEFAULT_WALLET_CURRENCY,
+        wallet_read_service: WalletReadService | None = None,
+        ledger_service: LedgerService | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.gift_api_service = gift_api_service
@@ -225,9 +231,15 @@ class StoreService:
         self.exchange_rate_service = exchange_rate_service
         self.cache_ttl_seconds = cache_ttl_seconds
         self.wallet_currency = wallet_currency
+        self.wallet_read_service = wallet_read_service
+        self.ledger_service = ledger_service
         self._cached_snapshot: CatalogSnapshot | None = None
         self._cache_until = 0.0
         self._cache_lock = asyncio.Lock()
+
+    @property
+    def is_core_first_billing(self) -> bool:
+        return self.ledger_service is not None
 
     async def refresh_catalog(self) -> CatalogSnapshot:
         return await self.get_catalog_snapshot(force_refresh=True)
@@ -428,6 +440,8 @@ class StoreService:
             return user
 
     async def get_wallet_snapshot(self, telegram_id: int, limit: int = 6) -> WalletSnapshot:
+        if self.wallet_read_service is not None:
+            return await self.wallet_read_service.get_snapshot(telegram_id, limit=limit)
         async with self.session_factory() as session:
             user_repository = UserRepository(session)
             wallet_repository = WalletTransactionRepository(session)
@@ -469,6 +483,9 @@ class StoreService:
             )
 
     async def top_up_balance(self, telegram_user: TelegramUserObject, amount: Decimal) -> WalletSnapshot:
+        if self.is_core_first_billing:
+            raise StoreServiceError(STORE_SERVICE_TEXT.TOP_UP_USE_PAYMENTS)
+
         normalized_amount = normalize_money_amount(amount)
         if normalized_amount <= Decimal("0.00"):
             raise StoreServiceError(STORE_SERVICE_TEXT.TOP_UP_AMOUNT_POSITIVE)
@@ -584,27 +601,56 @@ class StoreService:
                 charged_amount = await self.exchange_rate_service.convert(order_total_amount, offer.currency, wallet_currency)
             except ExchangeRateError as error:
                 raise StoreServiceError(str(error)) from error
-            if user.balance < charged_amount:
-                raise InsufficientBalanceError(Decimal(str(user.balance)), charged_amount, wallet_currency)
-
-            user.balance_currency = wallet_currency
-            user.balance -= charged_amount
-            user.updated_at = user.last_seen_at
-
-            await wallet_repository.add(
-                telegram_id=telegram_user.id,
-                transaction_type="purchase",
-                amount=-charged_amount,
-                currency=wallet_currency,
-                description=build_purchase_description(
-                    product_name=product.name,
-                    order_total_amount=order_total_amount,
-                    order_currency=offer.currency,
-                    charged_amount=charged_amount,
-                    wallet_currency=wallet_currency,
-                ),
-                reference=gift_order.order_id,
+            purchase_description = build_purchase_description(
+                product_name=product.name,
+                order_total_amount=order_total_amount,
+                order_currency=offer.currency,
+                charged_amount=charged_amount,
+                wallet_currency=wallet_currency,
             )
+
+            if self.is_core_first_billing:
+                assert self.ledger_service is not None
+                if wallet.balance < charged_amount:
+                    raise InsufficientBalanceError(wallet.balance, charged_amount, wallet_currency)
+                try:
+                    amount_usdt = await self.exchange_rate_service.convert(
+                        charged_amount,
+                        wallet_currency,
+                        "USDT",
+                    )
+                    snapshot = await self.ledger_service.debit_usdt(
+                        telegram_user.id,
+                        amount_usdt=amount_usdt,
+                        tx_type="transfer",
+                        description=purchase_description,
+                        operation_id=f"purchase:{gift_order.order_id}",
+                    )
+                except LedgerInsufficientFundsError as error:
+                    raise InsufficientBalanceError(wallet.balance, charged_amount, wallet_currency) from error
+                balance_after = await self.exchange_rate_service.convert(
+                    snapshot.available_usdt,
+                    "USDT",
+                    wallet_currency,
+                )
+            else:
+                if user.balance < charged_amount:
+                    raise InsufficientBalanceError(Decimal(str(user.balance)), charged_amount, wallet_currency)
+
+                user.balance_currency = wallet_currency
+                user.balance -= charged_amount
+                user.updated_at = user.last_seen_at
+
+                await wallet_repository.add(
+                    telegram_id=telegram_user.id,
+                    transaction_type="purchase",
+                    amount=-charged_amount,
+                    currency=wallet_currency,
+                    description=purchase_description,
+                    reference=gift_order.order_id,
+                )
+                balance_after = Decimal(str(user.balance))
+
             created_order = await order_repository.create(
                 telegram_id=telegram_user.id,
                 external_id=gift_order.external_id,
@@ -626,8 +672,8 @@ class StoreService:
                 order=to_order_view(created_order),
                 charged_amount=charged_amount,
                 charged_currency=wallet_currency,
-                balance_after=Decimal(str(user.balance)),
-                currency=user.balance_currency,
+                balance_after=balance_after,
+                currency=wallet_currency,
             )
 
 

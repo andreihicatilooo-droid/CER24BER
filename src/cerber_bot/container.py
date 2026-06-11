@@ -23,10 +23,12 @@ from cerber_bot.services.deals import DealService
 from cerber_bot.services.admin_events import AdminEventService
 from cerber_bot.services.exchange import ExchangeRateService
 from cerber_bot.services.giftapi import GiftApiService
+from cerber_bot.services.ledger import LedgerService
 from cerber_bot.services.payments import PaymentService
 from cerber_bot.services.store import StoreService
 from cerber_bot.services.tgaccounts import TgAccountService
 from cerber_bot.services.users import UserService
+from cerber_bot.services.wallet_read import WalletReadService
 
 
 @dataclass(slots=True)
@@ -40,6 +42,7 @@ class AppContainer:
     admin_event_service: AdminEventService
     gift_api_service: GiftApiService
     cerber_core_client: CerberCoreClient | None
+    ledger_service: LedgerService | None
     getmytg_client: GetMyTGClient | None
     tgaccounts_service: TgAccountService | None
     deal_service: DealService
@@ -51,6 +54,7 @@ class AppContainer:
     @classmethod
     async def build(cls, settings: Settings | None = None) -> "AppContainer":
         resolved_settings = settings or load_settings()
+        resolved_settings.validate_billing_configuration()
         ensure_database_parent(resolved_settings.database_url)
 
         engine = create_engine(resolved_settings.database_url)
@@ -75,13 +79,28 @@ class AppContainer:
         )
         gift_api_service = GiftApiService(giftapi_client)
         cerber_core_client: CerberCoreClient | None = None
-        if resolved_settings.cerber_core_enabled:
+        if resolved_settings.is_core_first_billing or resolved_settings.cerber_core_enabled:
             cerber_core_client = CerberCoreClient(
                 base_url=resolved_settings.cerber_core_base_url,
                 http_client=http_client,
                 api_key=resolved_settings.cerber_core_api_key,
                 secret_key=resolved_settings.cerber_core_secret_key,
             )
+        ledger_service: LedgerService | None = None
+        if resolved_settings.is_core_first_billing:
+            ledger_service = LedgerService.from_client(cerber_core_client)
+        exchange_rate_service = ExchangeRateService(
+            http_client=http_client,
+            api_url=resolved_settings.exchange_rate_api_url,
+            cache_ttl_seconds=resolved_settings.exchange_rate_cache_ttl,
+            fallback_usdt_rub_rate=resolved_settings.fallback_usdt_rub_rate,
+        )
+        wallet_read_service = WalletReadService(
+            session_factory=session_factory,
+            exchange_rate_service=exchange_rate_service,
+            wallet_currency=resolved_settings.wallet_currency,
+            ledger_service=ledger_service,
+        )
         getmytg_client: GetMyTGClient | None = None
         if resolved_settings.getmytg_api_key:
             getmytg_client = GetMyTGClient(
@@ -96,12 +115,8 @@ class AppContainer:
                 api_key=None,
             ),
             session_factory=session_factory,
-        )
-        exchange_rate_service = ExchangeRateService(
-            http_client=http_client,
-            api_url=resolved_settings.exchange_rate_api_url,
-            cache_ttl_seconds=resolved_settings.exchange_rate_cache_ttl,
-            fallback_usdt_rub_rate=resolved_settings.fallback_usdt_rub_rate,
+            exchange_rate_service=exchange_rate_service,
+            ledger_service=ledger_service,
         )
         nicepay_client = NicePayClient(
             base_url=resolved_settings.nicepay_base_url,
@@ -135,6 +150,7 @@ class AppContainer:
             stars_to_usd_rate=resolved_settings.stars_to_usd_rate,
             cerber_core_client=cerber_core_client,
             cerber_core_topup_method_code=resolved_settings.cerber_core_topup_method_code,
+            ledger_service=ledger_service,
         )
         store_service = StoreService(
             session_factory=session_factory,
@@ -143,6 +159,8 @@ class AppContainer:
             exchange_rate_service=exchange_rate_service,
             cache_ttl_seconds=resolved_settings.catalog_cache_ttl,
             wallet_currency=resolved_settings.wallet_currency,
+            wallet_read_service=wallet_read_service,
+            ledger_service=ledger_service,
         )
         deal_service = DealService(
             session_factory=session_factory,
@@ -151,10 +169,14 @@ class AppContainer:
             moderator_ids=resolved_settings.moderator_ids,
             withdrawal_min_amount_usdt=resolved_settings.withdrawal_min_amount_usdt,
             withdrawal_networks=resolved_settings.withdrawal_networks,
+            wallet_read_service=wallet_read_service,
+            ledger_service=ledger_service,
         )
         user_service = UserService(
             session_factory,
             default_balance_currency=resolved_settings.wallet_currency,
+            ledger_service=ledger_service,
+            exchange_rate_service=exchange_rate_service,
         )
 
         return cls(
@@ -170,6 +192,7 @@ class AppContainer:
             ),
             gift_api_service=gift_api_service,
             cerber_core_client=cerber_core_client,
+            ledger_service=ledger_service,
             getmytg_client=getmytg_client,
             tgaccounts_service=tgaccounts_service,
             deal_service=deal_service,

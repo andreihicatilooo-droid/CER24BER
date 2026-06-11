@@ -1,6 +1,8 @@
 # CERBER Telegram Bot
 
-Асинхронный Telegram-бот магазина CERBER на Python.  Бот отправляет `START.jpg` при первом сообщении, создаёт пользователя в базе при `/start`, строит пользовательскую витрину поверх GiftAPI, ведёт локальный баланс, платежи, заказы и гарант-сделки между пользователями с блокировкой средств, внутренним чатом, диспутами и запросами вывода в USDT.
+Асинхронный Telegram-бот магазина CERBER на Python. Бот отправляет `START.jpg` при первом сообщении, создаёт пользователя в базе при `/start`, строит пользовательскую витрину поверх GiftAPI, ведёт заказы, гарант-сделки между пользователями с блокировкой средств, внутренним чатом, диспутами и запросами вывода в USDT.
+
+**Биллинг (production):** `BILLING_MODE=core_first` — баланс USDT и все денежные операции через [Cerber Core](docs/adr/001-core-first-billing.md). Локальные поля `balance` / `held_balance` в SQLite — legacy для dev (`BILLING_MODE=local`).
 
 ---
 
@@ -28,7 +30,7 @@
 | Раздел | Что делает |
 |--------|-----------|
 | Витрина | Категории, товары, поиск, пагинация, карточка товара, покупка SKU |
-| Кошелёк | Баланс в USD/RUB/USDT, история операций, пополнение через NicePay |
+| Кошелёк | Баланс в USD/RUB/USDT (Cerber Core), история операций, пополнение через NicePay/Rukassa/Stars |
 | Гарант | Escrow-сделки с блокировкой средств, чат, диспуты, модерация |
 | Вывод | Заявка на вывод в USDT (TRC20/BEP20/ERC20), одобрение модератором |
 | GiftAPI | Прямой доступ к профилю, категориям, товарам, заказам, eSIM |
@@ -107,11 +109,23 @@ copy .env.example .env
 
 # 4. Положите START.jpg в корень проекта (необязательно)
 
-# 5. Запустите бота
+# 5. Production: поднимите Cerber Core и задайте BILLING_MODE=core_first в .env
+docker compose up -d billing-db users-db migrator api
+
+# 6. Запустите бота
 python -m cerber_bot
 ```
 
 Бот автоматически создаст SQLite-базу в `data/cerber.db` при первом запуске.
+
+Для **локальной разработки без Core** установите `BILLING_MODE=local` в `.env`.
+
+**Миграция с local на Core-first:** после переключения режима выполните dry-run, затем применение:
+
+```powershell
+python scripts/sync_local_balances_to_core.py
+python scripts/sync_local_balances_to_core.py --apply
+```
 
 ## Конфигурация
 
@@ -122,6 +136,10 @@ python -m cerber_bot
 | `BOT_TOKEN` | ✅ | — | Токен бота от @BotFather |
 | `DATABASE_URL` | — | `sqlite+aiosqlite:///./data/cerber.db` | URL базы данных |
 | `WALLET_CURRENCY` | — | `USD` | Базовая валюта кошелька |
+| `BILLING_MODE` | — | `core_first` | `core_first` (prod) или `local` (dev без Core) |
+| `CERBER_CORE_BASE_URL` | при core_first | — | URL Cerber Core API |
+| `CERBER_CORE_API_KEY` | при core_first | — | API key сервиса |
+| `CERBER_CORE_SECRET_KEY` | при core_first | — | AES-256 ключ (base64/hex) |
 | `SUPPORT_URL` | — | `https://t.me/cerber_support` | Ссылка на поддержку |
 | `MODERATOR_IDS` | — | — | Telegram ID модераторов через запятую |
 | `GIFTAPI_TOKEN` | — | — | Токен GiftAPI (для каталога) |
@@ -194,21 +212,23 @@ python -m cerber_bot
 
 ## Кошелёк и платежи
 
-Бот ведёт персональный баланс для каждого пользователя:
+**Core-first (`BILLING_MODE=core_first`, production):** баланс USDT и история операций живут в Cerber Core. Бот показывает доступный баланс и «заблокировано» (сумма активных escrow-сделок + pending withdrawals). Прямое локальное пополнение (`top_up_balance`) отключено — только платёжные методы.
+
+**Local (`BILLING_MODE=local`, dev):** баланс в таблице `telegram_users`:
 
 | Поле | Описание |
 |------|----------|
-| `balance` | Доступные средства |
-| `held_balance` | Заблокированные (сделки + заявки на вывод) |
+| `balance` | Доступные средства (legacy) |
+| `held_balance` | Заблокированные (legacy) |
 | `balance_currency` | Валюта кошелька |
 
-**Пополнение через NicePay:**
+**Пополнение (NicePay / Rukassa / Stars):**
 
 1. Пользователь выбирает сумму (+10 / +25 / +50 / +100 или произвольную).
 2. Бот создаёт pending-платёж в БД и запрашивает у NicePay ссылку.
 3. Пользователь переходит по ссылке и оплачивает.
 4. NicePay отправляет callback на публичный URL `{WEB_BASE_URL}/webhooks/nicepay`.
-5. Бот проверяет подпись, сумму, валюту и зачисляет средства.
+5. Бот проверяет подпись и зачисляет средства в Cerber Core (core-first) или локальный кошелёк (local).
 6. Пользователь получает уведомление в Telegram.
 
 Если `PAYMENTS_CURRENCY` ≠ `WALLET_CURRENCY`, суммы конвертируются через ExchangeRateService.
@@ -218,7 +238,7 @@ python -m cerber_bot
 Полноценный escrow со следующим потоком:
 
 1. **Покупатель** указывает продавца, сумму и условия.
-2. Сумма **блокируется** на балансе покупателя (`balance → held_balance`).
+2. Сумма **блокируется** через Cerber Core `hold` (core-first) или локально (`balance → held_balance`).
 3. Продавец получает уведомление и может **принять** или **отклонить**.
 4. После принятия открывается **чат сделки** — сообщения, фото, файлы пересылаются через бота.
 5. Покупатель подтверждает выполнение → средства **зачисляются продавцу**.

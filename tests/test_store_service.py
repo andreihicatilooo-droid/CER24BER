@@ -18,7 +18,9 @@ from cerber_bot.integrations.giftapi import (
     GiftSkuDetail,
 )
 from cerber_bot.services.exchange import WalletQuote
+from cerber_bot.services.ledger.types import LedgerSnapshot
 from cerber_bot.services.store import StoreService
+from cerber_bot.services.wallet_read import WalletReadService
 
 
 class StubGiftApiClient:
@@ -160,6 +162,68 @@ class StubGiftApiService:
         )
 
 
+class MutableStubLedgerService:
+    def __init__(self, *, balance_usdt: Decimal) -> None:
+        self.balance_usdt = balance_usdt
+        self.debits: list[dict[str, object]] = []
+        self.credits: list[dict[str, object]] = []
+
+    async def ensure_user(self, telegram_id: int) -> None:
+        return None
+
+    async def get_balance(self, telegram_id: int) -> LedgerSnapshot:
+        return LedgerSnapshot(
+            available_usdt=self.balance_usdt,
+            balance_rub=self.balance_usdt * Decimal("90.00"),
+            rate_usdt_rub=Decimal("90.00"),
+        )
+
+    async def list_transactions(self, telegram_id: int, *, limit: int = 20, offset: int = 0):
+        return ()
+
+    async def debit_usdt(
+        self,
+        telegram_id: int,
+        *,
+        amount_usdt: Decimal,
+        tx_type: str,
+        description: str,
+        operation_id: str,
+    ) -> LedgerSnapshot:
+        self.debits.append(
+            {
+                "telegram_id": telegram_id,
+                "amount_usdt": amount_usdt,
+                "tx_type": tx_type,
+                "description": description,
+                "operation_id": operation_id,
+            }
+        )
+        self.balance_usdt -= amount_usdt
+        return await self.get_balance(telegram_id)
+
+    async def credit_usdt(
+        self,
+        telegram_id: int,
+        *,
+        amount_usdt: Decimal,
+        tx_type: str,
+        description: str,
+        operation_id: str,
+    ) -> LedgerSnapshot:
+        self.credits.append(
+            {
+                "telegram_id": telegram_id,
+                "amount_usdt": amount_usdt,
+                "tx_type": tx_type,
+                "description": description,
+                "operation_id": operation_id,
+            }
+        )
+        self.balance_usdt += amount_usdt
+        return await self.get_balance(telegram_id)
+
+
 class StubExchangeRateService:
     async def convert(self, amount: Decimal, from_currency: str, to_currency: str) -> Decimal:
         return amount.quantize(Decimal("0.01"))
@@ -244,6 +308,81 @@ async def test_store_service_top_up_and_purchase_updates_wallet_and_orders(tmp_p
     assert orders_page.total_items == 1
     assert len(orders) == 1
     assert orders[0].product_name == "Apple Gift Card 10"
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_store_service_core_first_purchase_debits_ledger_not_local_balance(tmp_path: Path) -> None:
+    database_url = f"sqlite+aiosqlite:///{(tmp_path / 'core-first-purchase.db').as_posix()}"
+    engine = create_engine(database_url)
+    session_factory = create_session_factory(engine)
+    await init_database(engine)
+
+    ledger = MutableStubLedgerService(balance_usdt=Decimal("25.00"))
+    exchange_rate_service = StubExchangeRateService()
+    wallet_read_service = WalletReadService(
+        session_factory=session_factory,
+        exchange_rate_service=exchange_rate_service,
+        wallet_currency="USD",
+        ledger_service=ledger,
+    )
+    service = StoreService(
+        session_factory=session_factory,
+        gift_api_service=StubGiftApiService(),
+        gift_api_client=StubGiftApiClient(),
+        exchange_rate_service=exchange_rate_service,
+        cache_ttl_seconds=60,
+        wallet_read_service=wallet_read_service,
+        ledger_service=ledger,
+    )
+    telegram_user = User(
+        id=123456789,
+        is_bot=False,
+        first_name="Ivan",
+        last_name="Petrov",
+        username="cerber_client",
+        language_code="ru",
+    )
+
+    async with session_factory() as session:
+        from cerber_bot.db.repositories.users import UserRepository
+
+        users = UserRepository(session)
+        await users.get_or_create(
+            telegram_id=telegram_user.id,
+            username=telegram_user.username,
+            first_name=telegram_user.first_name,
+            last_name=telegram_user.last_name,
+            language_code=telegram_user.language_code,
+            is_bot=telegram_user.is_bot,
+            balance_currency="USD",
+        )
+        await session.commit()
+
+    purchase = await service.purchase_offer(
+        telegram_user,
+        product_id="product-apple-1",
+        sku_id="sku-apple-10",
+    )
+    wallet_after_purchase = await service.get_wallet_snapshot(telegram_user.id)
+
+    assert purchase.balance_after == Decimal("15.00")
+    assert wallet_after_purchase.balance == Decimal("15.00")
+    assert ledger.balance_usdt == Decimal("15.00")
+    assert len(ledger.debits) == 1
+    assert ledger.debits[0]["operation_id"] == "purchase:giftapi-order-1"
+
+    async with session_factory() as session:
+        from cerber_bot.db.repositories.users import UserRepository
+        from cerber_bot.db.repositories.wallet import WalletTransactionRepository
+
+        user = await UserRepository(session).get_by_telegram_id(telegram_user.id)
+        transactions = await WalletTransactionRepository(session).list_recent(telegram_user.id, limit=5)
+
+    assert user is not None
+    assert user.balance == Decimal("0")
+    assert len(transactions) == 0
 
     await engine.dispose()
 

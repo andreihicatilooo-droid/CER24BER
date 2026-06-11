@@ -28,6 +28,7 @@ class TelegramUser(Base):
     last_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     language_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     is_bot: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Legacy local wallet (BILLING_MODE=local). Core-first: источник истины — Cerber Core.
     balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"), nullable=False)
     held_balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"), nullable=False)
     balance_currency: Mapped[str] = mapped_column(String(8), default="USD", nullable=False)
@@ -42,6 +43,8 @@ class TelegramUser(Base):
 
 
 class WalletTransaction(Base):
+    """Legacy audit log for BILLING_MODE=local. Core-first: история в Cerber Core."""
+
     __tablename__ = "wallet_transactions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

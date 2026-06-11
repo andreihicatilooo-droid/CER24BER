@@ -93,6 +93,17 @@ def _is_moderator(user_id: int, container: AppContainer) -> bool:
     return user_id in container.deal_service.moderator_ids
 
 
+async def _admin_wallet_view(container: AppContainer, telegram_id: int):
+    if container.settings.is_core_first_billing:
+        snapshot = await container.store_service.get_wallet_snapshot(telegram_id)
+        return snapshot.balance, snapshot.held_balance, snapshot.currency
+    user = await container.user_service.get_profile(telegram_id)
+    if user is None:
+        return Decimal("0.00"), Decimal("0.00"), container.settings.wallet_currency
+    currency = user.balance_currency or container.settings.wallet_currency
+    return Decimal(str(user.balance)), Decimal(str(user.held_balance)), currency
+
+
 def _format_timestamp(value: object, *, short: bool = False) -> str:
     if not isinstance(value, datetime):
         return str(value)
@@ -560,7 +571,7 @@ def build_admin_router(container: AppContainer, *, user_bot: Bot | None = None) 
             await message.answer(ADMIN_TEXT.USER_NOT_FOUND)
             return
 
-        currency = user.balance_currency or "USD"
+        available, held, currency = await _admin_wallet_view(container, user.telegram_id)
         lines = [
             ADMIN_TEXT.USER_PROFILE_TITLE.format(telegram_id=user.telegram_id),
             ADMIN_TEXT.USER_PROFILE_NAME.format(name=escape(user.first_name or "—")),
@@ -568,10 +579,10 @@ def build_admin_router(container: AppContainer, *, user_bot: Bot | None = None) 
         if user.username:
             lines.append(ADMIN_TEXT.USER_PROFILE_USERNAME.format(username=escape(user.username)))
         lines.append(ADMIN_TEXT.USER_PROFILE_BALANCE.format(
-            balance=format_money(user.balance, currency), currency="",
+            balance=format_money(available, currency), currency="",
         ).rstrip())
         lines.append(ADMIN_TEXT.USER_PROFILE_HELD.format(
-            held=format_money(user.held_balance, currency), currency="",
+            held=format_money(held, currency), currency="",
         ).rstrip())
         await message.answer("\n".join(lines), reply_markup=build_user_profile_keyboard(user.telegram_id))
 
@@ -595,16 +606,16 @@ def build_admin_router(container: AppContainer, *, user_bot: Bot | None = None) 
             await callback.answer(ADMIN_TEXT.USER_NOT_FOUND, show_alert=True)
             return
 
-        currency = user.balance_currency or "USD"
+        available, _, currency = await _admin_wallet_view(container, telegram_id)
         await state.set_state(AdminStates.waiting_balance_delta)
         await state.update_data(
             telegram_id=telegram_id,
-            balance=str(user.balance),
+            balance=str(available),
             currency=currency,
             direction=direction,
         )
         prompt = ADMIN_TEXT.BALANCE_DELTA_PROMPT.format(
-            balance=format_money(user.balance, currency),
+            balance=format_money(available, currency),
             currency=currency,
         )
         msg = callback.message
@@ -638,7 +649,7 @@ def build_admin_router(container: AppContainer, *, user_bot: Bot | None = None) 
             delta = abs(delta)
 
         try:
-            old_balance, updated = await container.user_service.adjust_balance(
+            result = await container.user_service.adjust_balance(
                 telegram_id,
                 delta=delta,
                 admin_id=message.from_user.id,
@@ -651,8 +662,8 @@ def build_admin_router(container: AppContainer, *, user_bot: Bot | None = None) 
         await state.clear()
         await message.answer(
             ADMIN_TEXT.BALANCE_ADJUSTED.format(
-                old=format_money(old_balance, currency),
-                new=format_money(updated.balance, currency),
+                old=format_money(result.old_balance, currency),
+                new=format_money(result.new_balance, currency),
                 currency=currency,
             ),
             reply_markup=build_user_profile_keyboard(telegram_id),

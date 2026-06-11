@@ -13,6 +13,24 @@ from cerber_bot.db.session import create_engine, create_session_factory, init_da
 from cerber_bot.integrations.cerber_core import CerberCoreTopupSession
 from cerber_bot.services.exchange import WalletQuote
 from cerber_bot.services.payments import PaymentService
+from cerber_bot.services.ledger.types import LedgerSnapshot
+
+
+class StubLedgerService:
+    def __init__(self, *, balance_usdt: Decimal | None = None) -> None:
+        self.balance_usdt = balance_usdt or Decimal("0")
+        self.balance_reads: list[int] = []
+
+    async def get_balance(self, telegram_id: int) -> LedgerSnapshot:
+        self.balance_reads.append(telegram_id)
+        return LedgerSnapshot(
+            available_usdt=self.balance_usdt,
+            balance_rub=self.balance_usdt * Decimal("90"),
+            rate_usdt_rub=Decimal("90"),
+        )
+
+    async def ensure_user(self, telegram_id: int) -> None:
+        return None
 
 
 class StubNicePayClient:
@@ -123,7 +141,7 @@ class StubCerberCoreClient:
         )
 
 
-def build_payment_service(session_factory, *, cerber_core_client=None) -> PaymentService:
+def build_payment_service(session_factory, *, cerber_core_client=None, ledger_service=None) -> PaymentService:
     return PaymentService(
         session_factory=session_factory,
         nicepay_client=StubNicePayClient(),
@@ -139,6 +157,7 @@ def build_payment_service(session_factory, *, cerber_core_client=None) -> Paymen
         method="paypal_usd",
         cerber_core_client=cerber_core_client,
         cerber_core_topup_method_code="card_ru",
+        ledger_service=ledger_service,
     )
 
 
@@ -290,7 +309,12 @@ async def test_payment_service_uses_cerber_core_session_payload_and_confirms_it(
     await init_database(engine)
 
     core_client = StubCerberCoreClient()
-    service = build_payment_service(session_factory, cerber_core_client=core_client)
+    ledger = StubLedgerService(balance_usdt=Decimal("25.00"))
+    service = build_payment_service(
+        session_factory,
+        cerber_core_client=core_client,
+        ledger_service=ledger,
+    )
     telegram_user = build_user()
 
     payment_link = await service.create_top_up_link(telegram_user, Decimal("25.00"))
@@ -312,5 +336,13 @@ async def test_payment_service_uses_cerber_core_session_payload_and_confirms_it(
     assert core_client.created_sessions == [(telegram_user.id, Decimal("25.00"), "card_ru")]
     assert core_client.confirmed_sessions == [core_client.session_id]
     assert callback_result.balance_after == Decimal("25.00")
+
+    async with session_factory() as session:
+        user = await UserRepository(session).get_by_telegram_id(telegram_user.id)
+        transactions = await WalletTransactionRepository(session).list_recent(telegram_user.id, limit=10)
+
+    assert user is not None
+    assert Decimal(str(user.balance)) == Decimal("0.00")
+    assert len(transactions) == 0
 
     await engine.dispose()
