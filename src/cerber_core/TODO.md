@@ -119,18 +119,5 @@
 
 ## Тесты
 
-- [ ] [P5] Unit-тесты для пакета `internal/crypto`
-  - Изменяемые файлы: `internal/crypto/aes_gcm_test.go`
-  - Критерии приемки: тесты на Encrypt/Decrypt roundtrip, неверный ключ, повреждённый ciphertext; 100% покрытие пакета
-
-- [ ] [P5] Integration-тесты: Auth endpoints
-  - Изменяемые файлы: `internal/handler/auth_test.go`
-  - Критерии приемки: тесты `POST /auth/register`, `POST /auth/login`, `POST /auth/services` с реальной тестовой БД (`users-db`); проверка HTTP-статусов и наличия `user_hash` в ответе
-
-- [ ] [P5] Integration-тесты: Balance endpoints
-  - Изменяемые файлы: `internal/handler/balance_test.go`
-  - Критерии приемки: тесты с AES-GCM шифрованием запросов и расшифровкой ответов; проверка `X-API-Key` + Bearer JWT; создание/получение аккаунта по `user_hash`
-
-- [ ] [P5] Integration-тесты: Payment endpoints
-  - Изменяемые файлы: `internal/handler/payment_test.go`
-  - Критерии приемки: тесты `POST /deposit/payments`, `POST /deposit/payments/:id/check`, `GET /deposit/payments/:id/status` с шифрованием запросов/ответов; проверка полного цикла платежа
+> Активные задачи перенесены в Linear (milestone «Core тесты»):
+> [CER-23](https://linear.app/cerberlang/issue/CER-23), [CER-24](https://linear.app/cerberlang/issue/CER-24), [CER-25](https://linear.app/cerberlang/issue/CER-25), [CER-22](https://linear.app/cerberlang/issue/CER-22)
