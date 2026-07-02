@@ -66,6 +66,11 @@ async def test_profile_requires_auth(client: AsyncClient):
     assert response.status_code in (302, 401)
 
 
+async def test_reputation_requires_auth(client: AsyncClient):
+    response = await client.get("/reputation", follow_redirects=False)
+    assert response.status_code in (302, 401)
+
+
 async def test_logout_redirects(client: AsyncClient):
     response = await client.get("/logout", follow_redirects=False)
     assert response.status_code == 302

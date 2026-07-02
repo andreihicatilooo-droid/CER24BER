@@ -41,6 +41,7 @@ class MAIN_MENU_TEXT:
     DEALS = "🤝Гарант"
     ORDERS = "📦 Мои заказы"
     PROFILE = "👤 Профиль"
+    REPUTATION = "⭐ Репутация"
     HOME = "🏠 Главное меню"
     REFRESH = "🔄 Обновить каталог"
     SUPPORT = "🆘 Поддержка"
@@ -222,6 +223,11 @@ class MENU_TEXT:
     REFRESH_REPORT_PRODUCTS = "Товаров в витрине: {count}"
     REFRESH_REPORT_HINT = "Откройте магазин, чтобы увидеть свежие остатки и цены."
     MAIN_MENU_TITLE = "<b>Главное меню CERBER</b>"
+    REPUTATION_TITLE = "<b>Репутация CERBER</b>"
+    REPUTATION_SCORE = "Баллы репутации: {score}"
+    REPUTATION_LOSSES = "Проигранных споров: {count}"
+    REPUTATION_DEALS = "Завершённых сделок: {count}"
+    REPUTATION_HINT = "Репутация начисляется автоматически после завершения сделок и решений по спорам."
 
     @classmethod
     def support_contact(cls, support_url: str) -> str:

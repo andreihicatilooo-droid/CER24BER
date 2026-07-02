@@ -32,6 +32,8 @@ class TelegramUser(Base):
     balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"), nullable=False)
     held_balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"), nullable=False)
     balance_currency: Mapped[str] = mapped_column(String(8), default="USD", nullable=False)
+    reputation_score: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reputation_dispute_losses: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -40,6 +42,12 @@ class TelegramUser(Base):
         nullable=False,
     )
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    reputation_updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        nullable=False,
+    )
 
 
 class WalletTransaction(Base):

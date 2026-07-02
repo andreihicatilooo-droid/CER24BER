@@ -23,6 +23,7 @@ from cerber_bot.bot_runtime import build_bot_session, reset_webhook_with_retry
 from cerber_bot.container import AppContainer
 from cerber_bot.handlers.giftapi import build_giftapi_router
 from cerber_bot.handlers.menu import build_deals_router, build_menu_router
+from cerber_bot.handlers.reputation import build_reputation_router
 from cerber_bot.handlers.start import build_start_router
 from cerber_bot.handlers.storefront import build_storefront_router
 from cerber_bot.handlers.tgaccounts import build_tgaccounts_router
@@ -50,6 +51,7 @@ async def run() -> None:
     dispatcher.include_router(build_storefront_router(container))
     dispatcher.include_router(build_tgaccounts_router(container))
     dispatcher.include_router(build_giftapi_router(container))
+    dispatcher.include_router(build_reputation_router(container))
     dispatcher.include_router(build_deals_router(container))
     dispatcher.include_router(build_menu_router(container))
 

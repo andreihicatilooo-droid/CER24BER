@@ -45,5 +45,18 @@ def apply_lightweight_migrations(connection) -> None:  # type: ignore[no-untyped
     if "balance_currency" not in columns:
         statements.append("ALTER TABLE telegram_users ADD COLUMN balance_currency VARCHAR(8) NOT NULL DEFAULT 'USD'")
 
+    if "reputation_score" not in columns:
+        statements.append("ALTER TABLE telegram_users ADD COLUMN reputation_score INTEGER NOT NULL DEFAULT 0")
+
+    if "reputation_dispute_losses" not in columns:
+        statements.append(
+            "ALTER TABLE telegram_users ADD COLUMN reputation_dispute_losses INTEGER NOT NULL DEFAULT 0"
+        )
+
+    if "reputation_updated_at" not in columns:
+        statements.append(
+            "ALTER TABLE telegram_users ADD COLUMN reputation_updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
+        )
+
     for statement in statements:
         connection.execute(text(statement))

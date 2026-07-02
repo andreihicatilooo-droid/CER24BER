@@ -18,6 +18,7 @@ from cerber_bot.db.repositories.users import UserRepository
 from cerber_bot.db.repositories.wallet import WalletTransactionRepository
 from cerber_bot.services.exchange import ExchangeRateError, ExchangeRateService, WalletQuote
 from cerber_bot.services.ledger import LedgerInsufficientFundsError, LedgerService
+from cerber_bot.services.reputation import ReputationService
 from cerber_bot.services.store import PageInfo, build_page_info, format_money, normalize_money_amount
 from cerber_bot.services.wallet_read import WalletReadService
 from cerber_bot.texts import DEAL_SERVICE_TEXT
@@ -192,6 +193,7 @@ class DealService:
         withdrawal_networks: tuple[str, ...],
         wallet_read_service: WalletReadService | None = None,
         ledger_service: LedgerService | None = None,
+        reputation_service: ReputationService | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.exchange_rate_service = exchange_rate_service
@@ -201,6 +203,7 @@ class DealService:
         self.withdrawal_networks = tuple(network.upper() for network in withdrawal_networks)
         self.wallet_read_service = wallet_read_service
         self.ledger_service = ledger_service
+        self.reputation_service = reputation_service or ReputationService(session_factory)
 
     @property
     def is_core_first_billing(self) -> bool:
@@ -589,6 +592,7 @@ class DealService:
                 content_type="system",
                 body=DEAL_SERVICE_TEXT.DEAL_CONFIRMED_MESSAGE,
             )
+            self.reputation_service.apply_success(buyer, seller)
             await session.commit()
             return DealActionResult(
                 deal=await self._build_deal_view(session, deal, telegram_id),
@@ -694,6 +698,7 @@ class DealService:
                 content_type="system",
                 body=message_text,
             )
+            self.reputation_service.apply_dispute_resolution(buyer, seller, resolution=normalized_resolution)
             await session.commit()
             return DealModerationResult(
                 deal_id=deal.id,

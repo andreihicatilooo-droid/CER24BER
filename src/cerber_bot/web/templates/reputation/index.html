@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Репутация — CERBER{% endblock %}
+{% block content %}
+
+<div class="page-title">
+    <h1>Репутация</h1>
+</div>
+
+<div class="surface fade-up" style="margin-bottom:12px">
+    <div class="section-heading"><h2>Профиль</h2></div>
+    <div class="info-table">
+        <div class="info-row">
+            <span class="key">Имя</span>
+            <span class="val">{{ profile.first_name or '—' }}</span>
+        </div>
+        {% if profile.username %}
+        <div class="info-row">
+            <span class="key">Username</span>
+            <span class="val">@{{ profile.username }}</span>
+        </div>
+        {% endif %}
+        <div class="info-row">
+            <span class="key">Telegram ID</span>
+            <span class="val">{{ profile.telegram_id }}</span>
+        </div>
+    </div>
+</div>
+
+<div class="surface fade-up" style="margin-bottom:12px">
+    <div class="section-heading"><h2>Показатели</h2></div>
+    <div class="info-table">
+        <div class="info-row">
+            <span class="key">Баллы</span>
+            <span class="val green">{{ reputation.score }}</span>
+        </div>
+        <div class="info-row">
+            <span class="key">Проигранных споров</span>
+            <span class="val warn">{{ reputation.dispute_losses }}</span>
+        </div>
+        <div class="info-row">
+            <span class="key">Завершённых сделок</span>
+            <span class="val">{{ deal_stats.completed_deals }}</span>
+        </div>
+    </div>
+</div>
+
+<div class="surface fade-up">
+    <div class="btn-row">
+        <a href="/profile" class="ghost-btn btn-sm">К профилю →</a>
+        <a href="/deals" class="ghost-btn btn-sm">К сделкам →</a>
+    </div>
+</div>
+
+{% endblock %}

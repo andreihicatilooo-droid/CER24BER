@@ -24,6 +24,7 @@ from cerber_bot.services.admin_events import AdminEventService
 from cerber_bot.services.exchange import ExchangeRateService
 from cerber_bot.services.giftapi import GiftApiService
 from cerber_bot.services.ledger import LedgerService
+from cerber_bot.services.reputation import ReputationService
 from cerber_bot.services.payments import PaymentService
 from cerber_bot.services.store import StoreService
 from cerber_bot.services.tgaccounts import TgAccountService
@@ -41,6 +42,7 @@ class AppContainer:
     exchange_rate_service: ExchangeRateService
     admin_event_service: AdminEventService
     gift_api_service: GiftApiService
+    reputation_service: ReputationService
     cerber_core_client: CerberCoreClient | None
     ledger_service: LedgerService | None
     getmytg_client: GetMyTGClient | None
@@ -95,6 +97,7 @@ class AppContainer:
             cache_ttl_seconds=resolved_settings.exchange_rate_cache_ttl,
             fallback_usdt_rub_rate=resolved_settings.fallback_usdt_rub_rate,
         )
+        reputation_service = ReputationService(session_factory)
         wallet_read_service = WalletReadService(
             session_factory=session_factory,
             exchange_rate_service=exchange_rate_service,
@@ -171,6 +174,7 @@ class AppContainer:
             withdrawal_networks=resolved_settings.withdrawal_networks,
             wallet_read_service=wallet_read_service,
             ledger_service=ledger_service,
+            reputation_service=reputation_service,
         )
         user_service = UserService(
             session_factory,
@@ -191,6 +195,7 @@ class AppContainer:
                 moderator_ids=resolved_settings.moderator_ids,
             ),
             gift_api_service=gift_api_service,
+            reputation_service=reputation_service,
             cerber_core_client=cerber_core_client,
             ledger_service=ledger_service,
             getmytg_client=getmytg_client,

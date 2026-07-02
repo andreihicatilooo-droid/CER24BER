@@ -10,6 +10,7 @@ from cerber_bot.texts import FAQ_TEXT, MAIN_MENU_TEXT
 
 MAIN_MENU_ACTION = "menu:main"
 PROFILE_ACTION = "menu:profile"
+REPUTATION_ACTION = "menu:reputation"
 REFRESH_ACTION = STORE_REFRESH_ACTION  # реэкспорт для обратной совместимости хэндлеров
 SUPPORT_ACTION = "menu:support"
 FAQ_ACTION = "menu:faq"
@@ -28,6 +29,9 @@ def build_main_menu(settings: Settings) -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(text=MAIN_MENU_TEXT.ORDERS, callback_data=STORE_ORDERS_ACTION),
             InlineKeyboardButton(text=MAIN_MENU_TEXT.PROFILE, callback_data=PROFILE_ACTION),
+        ],
+        [
+            InlineKeyboardButton(text=MAIN_MENU_TEXT.REPUTATION, callback_data=REPUTATION_ACTION),
         ],
         [
             InlineKeyboardButton(text=MAIN_MENU_TEXT.TG_ACCOUNTS, callback_data=TGACC_HOME_ACTION),

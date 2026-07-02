@@ -10,6 +10,7 @@ from cerber_bot.services.deals import DealService
 from cerber_bot.services.exchange import WalletQuote
 from cerber_bot.services.ledger import LedgerInsufficientFundsError
 from cerber_bot.services.ledger.types import LedgerSnapshot
+from cerber_bot.services.reputation import ReputationService
 from cerber_bot.services.wallet_read import WalletReadService
 
 
@@ -149,6 +150,7 @@ class MutableStubLedgerService:
 
 def build_deal_service(session_factory, *, ledger: MutableStubLedgerService | None = None) -> DealService:
     exchange_rate_service = StubExchangeRateService()
+    reputation_service = ReputationService(session_factory)
     wallet_read_service = None
     if ledger is not None:
         wallet_read_service = WalletReadService(
@@ -166,6 +168,7 @@ def build_deal_service(session_factory, *, ledger: MutableStubLedgerService | No
         withdrawal_networks=("TRC20", "BEP20"),
         wallet_read_service=wallet_read_service,
         ledger_service=ledger,
+        reputation_service=reputation_service,
     )
 
 
@@ -215,6 +218,10 @@ async def test_deal_service_locks_funds_and_releases_to_seller_on_success(tmp_pa
     assert Decimal(str(buyer_row.balance)) == Decimal("30.00")
     assert Decimal(str(buyer_row.held_balance)) == Decimal("0.00")
     assert Decimal(str(seller_row.balance)) == Decimal("20.00")
+    assert int(buyer_row.reputation_score) == 1
+    assert int(seller_row.reputation_score) == 1
+    assert int(buyer_row.reputation_dispute_losses) == 0
+    assert int(seller_row.reputation_dispute_losses) == 0
 
     await engine.dispose()
 
@@ -256,6 +263,10 @@ async def test_deal_service_supports_dispute_and_moderator_refund(tmp_path: Path
     assert Decimal(str(buyer_row.balance)) == Decimal("40.00")
     assert Decimal(str(buyer_row.held_balance)) == Decimal("0.00")
     assert Decimal(str(seller_row.balance)) == Decimal("0.00")
+    assert int(buyer_row.reputation_score) == 0
+    assert int(seller_row.reputation_score) == -2
+    assert int(buyer_row.reputation_dispute_losses) == 0
+    assert int(seller_row.reputation_dispute_losses) == 1
 
     await engine.dispose()
 
