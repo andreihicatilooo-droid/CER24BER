@@ -14,6 +14,7 @@ REFRESH_ACTION = STORE_REFRESH_ACTION  # реэкспорт для обратн�
 SUPPORT_ACTION = "menu:support"
 FAQ_ACTION = "menu:faq"
 FAQ_SECTION_PREFIX = "menu:faq:"
+CERBER_TRADE_ACTION = "menu:cerber_trade"
 
 
 def build_main_menu(settings: Settings) -> InlineKeyboardMarkup:
@@ -23,7 +24,9 @@ def build_main_menu(settings: Settings) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text=MAIN_MENU_TEXT.WALLET, callback_data=STORE_WALLET_ACTION),
-            InlineKeyboardButton(text=MAIN_MENU_TEXT.DEALS, callback_data=DEAL_HOME_ACTION),
+        ],
+        [
+            InlineKeyboardButton(text=MAIN_MENU_TEXT.CERBER_TRADE, callback_data=CERBER_TRADE_ACTION),
         ],
         [
             InlineKeyboardButton(text=MAIN_MENU_TEXT.ORDERS, callback_data=STORE_ORDERS_ACTION),
@@ -52,6 +55,15 @@ def build_main_menu(settings: Settings) -> InlineKeyboardMarkup:
         keyboard.append([InlineKeyboardButton(text=MAIN_MENU_TEXT.SUPPORT, callback_data=SUPPORT_ACTION)])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def build_cerber_trade_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=MAIN_MENU_TEXT.DEALS, callback_data=DEAL_HOME_ACTION)],
+            [InlineKeyboardButton(text=MAIN_MENU_TEXT.HOME, callback_data=MAIN_MENU_ACTION)],
+        ]
+    )
 
 
 def build_faq_keyboard() -> InlineKeyboardMarkup:

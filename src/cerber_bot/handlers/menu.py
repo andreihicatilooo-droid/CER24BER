@@ -45,7 +45,19 @@ from cerber_bot.keyboards.deals import (
     build_moderator_withdrawal_keyboard,
     build_withdrawal_network_keyboard,
 )
-from cerber_bot.keyboards.main_menu import MAIN_MENU_ACTION, PROFILE_ACTION, REFRESH_ACTION, SUPPORT_ACTION, FAQ_ACTION, FAQ_SECTION_PREFIX, build_faq_keyboard, build_faq_back_keyboard, build_main_menu
+from cerber_bot.keyboards.main_menu import (
+    CERBER_TRADE_ACTION,
+    MAIN_MENU_ACTION,
+    PROFILE_ACTION,
+    REFRESH_ACTION,
+    SUPPORT_ACTION,
+    FAQ_ACTION,
+    FAQ_SECTION_PREFIX,
+    build_cerber_trade_menu,
+    build_faq_keyboard,
+    build_faq_back_keyboard,
+    build_main_menu,
+)
 from cerber_bot.services.deals import DealCard, DealDashboard, DealMessageRelayResult, DealModerationResult, DealServiceError, DealView, WithdrawalRequestView
 from cerber_bot.services.store import PageInfo, StoreServiceError, format_money
 from cerber_bot.texts import DEAL_HANDLER_TEXT, FAQ_TEXT, MENU_TEXT
@@ -120,6 +132,17 @@ def build_menu_router(container: AppContainer) -> Router:
         support_url = container.settings.support_url or MENU_TEXT.SUPPORT_CONTACT_MISSING
         await message.answer(MENU_TEXT.support_contact(escape(support_url)))
         await callback.answer(MENU_TEXT.CONTACTS_SENT)
+
+    @router.callback_query(F.data == CERBER_TRADE_ACTION)
+    async def handle_cerber_trade(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+
+        await state.clear()
+        await send_screen(message, MENU_TEXT.CERBER_TRADE_TITLE, build_cerber_trade_menu(), callback=callback)
+        await callback.answer()
 
     @router.callback_query(F.data == FAQ_ACTION)
     async def handle_faq(callback: CallbackQuery, state: FSMContext) -> None:

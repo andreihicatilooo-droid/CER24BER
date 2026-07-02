@@ -39,6 +39,7 @@ class MAIN_MENU_TEXT:
     SEARCH = "🔍 Поиск"
     WALLET = "💳 Кошелёк"
     DEALS = "🤝Гарант"
+    CERBER_TRADE = "🏦 CERBER TRADE"
     ORDERS = "📦 Мои заказы"
     PROFILE = "👤 Профиль"
     HOME = "🏠 Главное меню"
@@ -222,6 +223,11 @@ class MENU_TEXT:
     REFRESH_REPORT_PRODUCTS = "Товаров в витрине: {count}"
     REFRESH_REPORT_HINT = "Откройте магазин, чтобы увидеть свежие остатки и цены."
     MAIN_MENU_TITLE = "<b>Главное меню CERBER</b>"
+    CERBER_TRADE_TITLE = (
+        "<b>🏦 CERBER TRADE</b>\n\n"
+        "Бот-гарант для сделок между покупателем и продавцом: пополнение баланса, "
+        "безопасное удержание средств на время сделки и заявки на вывод USDT."
+    )
 
     @classmethod
     def support_contact(cls, support_url: str) -> str:
