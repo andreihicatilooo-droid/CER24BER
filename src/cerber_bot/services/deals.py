@@ -12,8 +12,9 @@ from decimal import Decimal
 from aiogram.types import User as TelegramUserObject
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from cerber_bot.db.models import EscrowDeal, EscrowDealMessage, TelegramUser, WithdrawalRequest, utcnow
+from cerber_bot.db.models import DealOffer, EscrowDeal, EscrowDealMessage, TelegramUser, WithdrawalRequest, utcnow
 from cerber_bot.db.repositories.deals import EscrowDealMessageRepository, EscrowDealRepository, WithdrawalRequestRepository
+from cerber_bot.db.repositories.offers import DealOfferRepository
 from cerber_bot.db.repositories.users import UserRepository
 from cerber_bot.db.repositories.wallet import WalletTransactionRepository
 from cerber_bot.services.exchange import ExchangeRateError, ExchangeRateService, WalletQuote
@@ -24,7 +25,13 @@ from cerber_bot.services.wallet_read import WalletReadService
 from cerber_bot.texts import DEAL_SERVICE_TEXT
 
 
-PENDING_DEAL_STATUSES = {"pending_acceptance", "active", "disputed"}
+PENDING_DEAL_STATUSES = {"pending_acceptance", "active", "delivered", "disputed"}
+
+# Статусы, в которых доступен чат и действия сторон
+LIVE_DEAL_STATUSES = {"active", "delivered", "disputed"}
+
+# Сколько часов у покупателя после выдачи товара на закрытие/диспут, потом автозакрытие в пользу продавца
+DELIVERY_AUTO_RELEASE_HOURS = 24
 
 
 class DealServiceError(RuntimeError):
@@ -89,6 +96,7 @@ class DealView:
     completed_at: object | None
     disputed_at: object | None
     closed_at: object | None
+    delivered_at: object | None
     messages: tuple[DealMessageView, ...]
     can_accept: bool
     can_decline: bool
@@ -97,6 +105,7 @@ class DealView:
     can_confirm_success: bool
     can_open_dispute: bool
     can_call_moderator: bool
+    can_mark_delivered: bool
 
 
 @dataclass(slots=True, frozen=True)
@@ -188,6 +197,27 @@ class DealModerationResult:
 class WithdrawalActionResult:
     request: WithdrawalRequestView
     owner_telegram_id: int
+
+
+@dataclass(slots=True, frozen=True)
+class DealOfferView:
+    offer_uuid: str
+    author_telegram_id: int
+    author_display: str
+    author_role: str
+    amount: Decimal
+    currency: str
+    terms: str
+    is_template: bool
+
+
+@dataclass(slots=True, frozen=True)
+class OfferAcceptResult:
+    deal: DealView
+    buyer_telegram_id: int
+    seller_telegram_id: int
+    author_telegram_id: int
+    acceptor_telegram_id: int
 
 
 class DealService:
@@ -389,15 +419,63 @@ class DealService:
             deal = await deal_repository.get_for_user(deal_id, telegram_id)
             if deal is None:
                 raise DealServiceError(DEAL_SERVICE_TEXT.DEAL_NOT_FOUND)
-            if deal.seller_telegram_id != telegram_id:
+            pending_actor = deal.pending_actor or "seller"
+            expected_acceptor_id = (
+                deal.buyer_telegram_id if pending_actor == "buyer" else deal.seller_telegram_id
+            )
+            if expected_acceptor_id != telegram_id:
                 raise DealPermissionError(DEAL_SERVICE_TEXT.ACCEPT_ONLY_SECOND_PARTY)
             if deal.status != "pending_acceptance":
                 raise DealStateError(DEAL_SERVICE_TEXT.DEAL_CANNOT_ACCEPT)
 
-            seller = await user_repository.get_by_telegram_id(telegram_id)
-            if seller is None:
+            acceptor = await user_repository.get_by_telegram_id(telegram_id, with_lock=True)
+            if acceptor is None:
                 raise DealServiceError(DEAL_SERVICE_TEXT.SELLER_NOT_FOUND)
-            self._ensure_wallet_currency(seller, deal.currency)
+            self._ensure_wallet_currency(acceptor, deal.currency)
+
+            amount = Decimal(str(deal.amount))
+            if pending_actor == "buyer" and not deal.funds_held:
+                # Витринная сделка: покупатель подтверждает условия — блокируем его средства
+                if self.is_core_first_billing:
+                    assert self.ledger_service is not None
+                    amount_usdt = await self._to_usdt(amount, deal.currency)
+                    try:
+                        await self.ledger_service.ensure_user(acceptor.telegram_id)
+                        await self.ledger_service.hold(
+                            acceptor.telegram_id,
+                            amount_usdt=amount_usdt,
+                            description=DEAL_SERVICE_TEXT.deal_hold_description(deal.id),
+                            operation_id=f"deal:{deal.id}:hold",
+                        )
+                    except LedgerInsufficientFundsError as error:
+                        await session.rollback()
+                        snapshot = await self.ledger_service.get_balance(acceptor.telegram_id)
+                        available = await self.exchange_rate_service.convert(
+                            snapshot.available_usdt,
+                            "USDT",
+                            deal.currency,
+                        )
+                        raise DealServiceError(
+                            DEAL_SERVICE_TEXT.hold_insufficient_funds(format_money(available, deal.currency))
+                        ) from error
+                else:
+                    if Decimal(str(acceptor.balance)) < amount:
+                        raise DealServiceError(
+                            DEAL_SERVICE_TEXT.hold_insufficient_funds(
+                                format_money(Decimal(str(acceptor.balance)), deal.currency)
+                            )
+                        )
+                    acceptor.balance -= amount
+                    acceptor.held_balance += amount
+                    await WalletTransactionRepository(session).add(
+                        telegram_id=acceptor.telegram_id,
+                        transaction_type="deal_hold",
+                        amount=-amount,
+                        currency=deal.currency,
+                        description=DEAL_SERVICE_TEXT.deal_hold_description(deal.id),
+                        reference=f"deal:{deal.id}",
+                    )
+                deal.funds_held = True
 
             now = utcnow()
             deal.status = "active"
@@ -411,9 +489,12 @@ class DealService:
                 body=DEAL_SERVICE_TEXT.DEAL_ACCEPTED_MESSAGE,
             )
             await session.commit()
+            counterparty_id = (
+                deal.seller_telegram_id if telegram_id == deal.buyer_telegram_id else deal.buyer_telegram_id
+            )
             return DealActionResult(
                 deal=await self._build_deal_view(session, deal, telegram_id),
-                counterparty_id=deal.buyer_telegram_id,
+                counterparty_id=counterparty_id,
             )
 
     async def decline_deal(self, telegram_id: int, deal_id: int) -> DealActionResult:
@@ -437,29 +518,33 @@ class DealService:
 
             amount = Decimal(str(deal.amount))
 
-            if self.is_core_first_billing:
-                assert self.ledger_service is not None
-                amount_usdt = await self._to_usdt(amount, deal.currency)
-                await self.ledger_service.unblock(
-                    buyer.telegram_id,
-                    amount_usdt=amount_usdt,
-                    description=DEAL_SERVICE_TEXT.deal_hold_return_description(deal.id),
-                    operation_id=f"deal:{deal.id}:unblock",
-                )
-            else:
-                if Decimal(str(buyer.held_balance)) < amount:
-                    raise DealStateError(DEAL_SERVICE_TEXT.DEAL_HELD_UNAVAILABLE)
+            # Возврат средств только если они были заблокированы
+            # (для витринных приглашений блокировка происходит при подтверждении покупателем)
+            if deal.funds_held:
+                if self.is_core_first_billing:
+                    assert self.ledger_service is not None
+                    amount_usdt = await self._to_usdt(amount, deal.currency)
+                    await self.ledger_service.unblock(
+                        buyer.telegram_id,
+                        amount_usdt=amount_usdt,
+                        description=DEAL_SERVICE_TEXT.deal_hold_return_description(deal.id),
+                        operation_id=f"deal:{deal.id}:unblock",
+                    )
+                else:
+                    if Decimal(str(buyer.held_balance)) < amount:
+                        raise DealStateError(DEAL_SERVICE_TEXT.DEAL_HELD_UNAVAILABLE)
 
-                buyer.held_balance -= amount
-                buyer.balance += amount
-                await wallet_repository.add(
-                    telegram_id=buyer.telegram_id,
-                    transaction_type="deal_release",
-                    amount=amount,
-                    currency=deal.currency,
-                    description=DEAL_SERVICE_TEXT.deal_hold_return_description(deal.id),
-                    reference=f"deal:{deal.id}",
-                )
+                    buyer.held_balance -= amount
+                    buyer.balance += amount
+                    await wallet_repository.add(
+                        telegram_id=buyer.telegram_id,
+                        transaction_type="deal_release",
+                        amount=amount,
+                        currency=deal.currency,
+                        description=DEAL_SERVICE_TEXT.deal_hold_return_description(deal.id),
+                        reference=f"deal:{deal.id}",
+                    )
+                deal.funds_held = False
 
             now = utcnow()
             canceled_by_buyer = telegram_id == deal.buyer_telegram_id
@@ -489,7 +574,7 @@ class DealService:
             deal = await deal_repository.get_for_user(deal_id, telegram_id)
             if deal is None:
                 raise DealServiceError(DEAL_SERVICE_TEXT.DEAL_NOT_FOUND)
-            if deal.status not in {"active", "disputed"}:
+            if deal.status not in LIVE_DEAL_STATUSES:
                 raise DealStateError(DEAL_SERVICE_TEXT.MODERATOR_ONLY_ACTIVE_OR_DISPUTE)
 
             deal.moderator_requested_at = utcnow()
@@ -515,7 +600,7 @@ class DealService:
             deal = await deal_repository.get_for_user(deal_id, telegram_id)
             if deal is None:
                 raise DealServiceError(DEAL_SERVICE_TEXT.DEAL_NOT_FOUND)
-            if deal.status != "active":
+            if deal.status not in {"active", "delivered"}:
                 raise DealStateError(DEAL_SERVICE_TEXT.DISPUTE_ONLY_ACTIVE)
 
             now = utcnow()
@@ -548,7 +633,7 @@ class DealService:
                 raise DealServiceError(DEAL_SERVICE_TEXT.DEAL_NOT_FOUND)
             if deal.buyer_telegram_id != telegram_id:
                 raise DealPermissionError(DEAL_SERVICE_TEXT.CONFIRM_ONLY_BUYER)
-            if deal.status not in {"active", "disputed"}:
+            if deal.status not in {"active", "delivered", "disputed"}:
                 raise DealStateError(DEAL_SERVICE_TEXT.DEAL_CANNOT_CONFIRM)
 
             buyer = await user_repository.get_by_telegram_id(deal.buyer_telegram_id, with_lock=True)
@@ -607,6 +692,109 @@ class DealService:
                 deal=await self._build_deal_view(session, deal, telegram_id),
                 counterparty_id=deal.seller_telegram_id,
             )
+
+    async def mark_delivered(self, telegram_id: int, deal_id: int) -> DealActionResult:
+        """Продавец отмечает, что товар выдан. Запускает 24-часовое окно покупателя."""
+        async with self.session_factory() as session:
+            deal_repository = EscrowDealRepository(session)
+            message_repository = EscrowDealMessageRepository(session)
+
+            deal = await deal_repository.get_for_user(deal_id, telegram_id)
+            if deal is None:
+                raise DealServiceError(DEAL_SERVICE_TEXT.DEAL_NOT_FOUND)
+            if deal.seller_telegram_id != telegram_id:
+                raise DealPermissionError(DEAL_SERVICE_TEXT.DELIVER_ONLY_SELLER)
+            if deal.status != "active":
+                raise DealStateError(DEAL_SERVICE_TEXT.DELIVER_ONLY_ACTIVE)
+
+            now = utcnow()
+            deal.status = "delivered"
+            deal.delivered_at = now
+            deal.updated_at = now
+            await message_repository.add(
+                deal_id=deal.id,
+                sender_telegram_id=0,
+                sender_role="system",
+                content_type="system",
+                body=DEAL_SERVICE_TEXT.DEAL_DELIVERED_MESSAGE,
+            )
+            await session.commit()
+            return DealActionResult(
+                deal=await self._build_deal_view(session, deal, telegram_id),
+                counterparty_id=deal.buyer_telegram_id,
+            )
+
+    async def auto_release_delivered(self) -> list[DealModerationResult]:
+        """Автозакрытие сделок: товар выдан более 24 часов назад — средства уходят продавцу."""
+        from datetime import timedelta
+
+        threshold = utcnow() - timedelta(hours=DELIVERY_AUTO_RELEASE_HOURS)
+        results: list[DealModerationResult] = []
+        async with self.session_factory() as session:
+            user_repository = UserRepository(session)
+            deal_repository = EscrowDealRepository(session)
+            message_repository = EscrowDealMessageRepository(session)
+            wallet_repository = WalletTransactionRepository(session)
+
+            deals = await deal_repository.list_delivered_before(threshold)
+            for deal in deals:
+                buyer = await user_repository.get_by_telegram_id(deal.buyer_telegram_id, with_lock=True)
+                seller = await user_repository.get_by_telegram_id(deal.seller_telegram_id, with_lock=True)
+                if buyer is None or seller is None:
+                    continue
+
+                amount = Decimal(str(deal.amount))
+                if self.is_core_first_billing:
+                    assert self.ledger_service is not None
+                    amount_usdt = await self._to_usdt(amount, deal.currency)
+                    await self.ledger_service.ensure_user(seller.telegram_id)
+                    await self.ledger_service.credit_usdt(
+                        seller.telegram_id,
+                        amount_usdt=amount_usdt,
+                        tx_type="transfer",
+                        description=DEAL_SERVICE_TEXT.deal_credit_description(deal.id),
+                        operation_id=f"deal:{deal.id}:release",
+                    )
+                else:
+                    if Decimal(str(buyer.held_balance)) < amount:
+                        continue
+
+                    buyer.held_balance -= amount
+                    seller.balance += amount
+                    seller.balance_currency = deal.currency
+                    await wallet_repository.add(
+                        telegram_id=seller.telegram_id,
+                        transaction_type="deal_release",
+                        amount=amount,
+                        currency=deal.currency,
+                        description=DEAL_SERVICE_TEXT.deal_credit_description(deal.id),
+                        reference=f"deal:{deal.id}",
+                    )
+
+                now = utcnow()
+                deal.status = "completed"
+                deal.completed_at = now
+                deal.closed_at = now
+                deal.updated_at = now
+                deal.resolution = "auto_release_after_delivery"
+                await message_repository.add(
+                    deal_id=deal.id,
+                    sender_telegram_id=0,
+                    sender_role="system",
+                    content_type="system",
+                    body=DEAL_SERVICE_TEXT.DEAL_AUTO_RELEASED_MESSAGE,
+                )
+                results.append(
+                    DealModerationResult(
+                        deal_id=deal.id,
+                        buyer_telegram_id=deal.buyer_telegram_id,
+                        seller_telegram_id=deal.seller_telegram_id,
+                        status=deal.status,
+                        resolution=deal.resolution,
+                    )
+                )
+            await session.commit()
+        return results
 
     async def resolve_dispute(self, moderator_id: int, deal_id: int, resolution: str) -> DealModerationResult:
         if moderator_id not in self.moderator_ids:
@@ -737,7 +925,7 @@ class DealService:
             deal = await deal_repository.get_for_user(deal_id, telegram_id)
             if deal is None:
                 raise DealServiceError(DEAL_SERVICE_TEXT.DEAL_NOT_FOUND)
-            if deal.status not in {"active", "disputed"}:
+            if deal.status not in LIVE_DEAL_STATUSES:
                 raise DealStateError(DEAL_SERVICE_TEXT.CHAT_ONLY_ACTIVE_OR_DISPUTE)
 
             sender = await user_repository.get_by_telegram_id(telegram_id)
@@ -1079,14 +1267,20 @@ class DealService:
             completed_at=deal.completed_at,
             disputed_at=deal.disputed_at,
             closed_at=deal.closed_at,
+            delivered_at=deal.delivered_at,
             messages=tuple(self._to_message_view(item, users) for item in messages),
-            can_accept=viewer_role == "seller" and deal.status == "pending_acceptance",
+            can_accept=(
+                deal.status == "pending_acceptance"
+                and viewer_role is not None
+                and viewer_role == (deal.pending_actor or "seller")
+            ),
             can_decline=viewer_role in {"buyer", "seller"} and deal.status == "pending_acceptance",
             can_cancel=viewer_role == "buyer" and deal.status == "pending_acceptance",
-            can_send_message=viewer_role in {"buyer", "seller"} and deal.status in {"active", "disputed"},
-            can_confirm_success=viewer_role == "buyer" and deal.status in {"active", "disputed"},
-            can_open_dispute=viewer_role in {"buyer", "seller"} and deal.status == "active",
-            can_call_moderator=viewer_role in {"buyer", "seller"} and deal.status in {"active", "disputed"},
+            can_send_message=viewer_role in {"buyer", "seller"} and deal.status in LIVE_DEAL_STATUSES,
+            can_confirm_success=viewer_role == "buyer" and deal.status in {"active", "delivered", "disputed"},
+            can_open_dispute=viewer_role in {"buyer", "seller"} and deal.status in {"active", "delivered"},
+            can_call_moderator=viewer_role in {"buyer", "seller"} and deal.status in LIVE_DEAL_STATUSES,
+            can_mark_delivered=viewer_role == "seller" and deal.status == "active",
         )
 
     async def _to_withdrawal_view(self, request: WithdrawalRequest) -> WithdrawalRequestView:
@@ -1213,6 +1407,211 @@ class DealService:
         role = self._viewer_role(deal, viewer_id)
         return deal.seller_telegram_id if role == "buyer" else deal.buyer_telegram_id
 
+    async def get_public_stats(self, telegram_id: int) -> tuple[int, int, int, Decimal]:
+        """Публичная статистика пользователя: (всего сделок, завершено, диспутов, оборот)."""
+        async with self.session_factory() as session:
+            deal_repository = EscrowDealRepository(session)
+            return (
+                await deal_repository.count_for_user(telegram_id),
+                await deal_repository.count_completed_for_user(telegram_id),
+                await deal_repository.count_disputed_for_user(telegram_id),
+                await deal_repository.sum_completed_for_user(telegram_id),
+            )
+
+    # ── Инлайн-предложения сделок (посты-шаблоны) ──────────────
+
+    async def save_offer(
+        self,
+        telegram_user: TelegramUserObject,
+        *,
+        offer_uuid: str,
+        author_role: str,
+        amount: Decimal,
+        terms: str,
+        is_template: bool,
+    ) -> DealOfferView:
+        normalized_amount = normalize_money_amount(amount)
+        if normalized_amount <= Decimal("0.00"):
+            raise DealServiceError(DEAL_SERVICE_TEXT.DEAL_AMOUNT_POSITIVE)
+        normalized_terms = terms.strip()
+        if len(normalized_terms) < 10:
+            raise DealServiceError(DEAL_SERVICE_TEXT.DEAL_TERMS_TOO_SHORT)
+        normalized_role = author_role if author_role in {"buyer", "seller"} else "buyer"
+
+        async with self.session_factory() as session:
+            user_repository = UserRepository(session)
+            offer_repository = DealOfferRepository(session)
+            author, _ = await user_repository.get_or_create(
+                telegram_id=telegram_user.id,
+                username=telegram_user.username,
+                first_name=telegram_user.first_name,
+                last_name=telegram_user.last_name,
+                language_code=telegram_user.language_code,
+                is_bot=telegram_user.is_bot,
+                balance_currency=self.wallet_currency,
+            )
+            offer = await offer_repository.upsert(
+                uuid=offer_uuid,
+                author_telegram_id=author.telegram_id,
+                author_role=normalized_role,
+                amount=normalized_amount,
+                currency=author.balance_currency or self.wallet_currency,
+                terms=normalized_terms,
+                is_template=is_template,
+            )
+            await session.commit()
+            return self._to_offer_view(offer, author)
+
+    async def get_offer_view(self, offer_uuid: str) -> DealOfferView | None:
+        async with self.session_factory() as session:
+            offer_repository = DealOfferRepository(session)
+            user_repository = UserRepository(session)
+            offer = await offer_repository.get_by_uuid(offer_uuid)
+            if offer is None or offer.status != "open":
+                return None
+            author = await user_repository.get_by_telegram_id(offer.author_telegram_id)
+            return self._to_offer_view(offer, author)
+
+    async def list_template_offers(self, telegram_id: int, *, limit: int = 10) -> tuple[DealOfferView, ...]:
+        async with self.session_factory() as session:
+            offer_repository = DealOfferRepository(session)
+            user_repository = UserRepository(session)
+            offers = await offer_repository.list_templates_for_author(telegram_id, limit=limit)
+            author = await user_repository.get_by_telegram_id(telegram_id)
+            return tuple(self._to_offer_view(offer, author) for offer in offers)
+
+    async def accept_deal_offer(self, offer_uuid: str, acceptor: TelegramUserObject) -> OfferAcceptResult:
+        """Создаёт приглашение в сделку по инлайн-посту (витрине).
+
+        Сделка создаётся в статусе pending_acceptance: нажавший кнопку должен
+        подтвердить условия в боте. Если автор поста — покупатель, его средства
+        блокируются сразу; если покупатель — нажавший, блокировка происходит
+        при его подтверждении условий (accept_deal).
+        """
+        async with self.session_factory() as session:
+            user_repository = UserRepository(session)
+            offer_repository = DealOfferRepository(session)
+            deal_repository = EscrowDealRepository(session)
+            message_repository = EscrowDealMessageRepository(session)
+            wallet_repository = WalletTransactionRepository(session)
+
+            offer = await offer_repository.get_by_uuid(offer_uuid)
+            if offer is None or offer.status != "open":
+                raise DealServiceError(DEAL_SERVICE_TEXT.OFFER_NOT_FOUND)
+            if offer.author_telegram_id == acceptor.id:
+                raise DealServiceError(DEAL_SERVICE_TEXT.DEAL_WITH_SELF)
+
+            author = await user_repository.get_by_telegram_id(offer.author_telegram_id)
+            if author is None:
+                raise DealServiceError(DEAL_SERVICE_TEXT.PARTNER_NOT_FOUND)
+            acceptor_user, _ = await user_repository.get_or_create(
+                telegram_id=acceptor.id,
+                username=acceptor.username,
+                first_name=acceptor.first_name,
+                last_name=acceptor.last_name,
+                language_code=acceptor.language_code,
+                is_bot=acceptor.is_bot,
+                balance_currency=self.wallet_currency,
+            )
+
+            amount = normalize_money_amount(Decimal(str(offer.amount)))
+            now = utcnow()
+            if offer.author_role == "seller":
+                # Витрина продавца: нажавший — покупатель, подтверждает условия и блокирует средства позже
+                buyer_id, seller_id = acceptor_user.telegram_id, author.telegram_id
+                pending_actor = "buyer"
+                funds_held = False
+                currency = acceptor_user.balance_currency or self.wallet_currency
+            else:
+                # Автор — покупатель: блокируем его средства сразу, нажавший (продавец) подтверждает
+                buyer = await user_repository.get_by_telegram_id(author.telegram_id, with_lock=True)
+                currency = buyer.balance_currency or self.wallet_currency
+                self._ensure_wallet_currency(buyer, currency)
+                if not self.is_core_first_billing:
+                    if Decimal(str(buyer.balance)) < amount:
+                        raise DealServiceError(
+                            DEAL_SERVICE_TEXT.hold_insufficient_funds(format_money(Decimal(str(buyer.balance)), currency))
+                        )
+                    buyer.balance -= amount
+                    buyer.held_balance += amount
+                buyer_id, seller_id = author.telegram_id, acceptor_user.telegram_id
+                pending_actor = "seller"
+                funds_held = True
+
+            deal = await deal_repository.create(
+                buyer_telegram_id=buyer_id,
+                seller_telegram_id=seller_id,
+                status="pending_acceptance",
+                amount=amount,
+                currency=currency,
+                terms=offer.terms,
+                pending_actor=pending_actor,
+                funds_held=funds_held,
+            )
+            if funds_held:
+                if self.is_core_first_billing:
+                    assert self.ledger_service is not None
+                    amount_usdt = await self._to_usdt(amount, currency)
+                    try:
+                        await self.ledger_service.ensure_user(buyer_id)
+                        await self.ledger_service.hold(
+                            buyer_id,
+                            amount_usdt=amount_usdt,
+                            description=DEAL_SERVICE_TEXT.deal_hold_description(deal.id),
+                            operation_id=f"deal:{deal.id}:hold",
+                        )
+                    except LedgerInsufficientFundsError as error:
+                        await session.rollback()
+                        snapshot = await self.ledger_service.get_balance(buyer_id)
+                        available = await self.exchange_rate_service.convert(
+                            snapshot.available_usdt,
+                            "USDT",
+                            currency,
+                        )
+                        raise DealServiceError(
+                            DEAL_SERVICE_TEXT.hold_insufficient_funds(format_money(available, currency))
+                        ) from error
+                else:
+                    await wallet_repository.add(
+                        telegram_id=buyer_id,
+                        transaction_type="deal_hold",
+                        amount=-amount,
+                        currency=currency,
+                        description=DEAL_SERVICE_TEXT.deal_hold_description(deal.id),
+                        reference=f"deal:{deal.id}",
+                    )
+            await message_repository.add(
+                deal_id=deal.id,
+                sender_telegram_id=0,
+                sender_role="system",
+                content_type="system",
+                body=DEAL_SERVICE_TEXT.OFFER_ACCEPTED_MESSAGE,
+            )
+            if not offer.is_template:
+                offer.status = "accepted"
+                offer.updated_at = now
+            await session.commit()
+
+            return OfferAcceptResult(
+                deal=await self._build_deal_view(session, deal, acceptor.id),
+                buyer_telegram_id=buyer_id,
+                seller_telegram_id=seller_id,
+                author_telegram_id=offer.author_telegram_id,
+                acceptor_telegram_id=acceptor.id,
+            )
+
+    def _to_offer_view(self, offer: DealOffer, author: TelegramUser | None) -> DealOfferView:
+        return DealOfferView(
+            offer_uuid=offer.uuid,
+            author_telegram_id=offer.author_telegram_id,
+            author_display=self._display_name(author, telegram_id=offer.author_telegram_id),
+            author_role=offer.author_role,
+            amount=Decimal(str(offer.amount)),
+            currency=offer.currency,
+            terms=offer.terms,
+            is_template=offer.is_template,
+        )
+
     # ── Методы для админ-бота ──────────────────────────────────
 
     async def get_admin_summary(self) -> tuple[int, int]:
@@ -1276,7 +1675,7 @@ class DealService:
             deal = await deal_repo.get_by_id(deal_id)
             if deal is None:
                 raise DealServiceError(DEAL_SERVICE_TEXT.DEAL_NOT_FOUND)
-            if deal.status not in {"active", "disputed"}:
+            if deal.status not in LIVE_DEAL_STATUSES:
                 raise DealStateError(DEAL_SERVICE_TEXT.CHAT_ONLY_ACTIVE_OR_DISPUTE)
 
             await message_repo.add(

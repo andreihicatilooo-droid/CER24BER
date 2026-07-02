@@ -21,6 +21,9 @@ from cerber_bot.integrations.nicepay import NicePayClient
 from cerber_bot.integrations.rukassa import RukassaClient
 from cerber_bot.services.deals import DealService
 from cerber_bot.services.admin_events import AdminEventService
+from cerber_bot.services.admin_group import AdminGroupService
+from cerber_bot.services.referrals import ReferralService
+from cerber_bot.services.reputation import ReputationService
 from cerber_bot.services.exchange import ExchangeRateService
 from cerber_bot.services.giftapi import GiftApiService
 from cerber_bot.services.ledger import LedgerService
@@ -52,6 +55,9 @@ class AppContainer:
     store_service: StoreService
     nbox_service: NboxService
     user_service: UserService
+    reputation_service: ReputationService
+    referral_service: ReferralService
+    admin_group_service: AdminGroupService
 
     @classmethod
     async def build(cls, settings: Settings | None = None) -> "AppContainer":
@@ -205,6 +211,12 @@ class AppContainer:
             store_service=store_service,
             nbox_service=NboxService(),
             user_service=user_service,
+            reputation_service=ReputationService(session_factory),
+            referral_service=ReferralService(
+                session_factory,
+                bot_username=resolved_settings.bot_username,
+            ),
+            admin_group_service=AdminGroupService(session_factory),
         )
 
     def build_user_service(self) -> UserService:

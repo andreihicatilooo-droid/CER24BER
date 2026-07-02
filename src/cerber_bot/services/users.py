@@ -70,6 +70,30 @@ class UserService:
             repository = UserRepository(session)
             return await repository.get_by_telegram_id(telegram_id)
 
+    async def change_display_name(self, telegram_id: int, new_name: str) -> TelegramUser:
+        """Сменить отображаемое имя аккаунта. Разрешено только один раз.
+
+        При регистрации имя берётся из Telegram; после смены фиксируется
+        name_changed_at и повторная смена запрещена.
+        """
+        normalized = " ".join(new_name.split())
+        if len(normalized) < 2 or len(normalized) > 32:
+            raise ValueError("Имя должно быть от 2 до 32 символов.")
+
+        async with self.session_factory() as session:
+            repository = UserRepository(session)
+            user = await repository.get_by_telegram_id(telegram_id)
+            if user is None:
+                raise ValueError("Пользователь не найден. Отправьте /start.")
+            if user.name_changed_at is not None:
+                raise ValueError("Имя уже было изменено ранее — сменить его можно только один раз.")
+
+            user.display_name = normalized
+            user.name_changed_at = utcnow()
+            user.updated_at = user.name_changed_at
+            await session.commit()
+            return user
+
     async def find_user(self, identifier: str) -> TelegramUser | None:
         """Найти пользователя по Telegram ID или @username."""
         async with self.session_factory() as session:

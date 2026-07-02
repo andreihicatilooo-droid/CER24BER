@@ -30,6 +30,10 @@ class TelegramUser(Base):
     nickname_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     language_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     is_bot: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Кастомное имя аккаунта: задаётся при регистрации из Telegram, менять можно один раз
+    display_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    name_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    referrer_telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
     # Legacy local wallet (BILLING_MODE=local). Core-first: источник истины — Cerber Core.
     balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"), nullable=False)
     held_balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"), nullable=False)
@@ -79,6 +83,14 @@ class EscrowDeal(Base):
     terms: Mapped[str] = mapped_column(Text, nullable=False)
     resolution: Mapped[str | None] = mapped_column(String(64), nullable=True)
     resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Тема (forum topic) в админ-группе, где решается диспут по сделке
+    dispute_topic_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Кто должен подтвердить сделку в статусе pending_acceptance: buyer | seller
+    pending_actor: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # Заблокированы ли средства покупателя (для витринных сделок блокировка происходит при подтверждении покупателем)
+    funds_held: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Момент выдачи товара продавцом; через 24 часа сделка автоматически закрывается в пользу продавца
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     moderator_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -103,6 +115,62 @@ class EscrowDealMessage(Base):
     content_type: Mapped[str] = mapped_column(String(32), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class DealOffer(Base):
+    """Шаблон-предложение сделки для инлайн-постов в чатах.
+
+    Автор создаёт шаблон (роль, сумма, условия) и отправляет пост с кнопкой
+    через inline-режим в любой чат. Нажатие кнопки создаёт гарант-сделку.
+    """
+
+    __tablename__ = "deal_offers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    uuid: Mapped[str] = mapped_column(String(36), unique=True, index=True)
+    author_telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    author_role: Mapped[str] = mapped_column(String(8), default="buyer", nullable=False)  # buyer | seller
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False)
+    terms: Mapped[str] = mapped_column(Text, nullable=False)
+    is_template: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="open", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        nullable=False,
+    )
+
+
+class DealReview(Base):
+    """Отзыв участника о контрагенте после завершения гарант-сделки."""
+
+    __tablename__ = "deal_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    deal_id: Mapped[int] = mapped_column(Integer, index=True)
+    reviewer_telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    target_telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class BotSetting(Base):
+    """Key-value настройки бота, изменяемые в рантайме (например, админ-группа)."""
+
+    __tablename__ = "bot_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        nullable=False,
+    )
 
 
 class WalletPayment(Base):

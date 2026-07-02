@@ -39,6 +39,7 @@ class MAIN_MENU_TEXT:
     SEARCH = "🔍 Поиск"
     WALLET = "💳 Кошелёк"
     DEALS = "🤝Гарант"
+    CERBER_TRADE = "🏦 CERBER TRADE"
     ORDERS = "📦 Мои заказы"
     PROFILE = "👤 Профиль"
     REPUTATION = "⭐ Репутация"
@@ -48,6 +49,7 @@ class MAIN_MENU_TEXT:
     WEB_APP = "🌐 Веб-магазин"
     FAQ = "❓ FAQ"
     TG_ACCOUNTS = "📱 Аккаунты TG"
+    WALLET_MINI_APP = "📲 Кошелёк (Mini App)"
 
 
 class GIFTAPI_MENU_TEXT:
@@ -137,6 +139,8 @@ class STORE_KEYBOARD_TEXT:
 
 class DEAL_KEYBOARD_TEXT:
     CREATE_DEAL = "Создать сделку"
+    LEAVE_REVIEW = "⭐ Оставить отзыв"
+    MARK_DELIVERED = "📦 Товар выдан"
     MY_DEALS = "Мои сделки"
     WITHDRAW_USDT = "Запрос вывода USDT"
     WALLET = "Кошелек"
@@ -164,6 +168,7 @@ class DEAL_KEYBOARD_TEXT:
     STATUS_LABELS = {
         "pending_acceptance": "ожидает принятия",
         "active": "активна",
+        "delivered": "товар выдан",
         "disputed": "диспут",
         "completed": "завершена",
         "declined": "отклонена",
@@ -744,6 +749,15 @@ class STORE_SERVICE_TEXT:
 class DEAL_SERVICE_TEXT:
     DEAL_AMOUNT_POSITIVE = "Сумма сделки должна быть больше нуля."
     DEAL_TERMS_TOO_SHORT = "Опишите полные условия сделки, минимум 10 символов."
+    OFFER_NOT_FOUND = "Предложение сделки не найдено или уже закрыто."
+    OFFER_ACCEPTED_MESSAGE = "Приглашение в сделку создано по посту из чата. Вторая сторона должна подтвердить условия."
+    DELIVER_ONLY_SELLER = "Отметить выдачу товара может только продавец."
+    DELIVER_ONLY_ACTIVE = "Выдать товар можно только в активной сделке."
+    DEAL_DELIVERED_MESSAGE = (
+        "Продавец отметил выдачу товара. У покупателя есть 24 часа, чтобы завершить сделку, "
+        "оставить отзыв или открыть диспут — иначе средства автоматически уйдут продавцу."
+    )
+    DEAL_AUTO_RELEASED_MESSAGE = "Сделка закрыта автоматически: 24 часа после выдачи товара истекли, средства переведены продавцу."
     PARTNER_NOT_FOUND = "Партнер не найден. Второй пользователь должен сначала запустить бота и быть зарегистрирован в базе."
     DEAL_WITH_SELF = "Нельзя создать сделку с самим собой."
     HOLD_INSUFFICIENT_FUNDS = "Недостаточно средств для блокировки. Доступно {available}."
@@ -887,6 +901,13 @@ class DEAL_HANDLER_TEXT:
     CALLBACK_ACCEPT_FAILED = "Не удалось принять"
     DEAL_ACCEPTED_NOTIFICATION = "Вторая сторона приняла сделку. Чат открыт, можно передавать данные или товар."
     CALLBACK_DEAL_ACCEPTED = "Сделка принята"
+    DEAL_DELIVERED_NOTIFICATION = (
+        "Продавец отметил выдачу товара. Проверьте его: в течение 24 часов вы можете завершить сделку, "
+        "оставить отзыв или открыть диспут. Без действий средства автоматически уйдут продавцу."
+    )
+    CALLBACK_DELIVERED = "Выдача товара отмечена"
+    CALLBACK_DELIVER_FAILED = "Не удалось отметить выдачу"
+    AUTO_RELEASE_NOTIFICATION = "Сделка #{deal_id} закрыта автоматически: 24 часа после выдачи товара истекли."
     CHAT_PROMPT = "Отправьте следующее сообщение, фото или файл. Бот перешлет его второй стороне и добавит в журнал сделки. Для отмены напишите 'отмена'."
     CALLBACK_WAIT_MESSAGE = "Жду сообщение"
     CHAT_CANCELED = "Отправка сообщения отменена."
@@ -1004,6 +1025,7 @@ class DEAL_HANDLER_TEXT:
     DEAL_STATUS_LABELS = {
         "pending_acceptance": "ожидает подтверждения",
         "active": "активна",
+        "delivered": "товар выдан — 24ч на закрытие",
         "disputed": "спор",
         "completed": "завершена",
         "declined": "отклонена",
@@ -1423,3 +1445,173 @@ class TG_ACCOUNTS_TEXT:
     def status_label(cls, status: str) -> str:
         normalized = (status or "").strip().upper()
         return cls.STATUS_LABELS.get(normalized, normalized or cls.UNKNOWN_STATUS)
+
+
+class REVIEW_TEXT:
+    RATING_OUT_OF_RANGE = "Оценка должна быть от 1 до 5."
+    DEAL_NOT_FOUND = "Сделка не найдена или вы не являетесь её участником."
+    DEAL_NOT_FINISHED = "Отзыв можно оставить только после завершения сделки."
+    ALREADY_REVIEWED = "Вы уже оставили отзыв по этой сделке."
+    LEAVE_REVIEW_BTN = "⭐ Оставить отзыв"
+    MY_REVIEWS_BTN = "⭐ Отзывы обо мне"
+    RATING_PROMPT = "Оцените контрагента по сделке #{deal_id}:"
+    COMMENT_PROMPT = "Напишите комментарий к отзыву или отправьте «пропустить», чтобы оставить отзыв без комментария."
+    SKIP_WORDS = ("пропустить", "skip", "-")
+    SAVED = "✅ Отзыв сохранен. Спасибо, что делаете CERBER TRADE безопаснее!"
+    REVIEW_NOTIFICATION_TITLE = "<b>⭐ Новый отзыв о вас</b>"
+    REVIEW_NOTIFICATION_ROW = "Сделка #{deal_id} | Оценка: {stars}"
+    REVIEWS_TITLE = "<b>⭐ Отзывы о пользователе</b>"
+    REVIEWS_SUMMARY = "Рейтинг: {stars} {average} | Отзывов: {count} (👍 {positive} / 👎 {negative})"
+    REVIEWS_EMPTY = "Отзывов пока нет."
+    REVIEW_ROW = "{stars} | {created_at} | {reviewer}"
+    REVIEW_COMMENT_ROW = "— {comment}"
+    CALLBACK_SAVED = "Отзыв сохранен"
+    CALLBACK_WAIT_RATING = "Выберите оценку"
+
+    @classmethod
+    def stars(cls, rating: int) -> str:
+        rating = max(1, min(5, rating))
+        return "★" * rating + "☆" * (5 - rating)
+
+
+class REFERRAL_TEXT:
+    BTN_INVITE = "👥 Пригласить друзей"
+    TITLE = "<b>👥 Приглашения</b>"
+    INVITED_COUNT = "Приглашено пользователей: {count}"
+    YOUR_LINK = "Ваша ссылка для приглашений:"
+    LINK_UNAVAILABLE = "Реферальная ссылка недоступна: не настроен BOT_USERNAME."
+    WELCOME_BY_REFERRAL = "\n\nВы пришли по приглашению — добро пожаловать!"
+    NEW_REFERRAL_NOTIFICATION = "👥 По вашей ссылке зарегистрировался новый пользователь!"
+
+
+class ACCOUNT_TEXT:
+    BTN_CHANGE_NAME = "✏️ Изменить имя"
+    NAME_PROMPT = (
+        "Отправьте новое имя аккаунта (2–32 символа).\n\n"
+        "⚠️ Имя задаётся из Telegram при регистрации, изменить его можно только ОДИН раз."
+    )
+    NAME_CHANGED = "✅ Имя изменено на: {name}\nПовторная смена имени недоступна."
+    NAME_ALREADY_CHANGED = "Имя уже было изменено ранее — сменить его можно только один раз."
+    PROFILE_DISPLAY_NAME = "Имя аккаунта: {name}"
+    PROFILE_NAME_CHANGE_AVAILABLE = "Смена имени: доступна (1 раз)"
+    PROFILE_NAME_CHANGE_USED = "Смена имени: использована"
+    PROFILE_REPUTATION = "Репутация: {stars} {average} ({count} отзывов)"
+    PROFILE_INVITED = "Приглашено: {count}"
+
+
+class ADMIN_GROUP_TEXT:
+    CONNECT_ONLY_MODERATOR = "Подключать админ-группу может только администратор/гарант бота."
+    CONNECT_ONLY_GROUP = "Эта команда работает только в группе. Добавьте бота в группу админов и отправьте команду там."
+    CONNECTED = (
+        "✅ Группа подключена как админ-группа CERBER TRADE.\n"
+        "Сюда будут приходить уведомления о диспутах и заявках на вывод."
+    )
+    CONNECTED_FORUM_HINT = "Темы (forum) включены: для каждого диспута будет создаваться отдельная ветка."
+    CONNECTED_NO_FORUM_HINT = (
+        "⚠️ В группе выключены темы (Topics). Включите их в настройках группы, "
+        "чтобы для каждого диспута создавалась отдельная ветка."
+    )
+    DISCONNECTED = "Админ-группа отключена."
+    DISPUTE_TOPIC_NAME = "Диспут #{deal_id}"
+    DISPUTE_TOPIC_OPENED = "<b>⚖️ Открыт диспут по сделке #{deal_id}</b>\nРешите спор кнопками ниже."
+    WITHDRAWAL_REQUEST_TITLE = "<b>💸 Новая заявка на вывод #{request_id}</b>"
+    DISPUTE_CHAT_RELAY = "💬 <b>{sender}</b> (сделка #{deal_id}):\n{body}"
+
+
+class MOD_MENU_TEXT:
+    NOT_ALLOWED = "Раздел доступен только администраторам и гарантам."
+    TITLE = "<b>🛡 Меню администратора / гаранта</b>"
+    SUMMARY = "Открытых диспутов: {disputes} | Заявок на вывод: {withdrawals}"
+    GROUP_CONNECTED = "Админ-группа: подключена (chat_id {chat_id})"
+    GROUP_NOT_CONNECTED = (
+        "Админ-группа: не подключена.\n"
+        "Добавьте бота в группу и отправьте там команду /connect_group."
+    )
+    BTN_DISPUTES = "⚖️ Диспуты"
+    BTN_WITHDRAWALS = "💸 Заявки на вывод"
+    BTN_STATS = "📊 Статистика"
+    BTN_REFRESH = "🔄 Обновить"
+    DISPUTES_TITLE = "<b>⚖️ Открытые диспуты</b>"
+    DISPUTES_EMPTY = "Открытых диспутов нет."
+    WITHDRAWALS_TITLE = "<b>💸 Заявки на вывод</b>"
+    WITHDRAWALS_EMPTY = "Ожидающих заявок на вывод нет."
+    WITHDRAWAL_ROW = "#{request_id} | {amount} | {network} | ID {telegram_id}"
+    STATS_TITLE = "<b>📊 Статистика пользователей</b>"
+    STATS_ROW = "Всего: {total} | 7 дней: {active_7d} | 24 часа: {active_24h}"
+    CALLBACK_OPENED = "Меню открыто"
+
+
+class OFFER_TEXT:
+    """Тексты инлайн-предложений сделок (посты-шаблоны в чатах)."""
+
+    ROLE_BUYER = "Покупаю (я плачу)"
+    ROLE_SELLER = "Продаю (платит контрагент)"
+    ROLE_LABELS = {"buyer": "покупатель", "seller": "продавец"}
+
+    BTN_CREATE_TEMPLATE = "📣 Пост сделки в чат"
+    TEMPLATE_ROLE_PROMPT = "Кем вы выступаете в сделке из поста?"
+    TEMPLATE_AMOUNT_PROMPT = "Введите сумму сделки (в валюте кошелька):"
+    TEMPLATE_TERMS_PROMPT = "Опишите условия сделки для поста (минимум 10 символов):"
+    TEMPLATE_SAVED_TITLE = "<b>📣 Шаблон поста сохранен</b>"
+    TEMPLATE_SAVED_HINT = (
+        "Нажмите кнопку ниже, выберите чат — пост с кнопкой будет отправлен от вашего имени.\n"
+        "Также можно набрать @{bot_username} в любом чате: пустой запрос покажет ваши шаблоны, "
+        "а «сумма условия…» создаст быстрое предложение."
+    )
+    TEMPLATE_SAVED_HINT_NO_USERNAME = "Отправьте пост в чат через инлайн-режим бота."
+    BTN_SEND_TO_CHAT = "📤 Отправить пост в чат"
+    BTN_ACCEPT = "🤝 Принять сделку через гаранта"
+    BTN_OPEN_BOT = "🛡 Открыть CERBER TRADE"
+
+    POST_TITLE = "<b>🏦 CERBER TRADE | Безопасная сделка</b>"
+    POST_AUTHOR = "Автор: {author} ({role})"
+    POST_AMOUNT = "Сумма: {amount}"
+    POST_TERMS_TITLE = "Условия:"
+    POST_FOOTER = "Средства блокируются гарантом до подтверждения выполнения условий."
+    POST_ACCEPTED_SUFFIX = "\n\n✅ Сделка #{deal_id} создана — продолжение в боте."
+
+    INLINE_TEMPLATE_TITLE = "📣 {amount} | {terms}"
+    INLINE_QUICK_BUYER_TITLE = "🤝 Покупаю за {amount}"
+    INLINE_QUICK_SELLER_TITLE = "🤝 Продаю за {amount}"
+    INLINE_HELP_TITLE = "ℹ️ Как создать предложение сделки"
+    INLINE_HELP_DESCRIPTION = "Наберите: сумма условия. Например: 50 продам аккаунт с гарантией"
+    INLINE_HELP_MESSAGE = (
+        "Чтобы отправить предложение сделки в чат, наберите @{bot_username} и далее:\n"
+        "<code>сумма условия сделки</code>\n\n"
+        "Например: <code>50 Продам аккаунт, передача через гаранта</code>\n"
+        "Пустой запрос показывает ваши сохраненные шаблоны постов."
+    )
+
+    ACCEPT_OK = "Приглашение в сделку создано! Откройте бота и подтвердите условия."
+    ACCEPT_FAILED = "Не удалось создать сделку: {error}"
+    DEAL_CREATED_NOTIFICATION = (
+        "<b>🤝 По вашему посту создано приглашение в сделку #{deal_id}</b>\n"
+        "Контрагент: {counterpart}\n"
+        "Сумма: {amount}\n"
+        "Сделка станет активной после подтверждения условий второй стороной."
+    )
+
+    SHOWCASE_TITLE = "<b>🛍 CERBER TRADE | Витрина продавца</b>"
+    SHOWCASE_AUTHOR = "Продавец: {author}"
+    SHOWCASE_PRODUCT_ROW = "{index}. {terms} — <b>{amount}</b>"
+    SHOWCASE_PRODUCT_BUTTON = "🛒 Товар {index} — {amount}"
+    SHOWCASE_INLINE_TITLE = "🛍 Витрина ({count} товаров)"
+    SHOWCASE_INLINE_DESCRIPTION = "Пост со всеми вашими товарами и кнопкой на каждый"
+
+
+class SEARCH_TEXT:
+    BTN_SEARCH = "🔍 Поиск по юзернейму"
+    PROMPT = "Отправьте @username или Telegram ID пользователя, чтобы посмотреть его профиль, репутацию и историю."
+    NOT_FOUND = "Пользователь не найден. Он должен хотя бы раз запустить бота."
+    TITLE = "<b>🔍 Профиль пользователя</b>"
+    ROW_NAME = "Имя: {name}"
+    ROW_USERNAME = "Username: {username}"
+    ROW_ID = "Telegram ID: {telegram_id}"
+    ROW_REGISTERED = "Зарегистрирован: {created_at}"
+    ROW_DEALS = "Сделок: {total} | Завершено: {completed} | Диспутов: {disputed}"
+    ROW_VOLUME = "Оборот: {volume}"
+    HISTORY_TITLE = "<b>История отзывов</b>"
+    SHOWCASE_TITLE = "<b>Витрина продавца</b>"
+    SHOWCASE_ROW = "• {terms} — {amount}"
+    SHOWCASE_EMPTY = "Товаров в витрине нет."
+    USERNAME_UNKNOWN = "не указан"

@@ -22,6 +22,7 @@ from cerber_bot.keyboards.deals import (
     DEAL_ACCEPT_PREFIX,
     DEAL_CANCEL_PREFIX,
     DEAL_DECLINE_PREFIX,
+    DEAL_DELIVERED_PREFIX,
     DEAL_DISPUTE_PREFIX,
     DEAL_HOME_ACTION,
     DEAL_LIST_ACTION,
@@ -45,10 +46,23 @@ from cerber_bot.keyboards.deals import (
     build_moderator_withdrawal_keyboard,
     build_withdrawal_network_keyboard,
 )
-from cerber_bot.keyboards.main_menu import MAIN_MENU_ACTION, PROFILE_ACTION, REFRESH_ACTION, SUPPORT_ACTION, FAQ_ACTION, FAQ_SECTION_PREFIX, build_faq_keyboard, build_faq_back_keyboard, build_main_menu
+from cerber_bot.keyboards.main_menu import (
+    CERBER_TRADE_ACTION,
+    MAIN_MENU_ACTION,
+    PROFILE_ACTION,
+    REFRESH_ACTION,
+    SUPPORT_ACTION,
+    FAQ_ACTION,
+    FAQ_SECTION_PREFIX,
+    build_cerber_trade_menu,
+    build_faq_keyboard,
+    build_faq_back_keyboard,
+    build_main_menu,
+    build_profile_keyboard,
+)
 from cerber_bot.services.deals import DealCard, DealDashboard, DealMessageRelayResult, DealModerationResult, DealServiceError, DealView, WithdrawalRequestView
 from cerber_bot.services.store import PageInfo, StoreServiceError, format_money
-from cerber_bot.texts import DEAL_HANDLER_TEXT, FAQ_TEXT, MENU_TEXT
+from cerber_bot.texts import ACCOUNT_TEXT, ADMIN_GROUP_TEXT, DEAL_HANDLER_TEXT, FAQ_TEXT, MENU_TEXT
 
 
 logger = logging.getLogger(__name__)
@@ -88,8 +102,11 @@ def build_menu_router(container: AppContainer) -> Router:
 
         wallet = await container.store_service.get_wallet_snapshot(callback.from_user.id)
         deals_dashboard = await container.deal_service.get_dashboard(callback.from_user.id)
+        reputation = await container.reputation_service.get_summary(callback.from_user.id)
+        referrals = await container.referral_service.get_stats(callback.from_user.id)
         await message.answer(
-            render_profile(profile, wallet, deals_dashboard),
+            render_profile(profile, wallet, deals_dashboard, reputation=reputation, referrals=referrals),
+            reply_markup=build_profile_keyboard(name_change_available=profile.name_changed_at is None),
         )
         await callback.answer(MENU_TEXT.PROFILE_OPENED)
 
@@ -120,6 +137,17 @@ def build_menu_router(container: AppContainer) -> Router:
         support_url = container.settings.support_url or MENU_TEXT.SUPPORT_CONTACT_MISSING
         await message.answer(MENU_TEXT.support_contact(escape(support_url)))
         await callback.answer(MENU_TEXT.CONTACTS_SENT)
+
+    @router.callback_query(F.data == CERBER_TRADE_ACTION)
+    async def handle_cerber_trade(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None:
+            await callback.answer()
+            return
+
+        await state.clear()
+        await send_screen(message, MENU_TEXT.CERBER_TRADE_TITLE, build_cerber_trade_menu(container.settings), callback=callback)
+        await callback.answer()
 
     @router.callback_query(F.data == FAQ_ACTION)
     async def handle_faq(callback: CallbackQuery, state: FSMContext) -> None:
@@ -177,17 +205,38 @@ async def answer_callback_safely(callback: CallbackQuery, text: str | None = Non
         logger.warning("Skipped expired callback answer for %s", callback.data)
 
 
-def render_profile(profile: TelegramUser, wallet, deals_dashboard) -> str:
+def render_profile(profile: TelegramUser, wallet, deals_dashboard, *, reputation=None, referrals=None) -> str:
     created_at = profile.created_at.astimezone(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
     last_seen = profile.last_seen_at.astimezone(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
     username = f"@{profile.username}" if profile.username else MENU_TEXT.PROFILE_USERNAME_UNKNOWN
     stats = deals_dashboard.statistics
+
+    account_lines: list[str] = []
+    display_name = profile.display_name or " ".join(part for part in (profile.first_name, profile.last_name) if part)
+    if display_name:
+        account_lines.append(ACCOUNT_TEXT.PROFILE_DISPLAY_NAME.format(name=escape(display_name)))
+    account_lines.append(
+        ACCOUNT_TEXT.PROFILE_NAME_CHANGE_USED
+        if profile.name_changed_at is not None
+        else ACCOUNT_TEXT.PROFILE_NAME_CHANGE_AVAILABLE
+    )
+    if reputation is not None:
+        account_lines.append(
+            ACCOUNT_TEXT.PROFILE_REPUTATION.format(
+                stars=reputation.stars,
+                average=f"{reputation.average_rating:.2f}",
+                count=reputation.review_count,
+            )
+        )
+    if referrals is not None:
+        account_lines.append(ACCOUNT_TEXT.PROFILE_INVITED.format(count=referrals.invited_count))
 
     return "\n".join(
         [
             MENU_TEXT.PROFILE_TITLE,
             MENU_TEXT.PROFILE_TELEGRAM_ID.format(telegram_id=profile.telegram_id),
             MENU_TEXT.PROFILE_USERNAME.format(username=escape(username)),
+            *account_lines,
             MENU_TEXT.PROFILE_FIRST_NAME.format(first_name=escape(profile.first_name or MENU_TEXT.PROFILE_FIRST_NAME_UNKNOWN)),
             MENU_TEXT.PROFILE_LAST_NAME.format(last_name=escape(profile.last_name or MENU_TEXT.PROFILE_LAST_NAME_UNKNOWN)),
             MENU_TEXT.PROFILE_LANGUAGE.format(language=escape(profile.language_code or MENU_TEXT.PROFILE_LANGUAGE_UNKNOWN)),
@@ -377,8 +426,12 @@ def build_deals_router(container: AppContainer) -> Router:
             await callback.answer(DEAL_HANDLER_TEXT.CALLBACK_DEAL_UNAVAILABLE)
             return
 
+        can_review = False
+        if deal.status in {"completed", "refunded"}:
+            can_review = not await container.reputation_service.has_review(callback.from_user.id, deal_id)
+
         await state.set_state(None)
-        await send_screen(message, render_deal_view(deal), build_deal_detail_keyboard(deal), callback=callback)
+        await send_screen(message, render_deal_view(deal), build_deal_detail_keyboard(deal, can_review=can_review), callback=callback)
         await callback.answer(DEAL_HANDLER_TEXT.CALLBACK_DEAL_OPENED)
 
     @router.callback_query(F.data.startswith(DEAL_ACCEPT_PREFIX))
@@ -488,6 +541,18 @@ def build_deals_router(container: AppContainer) -> Router:
             notification_text,
             reply_markup=build_deal_open_keyboard(deal_id),
         )
+        # В диспуте дублируем переписку в ветку админ-группы
+        if relay.deal.status == "disputed" and message.bot is not None:
+            topic_id = await container.admin_group_service.get_dispute_topic_id(deal_id)
+            await container.admin_group_service.send_to_group(
+                message.bot,
+                ADMIN_GROUP_TEXT.DISPUTE_CHAT_RELAY.format(
+                    sender=escape(relay.sender_display),
+                    deal_id=deal_id,
+                    body=escape(nbox_url or relay.preview),
+                ),
+                message_thread_id=topic_id,
+            )
         # Пересылаем вложение только если nbox не загрузил фото
         if nbox_url is None:
             try:
@@ -500,6 +565,32 @@ def build_deals_router(container: AppContainer) -> Router:
                     reply_markup=build_deal_open_keyboard(deal_id),
                 )
         await message.answer(render_deal_view(relay.deal), reply_markup=build_deal_detail_keyboard(relay.deal))
+
+    @router.callback_query(F.data.startswith(DEAL_DELIVERED_PREFIX))
+    async def handle_mark_delivered(callback: CallbackQuery, state: FSMContext) -> None:
+        message = extract_message(callback)
+        if message is None or callback.from_user is None:
+            await callback.answer()
+            return
+
+        deal_id = parse_int_suffix(callback.data or "", DEAL_DELIVERED_PREFIX)
+        try:
+            result = await container.deal_service.mark_delivered(callback.from_user.id, deal_id)
+        except DealServiceError as error:
+            await send_screen(message, render_deal_error(error), build_deal_home_keyboard(), callback=callback)
+            await callback.answer(DEAL_HANDLER_TEXT.CALLBACK_DELIVER_FAILED)
+            return
+
+        await state.set_state(None)
+        await send_screen(message, render_deal_view(result.deal), build_deal_detail_keyboard(result.deal), callback=callback)
+        if result.counterparty_id is not None:
+            await notify_user_safe(
+                callback.bot,
+                result.counterparty_id,
+                render_deal_status_notification(result.deal, DEAL_HANDLER_TEXT.DEAL_DELIVERED_NOTIFICATION),
+                reply_markup=build_deal_open_keyboard(result.deal.deal_id),
+            )
+        await callback.answer(DEAL_HANDLER_TEXT.CALLBACK_DELIVERED)
 
     @router.callback_query(F.data.startswith(DEAL_SUCCESS_PREFIX))
     async def handle_deal_success(callback: CallbackQuery, state: FSMContext) -> None:
@@ -517,7 +608,7 @@ def build_deals_router(container: AppContainer) -> Router:
             return
 
         await state.set_state(None)
-        await send_screen(message, render_deal_view(result.deal), build_deal_detail_keyboard(result.deal), callback=callback)
+        await send_screen(message, render_deal_view(result.deal), build_deal_detail_keyboard(result.deal, can_review=True), callback=callback)
         if result.counterparty_id is not None:
             await notify_user_safe(
                 callback.bot,
@@ -828,9 +919,29 @@ async def notify_user_safe(bot, telegram_id: int, text: str, reply_markup: Inlin
 
 
 async def notify_moderators_about_deal(bot, container: AppContainer, deal: DealView, *, reason: str) -> None:
+    text = render_moderator_deal_alert(deal, reason)
+
+    # Приоритет — привязанная админ-группа: диспут решается в отдельной ветке
+    if await container.admin_group_service.get_group_chat_id() is not None:
+        markup = build_moderator_deal_keyboard(deal.deal_id) if deal.status == "disputed" else None
+        topic_id: int | None = None
+        if deal.status == "disputed":
+            topic_id = await container.admin_group_service.ensure_dispute_topic(
+                bot,
+                deal_id=deal.deal_id,
+                topic_name=ADMIN_GROUP_TEXT.DISPUTE_TOPIC_NAME.format(deal_id=deal.deal_id),
+            )
+        sent = await container.admin_group_service.send_to_group(
+            bot,
+            text,
+            reply_markup=markup,
+            message_thread_id=topic_id,
+        )
+        if sent:
+            return
+
     if not container.deal_service.has_moderators:
         return
-    text = render_moderator_deal_alert(deal, reason)
     if container.settings.admin_bot_token:
         await container.admin_event_service.enqueue_deal_alert(
             text=text,
@@ -844,9 +955,20 @@ async def notify_moderators_about_deal(bot, container: AppContainer, deal: DealV
 
 
 async def notify_moderators_about_withdrawal(*, bot, container: AppContainer, request: WithdrawalRequestView) -> None:
+    text = render_moderator_withdrawal_alert(request)
+
+    # Приоритет — привязанная админ-группа: заявка с кнопками одобрения/отклонения
+    if await container.admin_group_service.get_group_chat_id() is not None:
+        sent = await container.admin_group_service.send_to_group(
+            bot,
+            text,
+            reply_markup=build_moderator_withdrawal_keyboard(request.request_id),
+        )
+        if sent:
+            return
+
     if not container.deal_service.has_moderators:
         return
-    text = render_moderator_withdrawal_alert(request)
     if container.settings.admin_bot_token:
         await container.admin_event_service.enqueue_withdrawal_alert(
             text=text,
@@ -859,6 +981,8 @@ async def notify_moderators_about_withdrawal(*, bot, container: AppContainer, re
 
 async def maybe_warn_about_missing_moderators(message: Message, container: AppContainer) -> None:
     if container.deal_service.has_moderators:
+        return
+    if await container.admin_group_service.get_group_chat_id() is not None:
         return
     support = container.settings.support_url or MENU_TEXT.SUPPORT_CONTACT_MISSING
     await message.answer(DEAL_HANDLER_TEXT.missing_moderators(escape(support)))

@@ -22,6 +22,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from cerber_bot.bot_runtime import build_bot_session, reset_webhook_with_retry
 from cerber_bot.container import AppContainer
 from cerber_bot.handlers.giftapi import build_giftapi_router
+from cerber_bot.handlers.inline import build_inline_router
 from cerber_bot.handlers.menu import build_deals_router, build_menu_router
 from CRP.bot import build_crp_router
 from cerber_bot.handlers.start import build_start_router
@@ -48,6 +49,7 @@ async def run() -> None:
 
     dispatcher = Dispatcher(storage=MemoryStorage())
     dispatcher.include_router(build_start_router(container))
+    dispatcher.include_router(build_moderation_router(container))
     dispatcher.include_router(build_storefront_router(container))
     dispatcher.include_router(build_tgaccounts_router(container))
     dispatcher.include_router(build_giftapi_router(container))
@@ -85,6 +87,8 @@ async def run() -> None:
                     "Запустите лаунчер (Cloudflare Tunnel задаёт его автоматически)."
                 )
 
+        asyncio.create_task(run_auto_release_loop(container, bot))
+
         await dispatcher.start_polling(bot, allowed_updates=dispatcher.resolve_used_update_types())
     except TelegramNetworkError as error:
         logger.error(
@@ -94,6 +98,27 @@ async def run() -> None:
     finally:
         await bot.session.close()
         await container.close()
+
+
+async def run_auto_release_loop(container: AppContainer, bot: Bot, *, interval_seconds: int = 1800) -> None:
+    """Периодически закрывает сделки, где товар выдан более 24 часов назад."""
+    from aiogram.exceptions import AiogramError
+
+    from cerber_bot.texts import DEAL_HANDLER_TEXT
+
+    while True:
+        try:
+            results = await container.deal_service.auto_release_delivered()
+            for result in results:
+                text = DEAL_HANDLER_TEXT.AUTO_RELEASE_NOTIFICATION.format(deal_id=result.deal_id)
+                for telegram_id in (result.buyer_telegram_id, result.seller_telegram_id):
+                    try:
+                        await bot.send_message(telegram_id, text)
+                    except AiogramError:
+                        pass
+        except Exception:  # noqa: BLE001 - фоновая задача не должна падать
+            logger.exception("Auto-release loop iteration failed")
+        await asyncio.sleep(interval_seconds)
 
 
 if __name__ == "__main__":

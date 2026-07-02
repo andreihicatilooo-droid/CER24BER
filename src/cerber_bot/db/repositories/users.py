@@ -94,6 +94,11 @@ class UserRepository:
         await self.session.flush()
         return user, True
 
+    async def count_referrals(self, telegram_id: int) -> int:
+        query = select(func.count()).select_from(TelegramUser).where(TelegramUser.referrer_telegram_id == telegram_id)
+        result = await self.session.execute(query)
+        return result.scalar_one()
+
     async def count_users(self) -> int:
         result = await self.session.execute(select(func.count()).select_from(TelegramUser))
         return result.scalar_one()
