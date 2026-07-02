@@ -113,11 +113,7 @@ class CerberCoreClient:
         )
         if not isinstance(payload, dict):
             raise CerberCoreError("CERBER Core вернул неожиданный ответ по балансу.")
-        return CerberCoreBalance(
-            balance_usdt=_to_decimal(payload.get("balance_usdt")),
-            balance_rub=_to_decimal(payload.get("balance_rub")),
-            rate_usdt_rub=_to_decimal(payload.get("rate_usdt_rub")),
-        )
+        return _to_balance(payload)
 
     async def list_transactions(
         self,
@@ -163,11 +159,7 @@ class CerberCoreClient:
         )
         if not isinstance(payload, dict):
             raise CerberCoreError("CERBER Core вернул неожиданный ответ при корректировке баланса.")
-        return CerberCoreBalance(
-            balance_usdt=_to_decimal(payload.get("balance_usdt")),
-            balance_rub=_to_decimal(payload.get("balance_rub")),
-            rate_usdt_rub=_to_decimal(payload.get("rate_usdt_rub")),
-        )
+        return _to_balance(payload)
 
     async def list_topup_methods(self, *, force_refresh: bool = False) -> tuple[CerberCoreTopupMethod, ...]:
         if self._methods_by_code is not None and not force_refresh:
@@ -224,6 +216,133 @@ class CerberCoreClient:
         if not isinstance(payload, dict):
             raise CerberCoreError("CERBER Core вернул неожиданный ответ при подтверждении topup-сессии.")
         return _to_topup_session(payload)
+
+    async def hold_funds(
+        self,
+        telegram_id: int,
+        *,
+        amount_usdt: Decimal,
+        description: str,
+        operation_id: str,
+    ) -> CerberCoreBalance:
+        return await self._mutate_balance(
+            "POST",
+            "/api/v1/balance/hold",
+            telegram_id,
+            {
+                "amount_usdt": float(amount_usdt),
+                "description": description,
+                "operation_id": operation_id,
+            },
+        )
+
+    async def unblock_funds(
+        self,
+        telegram_id: int,
+        *,
+        amount_usdt: Decimal,
+        description: str,
+        operation_id: str,
+    ) -> CerberCoreBalance:
+        return await self._mutate_balance(
+            "POST",
+            "/api/v1/balance/unblock",
+            telegram_id,
+            {
+                "amount_usdt": float(amount_usdt),
+                "description": description,
+                "operation_id": operation_id,
+            },
+        )
+
+    async def transfer_funds(
+        self,
+        from_telegram_id: int,
+        to_telegram_id: int,
+        *,
+        amount_usdt: Decimal,
+        description: str,
+        operation_id: str,
+    ) -> tuple[CerberCoreBalance, CerberCoreBalance]:
+        payload = await self._request(
+            "POST",
+            "/api/v1/balance/transfer",
+            json_body={
+                "from_encrypted_user_hash": self._encrypt_user_hash(from_telegram_id),
+                "to_encrypted_user_hash": self._encrypt_user_hash(to_telegram_id),
+                "amount_usdt": float(amount_usdt),
+                "description": description,
+                "operation_id": operation_id,
+            },
+        )
+        if not isinstance(payload, dict):
+            raise CerberCoreError("CERBER Core вернул неожиданный ответ при переводе.")
+        from_raw = payload.get("from")
+        to_raw = payload.get("to")
+        if not isinstance(from_raw, dict) or not isinstance(to_raw, dict):
+            raise CerberCoreError("CERBER Core вернул неполный ответ при переводе.")
+        return _to_balance(from_raw), _to_balance(to_raw)
+
+    async def create_withdrawal(
+        self,
+        telegram_id: int,
+        *,
+        amount_usdt: Decimal,
+        description: str,
+        operation_id: str,
+    ) -> CerberCoreBalance:
+        payload = await self._request(
+            "POST",
+            "/api/v1/withdrawal/create",
+            json_body={
+                "encrypted_user_hash": self._encrypt_user_hash(telegram_id),
+                "amount_usdt": float(amount_usdt),
+                "description": description,
+                "operation_id": operation_id,
+            },
+        )
+        if isinstance(payload, dict) and isinstance(payload.get("balance"), dict):
+            return _to_balance(payload["balance"])
+        if isinstance(payload, dict):
+            return _to_balance(payload)
+        raise CerberCoreError("CERBER Core вернул неожиданный ответ при создании вывода.")
+
+    async def cancel_withdrawal(
+        self,
+        telegram_id: int,
+        *,
+        amount_usdt: Decimal,
+        description: str,
+        operation_id: str,
+    ) -> CerberCoreBalance:
+        payload = await self._request(
+            "POST",
+            "/api/v1/withdrawal/cancel",
+            json_body={
+                "encrypted_user_hash": self._encrypt_user_hash(telegram_id),
+                "amount_usdt": float(amount_usdt),
+                "description": description,
+                "operation_id": operation_id,
+            },
+        )
+        if isinstance(payload, dict) and isinstance(payload.get("balance"), dict):
+            return _to_balance(payload["balance"])
+        if isinstance(payload, dict):
+            return _to_balance(payload)
+        raise CerberCoreError("CERBER Core вернул неожиданный ответ при отмене вывода.")
+
+    async def _mutate_balance(
+        self,
+        method: str,
+        path: str,
+        telegram_id: int,
+        body: dict[str, object],
+    ) -> CerberCoreBalance:
+        payload = {**body, "encrypted_user_hash": self._encrypt_user_hash(telegram_id)}
+        response = await self._request(method, path, json_body=payload)
+        if not isinstance(response, dict):
+            raise CerberCoreError(f"CERBER Core вернул неожиданный ответ: {path}")
+        return _to_balance(response)
 
     async def _request(
         self,
@@ -312,6 +431,17 @@ def _extract_error_message(payload: object) -> str:
 
 def _to_decimal(value: object) -> Decimal:
     return Decimal(str(value or "0"))
+
+
+def _to_balance(payload: dict[str, object]) -> CerberCoreBalance:
+    rate = payload.get("rate_usdt_rub")
+    if rate is None:
+        rate = payload.get("rate")
+    return CerberCoreBalance(
+        balance_usdt=_to_decimal(payload.get("balance_usdt")),
+        balance_rub=_to_decimal(payload.get("balance_rub")),
+        rate_usdt_rub=_to_decimal(rate),
+    )
 
 
 def _to_topup_method(payload: dict[str, object]) -> CerberCoreTopupMethod:

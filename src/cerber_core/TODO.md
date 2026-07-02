@@ -97,6 +97,24 @@
 - [x] [P5] Использовать `user_hash` в JWT-клеймах
   - N/A: JWT не используется в текущей архитектуре. Аутентификация через X-API-Key / X-API-Secret (HMAC-SHA256). `user_hash` передаётся в зашифрованном теле запроса.
 
+### Rollout: connector-driven topup contour
+
+- [ ] [P3] Зафиксировать topup contract: provider/method capabilities + presentation/action model
+  - Изменяемые файлы: `internal/model/payment.go`, `internal/service/payment.go`, `internal/handler/payment.go`, `internal/router/router.go`
+  - Критерии приемки: CORE описывает topup flow через generic contract; capabilities, presentation и action-переходы не завязаны на конкретный provider/link-only сценарий
+
+- [ ] [P3] Расширить persistence-модель topup-сессий под orchestration и connector-driven state machine
+  - Изменяемые файлы: `migrations/`, `internal/model/payment.go`, `internal/repository/payment.go`, `internal/repository/transaction.go`
+  - Критерии приемки: topup-сессии хранят provider/method snapshot, state machine, action history и данные для безопасного resume/idempotent confirm-fail
+
+- [ ] [P4] Внедрить controlled connector registry и стандарт скриптов-коннекторов
+  - Изменяемые файлы: `internal/config/config.go`, `internal/service/payment.go`, `internal/connectors/` (новый), `cmd/api/main.go`
+  - Критерии приемки: registry управляется конфигом/feature flags, провайдеры подключаются через единый connector contract, а production не допускает ad-hoc подключений в обход registry
+
+- [ ] [P5] Перенести payment orchestration, webhook handling и confirm/fail semantics в CORE как single source of truth
+  - Изменяемые файлы: `internal/service/payment.go`, `internal/handler/payment.go`, `internal/router/router.go`, `cmd/api/main.go`
+  - Критерии приемки: orchestration и webhook-потоки живут только в CORE; bot и другие клиенты читают состояния/действия из CORE без собственного ownership над topup state machine
+
 ---
 
 ## Тесты

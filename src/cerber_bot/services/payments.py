@@ -23,6 +23,7 @@ from cerber_bot.integrations.cerber_core import CerberCoreClient, CerberCoreErro
 from cerber_bot.integrations.nicepay import NicePayClient, NicePayError
 from cerber_bot.integrations.rukassa import RukassaClient, RukassaError, RukassaFrozenError, RUKASSA_PAID_STATUS
 from cerber_bot.services.exchange import ExchangeRateError, ExchangeRateService
+from cerber_bot.services.ledger import LedgerService
 from cerber_bot.services.store import format_money
 from cerber_bot.texts import PAYMENT_SERVICE_TEXT, RUKASSA_TEXT
 
@@ -135,6 +136,7 @@ class PaymentService:
         stars_to_usd_rate: Decimal = Decimal("0.013"),
         cerber_core_client: CerberCoreClient | None = None,
         cerber_core_topup_method_code: str = "card_ru",
+        ledger_service: LedgerService | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.nicepay_client = nicepay_client
@@ -153,6 +155,11 @@ class PaymentService:
         self.stars_to_usd_rate = stars_to_usd_rate
         self.cerber_core_client = cerber_core_client
         self.cerber_core_topup_method_code = cerber_core_topup_method_code.strip() or "card_ru"
+        self.ledger_service = ledger_service
+
+    @property
+    def is_core_first_billing(self) -> bool:
+        return self.ledger_service is not None
 
     @property
     def _use_rukassa(self) -> bool:
@@ -358,7 +365,6 @@ class PaymentService:
 
         async with self.session_factory() as session:
             user_repository = UserRepository(session)
-            wallet_repository = WalletTransactionRepository(session)
             payment_repository = WalletPaymentRepository(session)
 
             payment = await payment_repository.get_by_payload(notification.order_id)
@@ -397,38 +403,11 @@ class PaymentService:
             if notification.result != "success":
                 raise PaymentFlowError(PAYMENT_SERVICE_TEXT.unknown_status(notification.result))
 
-            user, _ = await user_repository.get_or_create(
-                telegram_id=payment.telegram_id,
-                username=None,
-                first_name=None,
-                last_name=None,
-                language_code=None,
-                is_bot=False,
-                balance_currency=self.wallet_currency,
-            )
-            # Блокируем строку пользователя, чтобы сериализовать конкурентные webhook-вызовы.
-            # После получения блокировки перечитываем платёж — если дублирующий вебхук
-            # уже успел зачислить средства и снять блокировку, статус будет "paid".
             user = await user_repository.get_by_telegram_id(payment.telegram_id, with_lock=True)
             await session.refresh(payment)
+            if user is None:
+                raise PaymentFlowError(PAYMENT_SERVICE_TEXT.PAYMENT_NOT_FOUND)
             wallet_currency = user.balance_currency or self.wallet_currency
-
-            if payment.status == "paid":
-                credited_transaction = await wallet_repository.get_by_reference(notification.payment_id)
-                await session.commit()
-                completion = PaymentCompletion(
-                    telegram_id=payment.telegram_id,
-                    amount=payment_amount,
-                    currency=payment.currency,
-                    credited_amount=(Decimal(str(credited_transaction.amount)) if credited_transaction is not None else None),
-                    credited_currency=(credited_transaction.currency if credited_transaction is not None else wallet_currency),
-                    balance_after=Decimal(str(user.balance)),
-                    payload=payment.payload,
-                    payment_id=notification.payment_id,
-                )
-                return to_callback_result(completion, method=notification.method)
-
-            await self._confirm_core_topup_if_needed(payment.payload)
 
             try:
                 credited_amount = await self.exchange_rate_service.convert(
@@ -439,37 +418,25 @@ class PaymentService:
             except ExchangeRateError as error:
                 raise PaymentFlowError(str(error)) from error
 
-            user.balance_currency = wallet_currency
-            user.balance += credited_amount
-            await wallet_repository.add(
-                telegram_id=payment.telegram_id,
-                transaction_type="top_up",
-                amount=credited_amount,
-                currency=wallet_currency,
-                description=build_wallet_credit_description(
+            if not self.is_core_first_billing:
+                await self._confirm_core_topup_if_needed(payment.payload)
+
+            completion = await self._complete_paid_topup(
+                session,
+                payment=payment,
+                user=user,
+                payment_amount=payment_amount,
+                wallet_currency=wallet_currency,
+                credited_amount=credited_amount,
+                provider_reference=notification.method,
+                provider_payment_id=notification.payment_id,
+                credit_description=build_wallet_credit_description(
                     payment_amount=payment_amount,
                     payment_currency=payment.currency,
                     credited_amount=credited_amount,
                     wallet_currency=wallet_currency,
                 ),
-                reference=notification.payment_id,
-            )
-            await payment_repository.mark_paid(
-                payment,
-                provider_reference=notification.method,
-                provider_payment_id=notification.payment_id,
-            )
-            await session.commit()
-
-            completion = PaymentCompletion(
-                telegram_id=payment.telegram_id,
-                amount=payment_amount,
-                currency=payment.currency,
-                credited_amount=credited_amount,
-                credited_currency=wallet_currency,
-                balance_after=Decimal(str(user.balance)),
-                payload=payment.payload,
-                payment_id=notification.payment_id,
+                wallet_reference=notification.payment_id,
             )
             return to_callback_result(completion, method=notification.method)
 
@@ -480,16 +447,117 @@ class PaymentService:
 
     @property
     def is_nicepay_link_configured(self) -> bool:
-        """True, если NicePay настроен в режиме ссылки (не H2H)."""
-        return self.nicepay_client.is_configured and not bool(self.method)
+        """Временно отключаем ссылки, оставляем только H2H."""
+        return False
 
     @property
     def is_h2h_mode(self) -> bool:
-        return bool(self.method) and self.nicepay_client.is_configured and not self._use_rukassa
+        return self.nicepay_client.is_configured and not self._use_rukassa
 
     @property
     def is_cerber_core_mode(self) -> bool:
-        return self.cerber_core_client is not None
+        return self.cerber_core_client is not None or self.is_core_first_billing
+
+    async def _ledger_balance_in_wallet_currency(self, telegram_id: int, wallet_currency: str) -> Decimal:
+        if self.ledger_service is None:
+            raise PaymentConfigurationError("Core-first billing не настроен.")
+        snapshot = await self.ledger_service.get_balance(telegram_id)
+        return await self.exchange_rate_service.convert(snapshot.available_usdt, "USDT", wallet_currency)
+
+    async def _confirm_core_topup_required(self, payload: str) -> None:
+        if not is_core_session_payload(payload):
+            raise PaymentFlowError("Core-first: ожидался идентификатор topup-сессии Cerber Core.")
+        if self.cerber_core_client is None:
+            raise PaymentConfigurationError("CERBER Core client не настроен.")
+        try:
+            await self.cerber_core_client.confirm_topup(payload)
+        except CerberCoreError as error:
+            raise PaymentFlowError(str(error)) from error
+
+    async def _complete_paid_topup(
+        self,
+        session: AsyncSession,
+        *,
+        payment,
+        user,
+        payment_amount: Decimal,
+        wallet_currency: str,
+        credited_amount: Decimal,
+        provider_reference: str | None,
+        provider_payment_id: str,
+        credit_description: str,
+        wallet_reference: str,
+    ) -> PaymentCompletion:
+        wallet_repository = WalletTransactionRepository(session)
+        payment_repository = WalletPaymentRepository(session)
+
+        if payment.status == "paid":
+            if self.is_core_first_billing:
+                balance_after = await self._ledger_balance_in_wallet_currency(payment.telegram_id, wallet_currency)
+            else:
+                credited_transaction = await wallet_repository.get_by_reference(wallet_reference)
+                balance_after = Decimal(str(user.balance))
+                if credited_transaction is not None:
+                    credited_amount = Decimal(str(credited_transaction.amount))
+                    wallet_currency = credited_transaction.currency
+            await session.commit()
+            return PaymentCompletion(
+                telegram_id=payment.telegram_id,
+                amount=payment_amount,
+                currency=payment.currency,
+                credited_amount=credited_amount,
+                credited_currency=wallet_currency,
+                balance_after=balance_after,
+                payload=payment.payload,
+                payment_id=provider_payment_id,
+            )
+
+        if self.is_core_first_billing:
+            await self._confirm_core_topup_required(payment.payload)
+            balance_after = await self._ledger_balance_in_wallet_currency(payment.telegram_id, wallet_currency)
+            await payment_repository.mark_paid(
+                payment,
+                provider_reference=provider_reference,
+                provider_payment_id=provider_payment_id,
+            )
+            await session.commit()
+            return PaymentCompletion(
+                telegram_id=payment.telegram_id,
+                amount=payment_amount,
+                currency=payment.currency,
+                credited_amount=credited_amount,
+                credited_currency=wallet_currency,
+                balance_after=balance_after,
+                payload=payment.payload,
+                payment_id=provider_payment_id,
+            )
+
+        user.balance_currency = wallet_currency
+        user.balance += credited_amount
+        await wallet_repository.add(
+            telegram_id=payment.telegram_id,
+            transaction_type="top_up",
+            amount=credited_amount,
+            currency=wallet_currency,
+            description=credit_description,
+            reference=wallet_reference,
+        )
+        await payment_repository.mark_paid(
+            payment,
+            provider_reference=provider_reference,
+            provider_payment_id=provider_payment_id,
+        )
+        await session.commit()
+        return PaymentCompletion(
+            telegram_id=payment.telegram_id,
+            amount=payment_amount,
+            currency=payment.currency,
+            credited_amount=credited_amount,
+            credited_currency=wallet_currency,
+            balance_after=Decimal(str(user.balance)),
+            payload=payment.payload,
+            payment_id=provider_payment_id,
+        )
 
     async def process_rukassa_webhook(
         self,
@@ -518,7 +586,6 @@ class PaymentService:
 
         async with self.session_factory() as session:
             user_repository = UserRepository(session)
-            wallet_repository = WalletTransactionRepository(session)
             payment_repository = WalletPaymentRepository(session)
 
             payment = await payment_repository.get_by_payload(notification.order_id)
@@ -566,23 +633,6 @@ class PaymentService:
                 raise PaymentFlowError(PAYMENT_SERVICE_TEXT.PAYMENT_NOT_FOUND)
             wallet_currency = user.balance_currency or self.wallet_currency
 
-            if payment.status == "paid":
-                credited_transaction = await wallet_repository.get_by_reference(provider_payment_id)
-                await session.commit()
-                completion = PaymentCompletion(
-                    telegram_id=payment.telegram_id,
-                    amount=payment_amount,
-                    currency=payment.currency,
-                    credited_amount=(Decimal(str(credited_transaction.amount)) if credited_transaction is not None else None),
-                    credited_currency=(credited_transaction.currency if credited_transaction is not None else wallet_currency),
-                    balance_after=Decimal(str(user.balance)),
-                    payload=payment.payload,
-                    payment_id=provider_payment_id,
-                )
-                return to_callback_result(completion, method=payment_method)
-
-            await self._confirm_core_topup_if_needed(payment.payload)
-
             try:
                 credited_amount = await self.exchange_rate_service.convert(
                     payment_amount,
@@ -592,37 +642,28 @@ class PaymentService:
             except ExchangeRateError as error:
                 raise PaymentFlowError(str(error)) from error
 
-            user.balance_currency = wallet_currency
-            user.balance += credited_amount
-            await wallet_repository.add(
-                telegram_id=payment.telegram_id,
-                transaction_type="top_up",
-                amount=credited_amount,
-                currency=wallet_currency,
-                description=RUKASSA_TEXT.credit_description_direct(
-                    format_money(payment_amount, payment.currency)
-                ) if payment.currency == wallet_currency else RUKASSA_TEXT.credit_description_converted(
+            if not self.is_core_first_billing:
+                await self._confirm_core_topup_if_needed(payment.payload)
+
+            credit_description = (
+                RUKASSA_TEXT.credit_description_direct(format_money(payment_amount, payment.currency))
+                if payment.currency == wallet_currency
+                else RUKASSA_TEXT.credit_description_converted(
                     format_money(payment_amount, payment.currency),
                     format_money(credited_amount, wallet_currency),
-                ),
-                reference=provider_payment_id,
+                )
             )
-            await payment_repository.mark_paid(
-                payment,
+            completion = await self._complete_paid_topup(
+                session,
+                payment=payment,
+                user=user,
+                payment_amount=payment_amount,
+                wallet_currency=wallet_currency,
+                credited_amount=credited_amount,
                 provider_reference=payment_method,
                 provider_payment_id=provider_payment_id,
-            )
-            await session.commit()
-
-            completion = PaymentCompletion(
-                telegram_id=payment.telegram_id,
-                amount=payment_amount,
-                currency=payment.currency,
-                credited_amount=credited_amount,
-                credited_currency=wallet_currency,
-                balance_after=Decimal(str(user.balance)),
-                payload=payment.payload,
-                payment_id=provider_payment_id,
+                credit_description=credit_description,
+                wallet_reference=provider_payment_id,
             )
             return to_callback_result(completion, method=payment_method)
 
@@ -799,7 +840,6 @@ class PaymentService:
         """Зачислить баланс после successful_payment (XTR)."""
         async with self.session_factory() as session:
             user_repository = UserRepository(session)
-            wallet_repository = WalletTransactionRepository(session)
             payment_repository = WalletPaymentRepository(session)
 
             payment = await payment_repository.get_by_payload(payload)
@@ -814,22 +854,6 @@ class PaymentService:
                 raise PaymentFlowError(PAYMENT_SERVICE_TEXT.PAYMENT_NOT_FOUND)
             wallet_currency = user.balance_currency or self.wallet_currency
 
-            if payment.status == "paid":
-                credited_tx = await wallet_repository.get_by_reference(telegram_charge_id)
-                await session.commit()
-                return PaymentCompletion(
-                    telegram_id=payment.telegram_id,
-                    amount=Decimal(stars_amount),
-                    currency="XTR",
-                    credited_amount=(Decimal(str(credited_tx.amount)) if credited_tx else None),
-                    credited_currency=(credited_tx.currency if credited_tx else wallet_currency),
-                    balance_after=Decimal(str(user.balance)),
-                    payload=payload,
-                    payment_id=telegram_charge_id,
-                )
-
-            await self._confirm_core_topup_if_needed(payment.payload)
-
             stars_as_usd = Decimal(stars_amount) * self.stars_to_usd_rate
             try:
                 credited_amount = await self.exchange_rate_service.convert(
@@ -838,38 +862,27 @@ class PaymentService:
             except ExchangeRateError as error:
                 raise PaymentFlowError(str(error)) from error
 
-            user.balance_currency = wallet_currency
-            user.balance += credited_amount
-            await wallet_repository.add(
-                telegram_id=payment.telegram_id,
-                transaction_type="top_up",
-                amount=credited_amount,
-                currency=wallet_currency,
-                description=build_wallet_credit_description(
+            if not self.is_core_first_billing:
+                await self._confirm_core_topup_if_needed(payment.payload)
+
+            completion = await self._complete_paid_topup(
+                session,
+                payment=payment,
+                user=user,
+                payment_amount=Decimal(stars_amount),
+                wallet_currency=wallet_currency,
+                credited_amount=credited_amount,
+                provider_reference=telegram_charge_id,
+                provider_payment_id=provider_charge_id or telegram_charge_id,
+                credit_description=build_wallet_credit_description(
                     payment_amount=Decimal(stars_amount),
                     payment_currency="XTR",
                     credited_amount=credited_amount,
                     wallet_currency=wallet_currency,
                 ),
-                reference=telegram_charge_id,
+                wallet_reference=telegram_charge_id,
             )
-            await payment_repository.mark_paid(
-                payment,
-                provider_reference=telegram_charge_id,
-                provider_payment_id=provider_charge_id,
-            )
-            await session.commit()
-
-        return PaymentCompletion(
-            telegram_id=payment.telegram_id,
-            amount=Decimal(stars_amount),
-            currency="XTR",
-            credited_amount=credited_amount,
-            credited_currency=wallet_currency,
-            balance_after=Decimal(str(user.balance)),
-            payload=payload,
-            payment_id=telegram_charge_id,
-        )
+            return completion
 
     def _effective_limits(self) -> tuple[Decimal, Decimal]:
         if self._use_rukassa:

@@ -8,6 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from cerber_bot.db.models import EscrowDeal, EscrowDealMessage, WithdrawalRequest, utcnow
 
 
+PENDING_DEAL_STATUSES = ("pending_acceptance", "active", "delivered", "disputed")
+
+
 class EscrowDealRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -115,7 +118,7 @@ class EscrowDealRepository:
 
     async def count_open_for_user(self, telegram_id: int) -> int:
         query = select(func.count(EscrowDeal.id)).where(
-            EscrowDeal.status.in_(("pending_acceptance", "active", "delivered", "disputed")),
+            EscrowDeal.status.in_(PENDING_DEAL_STATUSES),
             or_(EscrowDeal.buyer_telegram_id == telegram_id, EscrowDeal.seller_telegram_id == telegram_id),
         )
         result = await self.session.execute(query)
@@ -129,6 +132,14 @@ class EscrowDealRepository:
         )
         result = await self.session.execute(query)
         return list(result.scalars().all())
+
+    async def sum_pending_buyer_amount(self, telegram_id: int) -> Decimal:
+        query = select(func.coalesce(func.sum(EscrowDeal.amount), 0)).where(
+            EscrowDeal.buyer_telegram_id == telegram_id,
+            EscrowDeal.status.in_(PENDING_DEAL_STATUSES),
+        )
+        result = await self.session.execute(query)
+        return Decimal(str(result.scalar_one()))
 
 
 class EscrowDealMessageRepository:
@@ -249,3 +260,11 @@ class WithdrawalRequestRepository:
         )
         result = await self.session.execute(query)
         return int(result.scalar_one())
+
+    async def sum_pending_amount(self, telegram_id: int) -> Decimal:
+        query = select(func.coalesce(func.sum(WithdrawalRequest.amount), 0)).where(
+            WithdrawalRequest.telegram_id == telegram_id,
+            WithdrawalRequest.status == "requested",
+        )
+        result = await self.session.execute(query)
+        return Decimal(str(result.scalar_one()))

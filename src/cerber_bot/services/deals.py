@@ -17,8 +17,10 @@ from cerber_bot.db.repositories.deals import EscrowDealMessageRepository, Escrow
 from cerber_bot.db.repositories.offers import DealOfferRepository
 from cerber_bot.db.repositories.users import UserRepository
 from cerber_bot.db.repositories.wallet import WalletTransactionRepository
-from cerber_bot.services.exchange import ExchangeRateService, WalletQuote
+from cerber_bot.services.exchange import ExchangeRateError, ExchangeRateService, WalletQuote
+from cerber_bot.services.ledger import LedgerInsufficientFundsError, LedgerService
 from cerber_bot.services.store import PageInfo, build_page_info, format_money, normalize_money_amount
+from cerber_bot.services.wallet_read import WalletReadService
 from cerber_bot.texts import DEAL_SERVICE_TEXT
 
 
@@ -218,6 +220,8 @@ class DealService:
         moderator_ids: tuple[int, ...],
         withdrawal_min_amount_usdt: Decimal,
         withdrawal_networks: tuple[str, ...],
+        wallet_read_service: WalletReadService | None = None,
+        ledger_service: LedgerService | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.exchange_rate_service = exchange_rate_service
@@ -225,6 +229,12 @@ class DealService:
         self.moderator_ids = moderator_ids
         self.withdrawal_min_amount_usdt = normalize_money_amount(withdrawal_min_amount_usdt)
         self.withdrawal_networks = tuple(network.upper() for network in withdrawal_networks)
+        self.wallet_read_service = wallet_read_service
+        self.ledger_service = ledger_service
+
+    @property
+    def is_core_first_billing(self) -> bool:
+        return self.ledger_service is not None
 
     @property
     def has_moderators(self) -> bool:
@@ -319,29 +329,61 @@ class DealService:
 
             currency = buyer.balance_currency or self.wallet_currency
             self._ensure_wallet_currency(buyer, currency)
-            if Decimal(str(buyer.balance)) < normalized_amount:
-                raise DealServiceError(
-                    DEAL_SERVICE_TEXT.hold_insufficient_funds(format_money(Decimal(str(buyer.balance)), currency))
-                )
 
-            buyer.balance -= normalized_amount
-            buyer.held_balance += normalized_amount
-            deal = await deal_repository.create(
-                buyer_telegram_id=buyer.telegram_id,
-                seller_telegram_id=seller.telegram_id,
-                status="pending_acceptance",
-                amount=normalized_amount,
-                currency=currency,
-                terms=normalized_terms,
-            )
-            await wallet_repository.add(
-                telegram_id=buyer.telegram_id,
-                transaction_type="deal_hold",
-                amount=-normalized_amount,
-                currency=currency,
-                description=DEAL_SERVICE_TEXT.deal_hold_description(deal.id),
-                reference=f"deal:{deal.id}",
-            )
+            if self.is_core_first_billing:
+                assert self.ledger_service is not None
+                await self._ensure_buyer_can_hold(buyer.telegram_id, normalized_amount, currency)
+                deal = await deal_repository.create(
+                    buyer_telegram_id=buyer.telegram_id,
+                    seller_telegram_id=seller.telegram_id,
+                    status="pending_acceptance",
+                    amount=normalized_amount,
+                    currency=currency,
+                    terms=normalized_terms,
+                )
+                amount_usdt = await self._to_usdt(normalized_amount, currency)
+                try:
+                    await self.ledger_service.hold(
+                        buyer.telegram_id,
+                        amount_usdt=amount_usdt,
+                        description=DEAL_SERVICE_TEXT.deal_hold_description(deal.id),
+                        operation_id=f"deal:{deal.id}:hold",
+                    )
+                except LedgerInsufficientFundsError as error:
+                    await session.rollback()
+                    snapshot = await self.ledger_service.get_balance(buyer.telegram_id)
+                    available = await self.exchange_rate_service.convert(
+                        snapshot.available_usdt,
+                        "USDT",
+                        currency,
+                    )
+                    raise DealServiceError(
+                        DEAL_SERVICE_TEXT.hold_insufficient_funds(format_money(available, currency))
+                    ) from error
+            else:
+                if Decimal(str(buyer.balance)) < normalized_amount:
+                    raise DealServiceError(
+                        DEAL_SERVICE_TEXT.hold_insufficient_funds(format_money(Decimal(str(buyer.balance)), currency))
+                    )
+
+                buyer.balance -= normalized_amount
+                buyer.held_balance += normalized_amount
+                deal = await deal_repository.create(
+                    buyer_telegram_id=buyer.telegram_id,
+                    seller_telegram_id=seller.telegram_id,
+                    status="pending_acceptance",
+                    amount=normalized_amount,
+                    currency=currency,
+                    terms=normalized_terms,
+                )
+                await wallet_repository.add(
+                    telegram_id=buyer.telegram_id,
+                    transaction_type="deal_hold",
+                    amount=-normalized_amount,
+                    currency=currency,
+                    description=DEAL_SERVICE_TEXT.deal_hold_description(deal.id),
+                    reference=f"deal:{deal.id}",
+                )
             await message_repository.add(
                 deal_id=deal.id,
                 sender_telegram_id=0,
@@ -382,23 +424,46 @@ class DealService:
             amount = Decimal(str(deal.amount))
             if pending_actor == "buyer" and not deal.funds_held:
                 # Витринная сделка: покупатель подтверждает условия — блокируем его средства
-                if Decimal(str(acceptor.balance)) < amount:
-                    raise DealServiceError(
-                        DEAL_SERVICE_TEXT.hold_insufficient_funds(
-                            format_money(Decimal(str(acceptor.balance)), deal.currency)
+                if self.is_core_first_billing:
+                    assert self.ledger_service is not None
+                    amount_usdt = await self._to_usdt(amount, deal.currency)
+                    try:
+                        await self.ledger_service.ensure_user(acceptor.telegram_id)
+                        await self.ledger_service.hold(
+                            acceptor.telegram_id,
+                            amount_usdt=amount_usdt,
+                            description=DEAL_SERVICE_TEXT.deal_hold_description(deal.id),
+                            operation_id=f"deal:{deal.id}:hold",
                         )
+                    except LedgerInsufficientFundsError as error:
+                        await session.rollback()
+                        snapshot = await self.ledger_service.get_balance(acceptor.telegram_id)
+                        available = await self.exchange_rate_service.convert(
+                            snapshot.available_usdt,
+                            "USDT",
+                            deal.currency,
+                        )
+                        raise DealServiceError(
+                            DEAL_SERVICE_TEXT.hold_insufficient_funds(format_money(available, deal.currency))
+                        ) from error
+                else:
+                    if Decimal(str(acceptor.balance)) < amount:
+                        raise DealServiceError(
+                            DEAL_SERVICE_TEXT.hold_insufficient_funds(
+                                format_money(Decimal(str(acceptor.balance)), deal.currency)
+                            )
+                        )
+                    acceptor.balance -= amount
+                    acceptor.held_balance += amount
+                    await WalletTransactionRepository(session).add(
+                        telegram_id=acceptor.telegram_id,
+                        transaction_type="deal_hold",
+                        amount=-amount,
+                        currency=deal.currency,
+                        description=DEAL_SERVICE_TEXT.deal_hold_description(deal.id),
+                        reference=f"deal:{deal.id}",
                     )
-                acceptor.balance -= amount
-                acceptor.held_balance += amount
                 deal.funds_held = True
-                await WalletTransactionRepository(session).add(
-                    telegram_id=acceptor.telegram_id,
-                    transaction_type="deal_hold",
-                    amount=-amount,
-                    currency=deal.currency,
-                    description=DEAL_SERVICE_TEXT.deal_hold_description(deal.id),
-                    reference=f"deal:{deal.id}",
-                )
 
             now = utcnow()
             deal.status = "active"
@@ -440,11 +505,34 @@ class DealService:
                 raise DealServiceError(DEAL_SERVICE_TEXT.BUYER_NOT_FOUND)
 
             amount = Decimal(str(deal.amount))
+
+            # Возврат средств только если они были заблокированы
+            # (для витринных приглашений блокировка происходит при подтверждении покупателем)
             if deal.funds_held:
-                if Decimal(str(buyer.held_balance)) < amount:
-                    raise DealStateError(DEAL_SERVICE_TEXT.DEAL_HELD_UNAVAILABLE)
-                buyer.held_balance -= amount
-                buyer.balance += amount
+                if self.is_core_first_billing:
+                    assert self.ledger_service is not None
+                    amount_usdt = await self._to_usdt(amount, deal.currency)
+                    await self.ledger_service.unblock(
+                        buyer.telegram_id,
+                        amount_usdt=amount_usdt,
+                        description=DEAL_SERVICE_TEXT.deal_hold_return_description(deal.id),
+                        operation_id=f"deal:{deal.id}:unblock",
+                    )
+                else:
+                    if Decimal(str(buyer.held_balance)) < amount:
+                        raise DealStateError(DEAL_SERVICE_TEXT.DEAL_HELD_UNAVAILABLE)
+
+                    buyer.held_balance -= amount
+                    buyer.balance += amount
+                    await wallet_repository.add(
+                        telegram_id=buyer.telegram_id,
+                        transaction_type="deal_release",
+                        amount=amount,
+                        currency=deal.currency,
+                        description=DEAL_SERVICE_TEXT.deal_hold_return_description(deal.id),
+                        reference=f"deal:{deal.id}",
+                    )
+                deal.funds_held = False
 
             now = utcnow()
             canceled_by_buyer = telegram_id == deal.buyer_telegram_id
@@ -452,16 +540,6 @@ class DealService:
             deal.resolution = "canceled_by_buyer" if canceled_by_buyer else "declined_by_seller"
             deal.closed_at = now
             deal.updated_at = now
-            if deal.funds_held:
-                deal.funds_held = False
-                await wallet_repository.add(
-                    telegram_id=buyer.telegram_id,
-                    transaction_type="deal_release",
-                    amount=amount,
-                    currency=deal.currency,
-                    description=DEAL_SERVICE_TEXT.deal_hold_return_description(deal.id),
-                    reference=f"deal:{deal.id}",
-                )
             await message_repository.add(
                 deal_id=deal.id,
                 sender_telegram_id=0,
@@ -552,13 +630,34 @@ class DealService:
                 raise DealServiceError(DEAL_SERVICE_TEXT.DEAL_PARTICIPANTS_NOT_FOUND)
 
             amount = Decimal(str(deal.amount))
-            if Decimal(str(buyer.held_balance)) < amount:
-                raise DealStateError(DEAL_SERVICE_TEXT.DEAL_HELD_UNAVAILABLE)
 
-            self._ensure_wallet_currency(seller, deal.currency)
-            buyer.held_balance -= amount
-            seller.balance += amount
-            seller.balance_currency = deal.currency
+            if self.is_core_first_billing:
+                assert self.ledger_service is not None
+                amount_usdt = await self._to_usdt(amount, deal.currency)
+                await self.ledger_service.ensure_user(seller.telegram_id)
+                await self.ledger_service.credit_usdt(
+                    seller.telegram_id,
+                    amount_usdt=amount_usdt,
+                    tx_type="transfer",
+                    description=DEAL_SERVICE_TEXT.deal_credit_description(deal.id),
+                    operation_id=f"deal:{deal.id}:release",
+                )
+            else:
+                if Decimal(str(buyer.held_balance)) < amount:
+                    raise DealStateError(DEAL_SERVICE_TEXT.DEAL_HELD_UNAVAILABLE)
+
+                self._ensure_wallet_currency(seller, deal.currency)
+                buyer.held_balance -= amount
+                seller.balance += amount
+                seller.balance_currency = deal.currency
+                await wallet_repository.add(
+                    telegram_id=seller.telegram_id,
+                    transaction_type="deal_release",
+                    amount=amount,
+                    currency=deal.currency,
+                    description=DEAL_SERVICE_TEXT.deal_credit_description(deal.id),
+                    reference=f"deal:{deal.id}",
+                )
 
             now = utcnow()
             deal.status = "completed"
@@ -568,14 +667,6 @@ class DealService:
             if deal.resolution is None and deal.disputed_at is not None:
                 deal.resolution = "released_after_dispute"
 
-            await wallet_repository.add(
-                telegram_id=seller.telegram_id,
-                transaction_type="deal_release",
-                amount=amount,
-                currency=deal.currency,
-                description=DEAL_SERVICE_TEXT.deal_credit_description(deal.id),
-                reference=f"deal:{deal.id}",
-            )
             await message_repository.add(
                 deal_id=deal.id,
                 sender_telegram_id=0,
@@ -640,12 +731,32 @@ class DealService:
                     continue
 
                 amount = Decimal(str(deal.amount))
-                if Decimal(str(buyer.held_balance)) < amount:
-                    continue
+                if self.is_core_first_billing:
+                    assert self.ledger_service is not None
+                    amount_usdt = await self._to_usdt(amount, deal.currency)
+                    await self.ledger_service.ensure_user(seller.telegram_id)
+                    await self.ledger_service.credit_usdt(
+                        seller.telegram_id,
+                        amount_usdt=amount_usdt,
+                        tx_type="transfer",
+                        description=DEAL_SERVICE_TEXT.deal_credit_description(deal.id),
+                        operation_id=f"deal:{deal.id}:release",
+                    )
+                else:
+                    if Decimal(str(buyer.held_balance)) < amount:
+                        continue
 
-                buyer.held_balance -= amount
-                seller.balance += amount
-                seller.balance_currency = deal.currency
+                    buyer.held_balance -= amount
+                    seller.balance += amount
+                    seller.balance_currency = deal.currency
+                    await wallet_repository.add(
+                        telegram_id=seller.telegram_id,
+                        transaction_type="deal_release",
+                        amount=amount,
+                        currency=deal.currency,
+                        description=DEAL_SERVICE_TEXT.deal_credit_description(deal.id),
+                        reference=f"deal:{deal.id}",
+                    )
 
                 now = utcnow()
                 deal.status = "completed"
@@ -653,14 +764,6 @@ class DealService:
                 deal.closed_at = now
                 deal.updated_at = now
                 deal.resolution = "auto_release_after_delivery"
-                await wallet_repository.add(
-                    telegram_id=seller.telegram_id,
-                    transaction_type="deal_release",
-                    amount=amount,
-                    currency=deal.currency,
-                    description=DEAL_SERVICE_TEXT.deal_credit_description(deal.id),
-                    reference=f"deal:{deal.id}",
-                )
                 await message_repository.add(
                     deal_id=deal.id,
                     sender_telegram_id=0,
@@ -706,40 +809,68 @@ class DealService:
                 raise DealServiceError(DEAL_SERVICE_TEXT.DEAL_PARTICIPANTS_NOT_FOUND)
 
             amount = Decimal(str(deal.amount))
-            if Decimal(str(buyer.held_balance)) < amount:
-                raise DealStateError(DEAL_SERVICE_TEXT.DISPUTE_HELD_UNAVAILABLE)
-
+            amount_usdt = await self._to_usdt(amount, deal.currency) if self.is_core_first_billing else None
             now = utcnow()
-            buyer.held_balance -= amount
-            if normalized_resolution == "refund":
-                buyer.balance += amount
-                deal.status = "refunded"
-                deal.resolution = "refund_buyer"
-                await wallet_repository.add(
-                    telegram_id=buyer.telegram_id,
-                    transaction_type="deal_refund",
-                    amount=amount,
-                    currency=deal.currency,
-                    description=DEAL_SERVICE_TEXT.dispute_refund_description(deal.id),
-                    reference=f"deal:{deal.id}",
-                )
-                message_text = DEAL_SERVICE_TEXT.MODERATOR_REFUND_MESSAGE
+
+            if self.is_core_first_billing:
+                assert self.ledger_service is not None
+                if normalized_resolution == "refund":
+                    await self.ledger_service.unblock(
+                        buyer.telegram_id,
+                        amount_usdt=amount_usdt,
+                        description=DEAL_SERVICE_TEXT.dispute_refund_description(deal.id),
+                        operation_id=f"deal:{deal.id}:refund",
+                    )
+                    deal.status = "refunded"
+                    deal.resolution = "refund_buyer"
+                    message_text = DEAL_SERVICE_TEXT.MODERATOR_REFUND_MESSAGE
+                else:
+                    await self.ledger_service.ensure_user(seller.telegram_id)
+                    await self.ledger_service.credit_usdt(
+                        seller.telegram_id,
+                        amount_usdt=amount_usdt,
+                        tx_type="transfer",
+                        description=DEAL_SERVICE_TEXT.moderator_release_description(deal.id),
+                        operation_id=f"deal:{deal.id}:release",
+                    )
+                    deal.status = "completed"
+                    deal.completed_at = now
+                    deal.resolution = "release_seller"
+                    message_text = DEAL_SERVICE_TEXT.MODERATOR_RELEASE_MESSAGE
             else:
-                self._ensure_wallet_currency(seller, deal.currency)
-                seller.balance += amount
-                seller.balance_currency = deal.currency
-                deal.status = "completed"
-                deal.completed_at = now
-                deal.resolution = "release_seller"
-                await wallet_repository.add(
-                    telegram_id=seller.telegram_id,
-                    transaction_type="deal_release",
-                    amount=amount,
-                    currency=deal.currency,
-                    description=DEAL_SERVICE_TEXT.moderator_release_description(deal.id),
-                    reference=f"deal:{deal.id}",
-                )
-                message_text = DEAL_SERVICE_TEXT.MODERATOR_RELEASE_MESSAGE
+                if Decimal(str(buyer.held_balance)) < amount:
+                    raise DealStateError(DEAL_SERVICE_TEXT.DISPUTE_HELD_UNAVAILABLE)
+
+                buyer.held_balance -= amount
+                if normalized_resolution == "refund":
+                    buyer.balance += amount
+                    deal.status = "refunded"
+                    deal.resolution = "refund_buyer"
+                    await wallet_repository.add(
+                        telegram_id=buyer.telegram_id,
+                        transaction_type="deal_refund",
+                        amount=amount,
+                        currency=deal.currency,
+                        description=DEAL_SERVICE_TEXT.dispute_refund_description(deal.id),
+                        reference=f"deal:{deal.id}",
+                    )
+                    message_text = DEAL_SERVICE_TEXT.MODERATOR_REFUND_MESSAGE
+                else:
+                    self._ensure_wallet_currency(seller, deal.currency)
+                    seller.balance += amount
+                    seller.balance_currency = deal.currency
+                    deal.status = "completed"
+                    deal.completed_at = now
+                    deal.resolution = "release_seller"
+                    await wallet_repository.add(
+                        telegram_id=seller.telegram_id,
+                        transaction_type="deal_release",
+                        amount=amount,
+                        currency=deal.currency,
+                        description=DEAL_SERVICE_TEXT.moderator_release_description(deal.id),
+                        reference=f"deal:{deal.id}",
+                    )
+                    message_text = DEAL_SERVICE_TEXT.MODERATOR_RELEASE_MESSAGE
 
             deal.resolution_note = f"moderated_by:{moderator_id}"
             deal.closed_at = now
@@ -862,33 +993,70 @@ class DealService:
                 "USDT",
                 wallet_currency,
             )
-            if Decimal(str(user.balance)) < amount_in_wallet_currency:
-                raise WithdrawalError(
-                    DEAL_SERVICE_TEXT.withdrawal_insufficient_funds(format_money(Decimal(str(user.balance)), wallet_currency))
-                )
 
-            user.balance -= amount_in_wallet_currency
-            user.held_balance += amount_in_wallet_currency
-            request = await withdrawal_repository.create(
-                telegram_id=user.telegram_id,
-                status="requested",
-                amount=amount_in_wallet_currency,
-                amount_usdt=normalized_amount_usdt,
-                currency=wallet_currency,
-                network=normalized_network,
-                address=normalized_address,
-            )
-            await wallet_repository.add(
-                telegram_id=user.telegram_id,
-                transaction_type="withdrawal_hold",
-                amount=-amount_in_wallet_currency,
-                currency=wallet_currency,
-                description=DEAL_SERVICE_TEXT.withdrawal_request_description(
-                    format_money(normalized_amount_usdt, 'USDT'),
-                    normalized_network,
-                ),
-                reference=f"withdrawal:{request.id}",
-            )
+            if self.is_core_first_billing:
+                assert self.ledger_service is not None
+                await self._ensure_withdrawal_funds(user.telegram_id, normalized_amount_usdt, wallet_currency)
+                request = await withdrawal_repository.create(
+                    telegram_id=user.telegram_id,
+                    status="requested",
+                    amount=amount_in_wallet_currency,
+                    amount_usdt=normalized_amount_usdt,
+                    currency=wallet_currency,
+                    network=normalized_network,
+                    address=normalized_address,
+                )
+                try:
+                    await self.ledger_service.create_withdrawal(
+                        user.telegram_id,
+                        amount_usdt=normalized_amount_usdt,
+                        description=DEAL_SERVICE_TEXT.withdrawal_request_description(
+                            format_money(normalized_amount_usdt, "USDT"),
+                            normalized_network,
+                        ),
+                        operation_id=f"withdrawal:{request.id}",
+                    )
+                except LedgerInsufficientFundsError as error:
+                    await session.rollback()
+                    snapshot = await self.ledger_service.get_balance(user.telegram_id)
+                    available = await self.exchange_rate_service.convert(
+                        snapshot.available_usdt,
+                        "USDT",
+                        wallet_currency,
+                    )
+                    raise WithdrawalError(
+                        DEAL_SERVICE_TEXT.withdrawal_insufficient_funds(format_money(available, wallet_currency))
+                    ) from error
+            else:
+                if Decimal(str(user.balance)) < amount_in_wallet_currency:
+                    raise WithdrawalError(
+                        DEAL_SERVICE_TEXT.withdrawal_insufficient_funds(
+                            format_money(Decimal(str(user.balance)), wallet_currency)
+                        )
+                    )
+
+                user.balance -= amount_in_wallet_currency
+                user.held_balance += amount_in_wallet_currency
+                request = await withdrawal_repository.create(
+                    telegram_id=user.telegram_id,
+                    status="requested",
+                    amount=amount_in_wallet_currency,
+                    amount_usdt=normalized_amount_usdt,
+                    currency=wallet_currency,
+                    network=normalized_network,
+                    address=normalized_address,
+                )
+                await wallet_repository.add(
+                    telegram_id=user.telegram_id,
+                    transaction_type="withdrawal_hold",
+                    amount=-amount_in_wallet_currency,
+                    currency=wallet_currency,
+                    description=DEAL_SERVICE_TEXT.withdrawal_request_description(
+                        format_money(normalized_amount_usdt, "USDT"),
+                        normalized_network,
+                    ),
+                    reference=f"withdrawal:{request.id}",
+                )
             await session.commit()
             return WithdrawalActionResult(
                 request=await self._to_withdrawal_view(request),
@@ -912,23 +1080,35 @@ class DealService:
                 raise WithdrawalError(DEAL_SERVICE_TEXT.USER_NOT_FOUND)
 
             amount = Decimal(str(request.amount))
-            if Decimal(str(user.held_balance)) < amount:
-                raise WithdrawalError(DEAL_SERVICE_TEXT.WITHDRAWAL_FUNDS_UNAVAILABLE)
+            amount_usdt = Decimal(str(request.amount_usdt))
 
-            user.held_balance -= amount
-            user.balance += amount
+            if self.is_core_first_billing:
+                assert self.ledger_service is not None
+                await self.ledger_service.cancel_withdrawal(
+                    telegram_id,
+                    amount_usdt=amount_usdt,
+                    description=DEAL_SERVICE_TEXT.withdrawal_cancel_refund_description(request.id),
+                    operation_id=f"withdrawal:{request.id}:cancel",
+                )
+            else:
+                if Decimal(str(user.held_balance)) < amount:
+                    raise WithdrawalError(DEAL_SERVICE_TEXT.WITHDRAWAL_FUNDS_UNAVAILABLE)
+
+                user.held_balance -= amount
+                user.balance += amount
+                await wallet_repository.add(
+                    telegram_id=telegram_id,
+                    transaction_type="withdrawal_release",
+                    amount=amount,
+                    currency=request.currency,
+                    description=DEAL_SERVICE_TEXT.withdrawal_cancel_refund_description(request.id),
+                    reference=f"withdrawal:{request.id}",
+                )
+
             request.status = "canceled"
             request.resolution_note = DEAL_SERVICE_TEXT.WITHDRAWAL_CANCELED_BY_USER
             request.resolved_at = utcnow()
             request.updated_at = request.resolved_at
-            await wallet_repository.add(
-                telegram_id=telegram_id,
-                transaction_type="withdrawal_release",
-                amount=amount,
-                currency=request.currency,
-                description=DEAL_SERVICE_TEXT.withdrawal_cancel_refund_description(request.id),
-                reference=f"withdrawal:{request.id}",
-            )
             await session.commit()
             return WithdrawalActionResult(
                 request=await self._to_withdrawal_view(request),
@@ -964,35 +1144,52 @@ class DealService:
                 raise WithdrawalError(DEAL_SERVICE_TEXT.WITHDRAWAL_OWNER_NOT_FOUND)
 
             amount = Decimal(str(request.amount))
-            if Decimal(str(user.held_balance)) < amount:
-                raise WithdrawalError(DEAL_SERVICE_TEXT.WITHDRAWAL_HELD_UNAVAILABLE)
-
-            user.held_balance -= amount
+            amount_usdt = Decimal(str(request.amount_usdt))
             request.resolved_at = utcnow()
             request.updated_at = request.resolved_at
-            if normalized_action == "approve":
-                request.status = "approved"
-                request.resolution_note = DEAL_SERVICE_TEXT.withdrawal_approved_by_moderator(moderator_id)
-                await wallet_repository.add(
-                    telegram_id=user.telegram_id,
-                    transaction_type="withdrawal_approved",
-                    amount=-amount,
-                    currency=request.currency,
-                    description=DEAL_SERVICE_TEXT.withdrawal_approved_description(request.id),
-                    reference=f"withdrawal:{request.id}",
-                )
+
+            if self.is_core_first_billing:
+                assert self.ledger_service is not None
+                if normalized_action == "approve":
+                    request.status = "approved"
+                    request.resolution_note = DEAL_SERVICE_TEXT.withdrawal_approved_by_moderator(moderator_id)
+                else:
+                    await self.ledger_service.cancel_withdrawal(
+                        request.telegram_id,
+                        amount_usdt=amount_usdt,
+                        description=DEAL_SERVICE_TEXT.withdrawal_reject_refund_description(request.id),
+                        operation_id=f"withdrawal:{request.id}:cancel",
+                    )
+                    request.status = "rejected"
+                    request.resolution_note = DEAL_SERVICE_TEXT.withdrawal_rejected_by_moderator(moderator_id)
             else:
-                user.balance += amount
-                request.status = "rejected"
-                request.resolution_note = DEAL_SERVICE_TEXT.withdrawal_rejected_by_moderator(moderator_id)
-                await wallet_repository.add(
-                    telegram_id=user.telegram_id,
-                    transaction_type="withdrawal_release",
-                    amount=amount,
-                    currency=request.currency,
-                    description=DEAL_SERVICE_TEXT.withdrawal_reject_refund_description(request.id),
-                    reference=f"withdrawal:{request.id}",
-                )
+                if Decimal(str(user.held_balance)) < amount:
+                    raise WithdrawalError(DEAL_SERVICE_TEXT.WITHDRAWAL_HELD_UNAVAILABLE)
+
+                user.held_balance -= amount
+                if normalized_action == "approve":
+                    request.status = "approved"
+                    request.resolution_note = DEAL_SERVICE_TEXT.withdrawal_approved_by_moderator(moderator_id)
+                    await wallet_repository.add(
+                        telegram_id=user.telegram_id,
+                        transaction_type="withdrawal_approved",
+                        amount=-amount,
+                        currency=request.currency,
+                        description=DEAL_SERVICE_TEXT.withdrawal_approved_description(request.id),
+                        reference=f"withdrawal:{request.id}",
+                    )
+                else:
+                    user.balance += amount
+                    request.status = "rejected"
+                    request.resolution_note = DEAL_SERVICE_TEXT.withdrawal_rejected_by_moderator(moderator_id)
+                    await wallet_repository.add(
+                        telegram_id=user.telegram_id,
+                        transaction_type="withdrawal_release",
+                        amount=amount,
+                        currency=request.currency,
+                        description=DEAL_SERVICE_TEXT.withdrawal_reject_refund_description(request.id),
+                        reference=f"withdrawal:{request.id}",
+                    )
 
             await session.commit()
             return WithdrawalActionResult(
@@ -1001,6 +1198,18 @@ class DealService:
             )
 
     async def _build_balance_view(self, user: TelegramUser | None) -> DealBalanceView:
+        if self.wallet_read_service is not None and user is not None:
+            available, held, currency = await self.wallet_read_service.get_balance_amounts(user.telegram_id)
+            total = available + held
+            return DealBalanceView(
+                available=available,
+                held=held,
+                total=total,
+                currency=currency,
+                available_quote=await self.exchange_rate_service.quote_wallet(available, currency),
+                held_quote=await self.exchange_rate_service.quote_wallet(held, currency),
+                total_quote=await self.exchange_rate_service.quote_wallet(total, currency),
+            )
         available = Decimal("0.00") if user is None else Decimal(str(user.balance))
         held = Decimal("0.00") if user is None else Decimal(str(user.held_balance))
         currency = self.wallet_currency if user is None else (user.balance_currency or self.wallet_currency)
@@ -1135,11 +1344,43 @@ class DealService:
         normalized_currency = currency.upper()
         current_currency = (user.balance_currency or normalized_currency).upper()
         if current_currency != normalized_currency:
-            if Decimal(str(user.balance)) != Decimal("0.00") or Decimal(str(user.held_balance)) != Decimal("0.00"):
+            if not self.is_core_first_billing and (
+                Decimal(str(user.balance)) != Decimal("0.00") or Decimal(str(user.held_balance)) != Decimal("0.00")
+            ):
                 raise DealServiceError(
                     DEAL_SERVICE_TEXT.wallet_currency_mismatch(current_currency, normalized_currency)
                 )
         user.balance_currency = normalized_currency
+
+    async def _to_usdt(self, amount: Decimal, currency: str) -> Decimal:
+        try:
+            return await self.exchange_rate_service.convert(amount, currency, "USDT")
+        except ExchangeRateError as error:
+            raise DealServiceError(str(error)) from error
+
+    async def _ensure_buyer_can_hold(self, telegram_id: int, amount: Decimal, currency: str) -> None:
+        assert self.ledger_service is not None
+        await self.ledger_service.ensure_user(telegram_id)
+        snapshot = await self.ledger_service.get_balance(telegram_id)
+        amount_usdt = await self._to_usdt(amount, currency)
+        if snapshot.available_usdt < amount_usdt:
+            available = await self.exchange_rate_service.convert(snapshot.available_usdt, "USDT", currency)
+            raise DealServiceError(DEAL_SERVICE_TEXT.hold_insufficient_funds(format_money(available, currency)))
+
+    async def _ensure_withdrawal_funds(
+        self,
+        telegram_id: int,
+        amount_usdt: Decimal,
+        wallet_currency: str,
+    ) -> None:
+        assert self.ledger_service is not None
+        await self.ledger_service.ensure_user(telegram_id)
+        snapshot = await self.ledger_service.get_balance(telegram_id)
+        if snapshot.available_usdt < amount_usdt:
+            available = await self.exchange_rate_service.convert(snapshot.available_usdt, "USDT", wallet_currency)
+            raise WithdrawalError(
+                DEAL_SERVICE_TEXT.withdrawal_insufficient_funds(format_money(available, wallet_currency))
+            )
 
     def _viewer_role(self, deal: EscrowDeal, viewer_id: int | None) -> str:
         if viewer_id == deal.buyer_telegram_id:
@@ -1272,12 +1513,13 @@ class DealService:
                 buyer = await user_repository.get_by_telegram_id(author.telegram_id, with_lock=True)
                 currency = buyer.balance_currency or self.wallet_currency
                 self._ensure_wallet_currency(buyer, currency)
-                if Decimal(str(buyer.balance)) < amount:
-                    raise DealServiceError(
-                        DEAL_SERVICE_TEXT.hold_insufficient_funds(format_money(Decimal(str(buyer.balance)), currency))
-                    )
-                buyer.balance -= amount
-                buyer.held_balance += amount
+                if not self.is_core_first_billing:
+                    if Decimal(str(buyer.balance)) < amount:
+                        raise DealServiceError(
+                            DEAL_SERVICE_TEXT.hold_insufficient_funds(format_money(Decimal(str(buyer.balance)), currency))
+                        )
+                    buyer.balance -= amount
+                    buyer.held_balance += amount
                 buyer_id, seller_id = author.telegram_id, acceptor_user.telegram_id
                 pending_actor = "seller"
                 funds_held = True
@@ -1293,14 +1535,37 @@ class DealService:
                 funds_held=funds_held,
             )
             if funds_held:
-                await wallet_repository.add(
-                    telegram_id=buyer_id,
-                    transaction_type="deal_hold",
-                    amount=-amount,
-                    currency=currency,
-                    description=DEAL_SERVICE_TEXT.deal_hold_description(deal.id),
-                    reference=f"deal:{deal.id}",
-                )
+                if self.is_core_first_billing:
+                    assert self.ledger_service is not None
+                    amount_usdt = await self._to_usdt(amount, currency)
+                    try:
+                        await self.ledger_service.ensure_user(buyer_id)
+                        await self.ledger_service.hold(
+                            buyer_id,
+                            amount_usdt=amount_usdt,
+                            description=DEAL_SERVICE_TEXT.deal_hold_description(deal.id),
+                            operation_id=f"deal:{deal.id}:hold",
+                        )
+                    except LedgerInsufficientFundsError as error:
+                        await session.rollback()
+                        snapshot = await self.ledger_service.get_balance(buyer_id)
+                        available = await self.exchange_rate_service.convert(
+                            snapshot.available_usdt,
+                            "USDT",
+                            currency,
+                        )
+                        raise DealServiceError(
+                            DEAL_SERVICE_TEXT.hold_insufficient_funds(format_money(available, currency))
+                        ) from error
+                else:
+                    await wallet_repository.add(
+                        telegram_id=buyer_id,
+                        transaction_type="deal_hold",
+                        amount=-amount,
+                        currency=currency,
+                        description=DEAL_SERVICE_TEXT.deal_hold_description(deal.id),
+                        reference=f"deal:{deal.id}",
+                    )
             await message_repository.add(
                 deal_id=deal.id,
                 sender_telegram_id=0,

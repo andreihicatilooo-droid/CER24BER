@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 from aiogram.types import User as TelegramUserObject
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -10,6 +11,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from cerber_bot.db.models import TelegramUser, utcnow
 from cerber_bot.db.repositories.users import UserRepository
 from cerber_bot.db.repositories.wallet import WalletTransactionRepository
+from cerber_bot.services.exchange import ExchangeRateError, ExchangeRateService
+from cerber_bot.services.ledger import LedgerInsufficientFundsError, LedgerService
+
+
+@dataclass(slots=True, frozen=True)
+class BalanceAdjustResult:
+    old_balance: Decimal
+    new_balance: Decimal
+    user: TelegramUser
 
 
 @dataclass(slots=True, frozen=True)
@@ -20,9 +30,21 @@ class UserStats:
 
 
 class UserService:
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession], default_balance_currency: str = "USD") -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        default_balance_currency: str = "USD",
+        ledger_service: LedgerService | None = None,
+        exchange_rate_service: ExchangeRateService | None = None,
+    ) -> None:
         self.session_factory = session_factory
         self.default_balance_currency = default_balance_currency
+        self.ledger_service = ledger_service
+        self.exchange_rate_service = exchange_rate_service
+
+    @property
+    def is_core_first_billing(self) -> bool:
+        return self.ledger_service is not None and self.exchange_rate_service is not None
 
     async def register_or_update(self, telegram_user: TelegramUserObject) -> tuple[TelegramUser, bool]:
         async with self.session_factory() as session:
@@ -37,7 +59,11 @@ class UserService:
                 balance_currency=self.default_balance_currency,
             )
             await session.commit()
-            return user, created
+
+        if self.ledger_service is not None:
+            await self.ledger_service.ensure_user(telegram_user.id)
+
+        return user, created
 
     async def get_profile(self, telegram_id: int) -> TelegramUser | None:
         async with self.session_factory() as session:
@@ -89,12 +115,19 @@ class UserService:
         *,
         delta: Decimal,
         admin_id: int,
-    ) -> tuple[Decimal, TelegramUser]:
-        """Изменить баланс пользователя на delta (может быть отрицательным).
+    ) -> BalanceAdjustResult:
+        """Изменить баланс пользователя на delta (может быть отрицательным)."""
+        if self.is_core_first_billing:
+            return await self._adjust_balance_core_first(telegram_id, delta=delta, admin_id=admin_id)
+        return await self._adjust_balance_local(telegram_id, delta=delta, admin_id=admin_id)
 
-        Возвращает (старый_баланс, обновлённый_пользователь).
-        Raises ValueError если баланс уйдёт в минус.
-        """
+    async def _adjust_balance_local(
+        self,
+        telegram_id: int,
+        *,
+        delta: Decimal,
+        admin_id: int,
+    ) -> BalanceAdjustResult:
         async with self.session_factory() as session:
             user_repo = UserRepository(session)
             wallet_repo = WalletTransactionRepository(session)
@@ -122,4 +155,59 @@ class UserService:
                 reference=f"admin:{admin_id}",
             )
             await session.commit()
-            return old_balance, user
+            return BalanceAdjustResult(old_balance=old_balance, new_balance=new_balance, user=user)
+
+    async def _adjust_balance_core_first(
+        self,
+        telegram_id: int,
+        *,
+        delta: Decimal,
+        admin_id: int,
+    ) -> BalanceAdjustResult:
+        assert self.ledger_service is not None
+        assert self.exchange_rate_service is not None
+
+        async with self.session_factory() as session:
+            user_repo = UserRepository(session)
+            user = await user_repo.get_by_telegram_id(telegram_id)
+            if user is None:
+                raise ValueError("Пользователь не найден.")
+            currency = user.balance_currency or self.default_balance_currency
+
+        await self.ledger_service.ensure_user(telegram_id)
+        snapshot = await self.ledger_service.get_balance(telegram_id)
+        old_balance = await self.exchange_rate_service.convert(snapshot.available_usdt, "USDT", currency)
+        projected = old_balance + delta
+        if projected < Decimal("0.00"):
+            raise ValueError("Баланс не может стать отрицательным.")
+
+        try:
+            delta_usdt = await self.exchange_rate_service.convert(abs(delta), currency, "USDT")
+        except ExchangeRateError as error:
+            raise ValueError(str(error)) from error
+        if delta < Decimal("0.00"):
+            delta_usdt = -delta_usdt
+
+        tx_type = "topup" if delta >= Decimal("0.00") else "transfer"
+        try:
+            updated = await self.ledger_service.adjust(
+                telegram_id,
+                delta_usdt=delta_usdt,
+                tx_type=tx_type,
+                description=f"Корректировка администратором {admin_id}",
+                operation_id=f"admin:{admin_id}:{uuid4().hex[:12]}",
+            )
+        except LedgerInsufficientFundsError as error:
+            raise ValueError("Баланс не может стать отрицательным.") from error
+
+        new_balance = await self.exchange_rate_service.convert(updated.available_usdt, "USDT", currency)
+
+        async with self.session_factory() as session:
+            user_repo = UserRepository(session)
+            user = await user_repo.get_by_telegram_id(telegram_id)
+            if user is None:
+                raise ValueError("Пользователь не найден.")
+            user.updated_at = utcnow()
+            await session.commit()
+
+        return BalanceAdjustResult(old_balance=old_balance, new_balance=new_balance, user=user)

@@ -80,7 +80,7 @@ class STORE_KEYBOARD_TEXT:
     CUSTOM_AMOUNT = "Своя сумма"
     PAY_WITH_NICEPAY = "Оплатить через NicePay"
     PAY_WITH_RUKASSA = "Оплатить через Rukassa"
-    TOP_UP_H2H = "📲 Напрямую (H2H)"
+    TOP_UP_H2H = "💳 NicePay (перевод по реквизитам)"
     TOP_UP_LINK = "🔗 Через ссылку"
     TOP_UP_NICEPAY = "💳 Через NicePay"
     TOP_UP_RUKASSA = "💰 Через Rukassa"
@@ -713,6 +713,7 @@ class STORE_SERVICE_TEXT:
     REASON_CUSTOM_AMOUNT = "нужна произвольная сумма"
     REASON_CUSTOMER_DATA = "нужны дополнительные данные покупателя"
     TOP_UP_AMOUNT_POSITIVE = "Сумма пополнения должна быть больше нуля."
+    TOP_UP_USE_PAYMENTS = "Пополнение доступно только через платёжные методы (NicePay, Rukassa, Stars)."
     TOP_UP_DESCRIPTION = "Пополнение баланса на {amount}"
     BALANCE_ADJUSTMENT_NON_ZERO = "Сумма изменения должна быть больше нуля."
     MANUAL_CREDIT_DESCRIPTION = "Ручное пополнение разработчиком на {amount}"
@@ -1329,19 +1330,19 @@ class TG_ACCOUNTS_KEYBOARD_TEXT:
     PAGINATION_PREVIOUS = "◀"
     PAGINATION_PLACEHOLDER = "·"
     PAGINATION_NEXT = "▶"
-    
+
     @staticmethod
     def country_card(emoji: str | None, name: str, price: str, available: bool) -> str:
         """Формат кнопки страны в каталоге."""
         status = "✅" if available else "❌"
         emoji_str = emoji if emoji else "🌍"
         return f"{emoji_str} {name} • {price} {status}"
-    
+
     @staticmethod
     def page_info(page: int, total_pages: int) -> str:
         """Формат номера страницы."""
         return f"{page}/{total_pages}"
-    
+
     @staticmethod
     def purchase_card(phone: str | None, country: str, status: str) -> str:
         """Формат кнопки покупки в списке."""

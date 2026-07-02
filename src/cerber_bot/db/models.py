@@ -32,6 +32,7 @@ class TelegramUser(Base):
     display_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     name_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     referrer_telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    # Legacy local wallet (BILLING_MODE=local). Core-first: источник истины — Cerber Core.
     balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"), nullable=False)
     held_balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"), nullable=False)
     balance_currency: Mapped[str] = mapped_column(String(8), default="USD", nullable=False)
@@ -46,6 +47,8 @@ class TelegramUser(Base):
 
 
 class WalletTransaction(Base):
+    """Legacy audit log for BILLING_MODE=local. Core-first: история в Cerber Core."""
+
     __tablename__ = "wallet_transactions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

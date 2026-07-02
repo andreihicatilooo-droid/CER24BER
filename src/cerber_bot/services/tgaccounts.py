@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -11,6 +12,8 @@ from cerber_bot.db.repositories.tgaccounts import TgAccountRepository
 from cerber_bot.db.repositories.users import UserRepository
 from cerber_bot.db.repositories.wallet import WalletTransactionRepository
 from cerber_bot.integrations.getmytg import GetMyTGClient, GetMyTGError
+from cerber_bot.services.exchange import ExchangeRateError, ExchangeRateService
+from cerber_bot.services.ledger import LedgerInsufficientFundsError, LedgerService
 
 
 class TgAccountServiceError(RuntimeError):
@@ -78,9 +81,18 @@ class TgAccountService:
         self,
         client: GetMyTGClient,
         session_factory: async_sessionmaker[AsyncSession],
+        *,
+        exchange_rate_service: ExchangeRateService | None = None,
+        ledger_service: LedgerService | None = None,
     ) -> None:
         self.client = client
         self.session_factory = session_factory
+        self.exchange_rate_service = exchange_rate_service
+        self.ledger_service = ledger_service
+
+    @property
+    def is_core_first_billing(self) -> bool:
+        return self.ledger_service is not None and self.exchange_rate_service is not None
 
     @property
     def is_configured(self) -> bool:
@@ -130,6 +142,9 @@ class TgAccountService:
 
     async def buy_account(self, telegram_id: int, country_code: str) -> TgAccountPurchase:
         details = await self.get_country_details(country_code)
+
+        if self.is_core_first_billing:
+            return await self._buy_account_core_first(telegram_id, details)
 
         async with self.session_factory() as session:
             user_repo = UserRepository(session)
@@ -184,6 +199,71 @@ class TgAccountService:
                 verification_password=_extract_verification_value(purchase_data, "password"),
             )
 
+            await session.commit()
+            return purchase
+
+    async def _buy_account_core_first(self, telegram_id: int, details: TgCountryDetails) -> TgAccountPurchase:
+        assert self.ledger_service is not None
+        assert self.exchange_rate_service is not None
+
+        try:
+            amount_usdt = await self.exchange_rate_service.convert(details.amount, details.currency, "USDT")
+        except ExchangeRateError as error:
+            raise TgAccountServiceError(str(error)) from error
+
+        snapshot = await self.ledger_service.get_balance(telegram_id)
+        if snapshot.available_usdt < amount_usdt:
+            available = await self.exchange_rate_service.convert(snapshot.available_usdt, "USDT", details.currency)
+            raise TgAccountInsufficientBalanceError(
+                available=available,
+                required=details.amount,
+                currency=details.currency,
+            )
+
+        operation_id = f"getmytg:buy:{telegram_id}:{details.country_code}:{uuid4().hex[:12]}"
+        try:
+            await self.ledger_service.debit_usdt(
+                telegram_id,
+                amount_usdt=amount_usdt,
+                tx_type="transfer",
+                description=f"Покупка Telegram-аккаунта {details.country_code}",
+                operation_id=operation_id,
+            )
+        except LedgerInsufficientFundsError as error:
+            available = await self.exchange_rate_service.convert(snapshot.available_usdt, "USDT", details.currency)
+            raise TgAccountInsufficientBalanceError(
+                available=available,
+                required=details.amount,
+                currency=details.currency,
+            ) from error
+
+        try:
+            purchase_payload = await self.client.create_purchase(details.country_code)
+        except GetMyTGError as error:
+            await self.ledger_service.credit_usdt(
+                telegram_id,
+                amount_usdt=amount_usdt,
+                tx_type="transfer",
+                description=f"Отмена покупки Telegram-аккаунта {details.country_code}",
+                operation_id=f"{operation_id}:rollback",
+            )
+            raise TgAccountServiceError(str(error)) from error
+
+        purchase_data = _extract_purchase_payload(purchase_payload)
+        async with self.session_factory() as session:
+            tg_repo = TgAccountRepository(session)
+            purchase = await tg_repo.create(
+                telegram_id=telegram_id,
+                getmytg_purchase_id=_required_int(purchase_data, "id"),
+                country_code=_required_str(purchase_data, "country_code", default=details.country_code),
+                phone_number=_optional_str(purchase_data.get("phone_number")),
+                status=_required_str(purchase_data, "status", default="PENDING"),
+                amount=_extract_price_amount(purchase_data, default=details.amount),
+                currency=_extract_price_currency(purchase_data, default=details.currency),
+                purchase_type=_required_str(purchase_data, "purchase_type", default="SINGLE"),
+                verification_code=_extract_verification_value(purchase_data, "code"),
+                verification_password=_extract_verification_value(purchase_data, "password"),
+            )
             await session.commit()
             return purchase
 
@@ -250,19 +330,34 @@ class TgAccountService:
             await repository.update_status(purchase, status=new_status)
 
             if new_status == "REFUND":
-                user = await user_repo.get_by_telegram_id(telegram_id, with_lock=True)
-                if user is None:
-                    raise TgAccountServiceError("Пользователь не найден.")
                 amount = Decimal(str(purchase.amount))
-                user.balance += amount
-                await wallet_repo.add(
-                    telegram_id=telegram_id,
-                    transaction_type="tg_account_refund",
-                    amount=amount,
-                    currency=purchase.currency,
-                    description=f"Возврат за Telegram-аккаунт #{purchase.id}",
-                    reference=f"getmytg:refund:{purchase.getmytg_purchase_id}",
-                )
+                if self.is_core_first_billing:
+                    assert self.ledger_service is not None
+                    assert self.exchange_rate_service is not None
+                    try:
+                        amount_usdt = await self.exchange_rate_service.convert(amount, purchase.currency, "USDT")
+                    except ExchangeRateError as error:
+                        raise TgAccountServiceError(str(error)) from error
+                    await self.ledger_service.credit_usdt(
+                        telegram_id,
+                        amount_usdt=amount_usdt,
+                        tx_type="transfer",
+                        description=f"Возврат за Telegram-аккаунт #{purchase.id}",
+                        operation_id=f"getmytg:refund:{purchase.getmytg_purchase_id}",
+                    )
+                else:
+                    user = await user_repo.get_by_telegram_id(telegram_id, with_lock=True)
+                    if user is None:
+                        raise TgAccountServiceError("Пользователь не найден.")
+                    user.balance += amount
+                    await wallet_repo.add(
+                        telegram_id=telegram_id,
+                        transaction_type="tg_account_refund",
+                        amount=amount,
+                        currency=purchase.currency,
+                        description=f"Возврат за Telegram-аккаунт #{purchase.id}",
+                        reference=f"getmytg:refund:{purchase.getmytg_purchase_id}",
+                    )
 
             await session.commit()
             return purchase

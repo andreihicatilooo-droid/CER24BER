@@ -30,6 +30,7 @@ from ceer_bot.handlers.start import build_start_router
 from ceer_bot.handlers.tictactoe import build_tictactoe_router
 from ceer_bot.handlers.blackjack import build_blackjack_router
 from ceer_bot.handlers.durak import build_durak_router
+from cerber_bot.log_config import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +54,7 @@ async def _reset_webhook(bot: Bot) -> None:
 
 async def run() -> None:
     """Основной цикл CEER Bot."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        stream=sys.stdout,
-    )
+    setup_logging()
 
     settings = load_settings()
     container = await AppContainer.build(settings)
