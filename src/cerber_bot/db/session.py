@@ -45,5 +45,25 @@ def apply_lightweight_migrations(connection) -> None:  # type: ignore[no-untyped
     if "balance_currency" not in columns:
         statements.append("ALTER TABLE telegram_users ADD COLUMN balance_currency VARCHAR(8) NOT NULL DEFAULT 'USD'")
 
+    if "display_name" not in columns:
+        statements.append("ALTER TABLE telegram_users ADD COLUMN display_name VARCHAR(64)")
+
+    if "name_changed_at" not in columns:
+        statements.append("ALTER TABLE telegram_users ADD COLUMN name_changed_at DATETIME")
+
+    if "referrer_telegram_id" not in columns:
+        statements.append("ALTER TABLE telegram_users ADD COLUMN referrer_telegram_id BIGINT")
+
+    if inspector.has_table("escrow_deals"):
+        deal_columns = {column["name"] for column in inspector.get_columns("escrow_deals")}
+        if "dispute_topic_id" not in deal_columns:
+            statements.append("ALTER TABLE escrow_deals ADD COLUMN dispute_topic_id INTEGER")
+        if "pending_actor" not in deal_columns:
+            statements.append("ALTER TABLE escrow_deals ADD COLUMN pending_actor VARCHAR(8)")
+        if "funds_held" not in deal_columns:
+            statements.append("ALTER TABLE escrow_deals ADD COLUMN funds_held BOOLEAN NOT NULL DEFAULT 1")
+        if "delivered_at" not in deal_columns:
+            statements.append("ALTER TABLE escrow_deals ADD COLUMN delivered_at DATETIME")
+
     for statement in statements:
         connection.execute(text(statement))

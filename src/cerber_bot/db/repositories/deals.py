@@ -21,6 +21,8 @@ class EscrowDealRepository:
         amount: Decimal,
         currency: str,
         terms: str,
+        pending_actor: str | None = "seller",
+        funds_held: bool = True,
     ) -> EscrowDeal:
         now = utcnow()
         deal = EscrowDeal(
@@ -30,6 +32,8 @@ class EscrowDealRepository:
             amount=amount,
             currency=currency,
             terms=terms,
+            pending_actor=pending_actor,
+            funds_held=funds_held,
             created_at=now,
             updated_at=now,
         )
@@ -111,11 +115,20 @@ class EscrowDealRepository:
 
     async def count_open_for_user(self, telegram_id: int) -> int:
         query = select(func.count(EscrowDeal.id)).where(
-            EscrowDeal.status.in_(("pending_acceptance", "active", "disputed")),
+            EscrowDeal.status.in_(("pending_acceptance", "active", "delivered", "disputed")),
             or_(EscrowDeal.buyer_telegram_id == telegram_id, EscrowDeal.seller_telegram_id == telegram_id),
         )
         result = await self.session.execute(query)
         return int(result.scalar_one())
+
+    async def list_delivered_before(self, threshold) -> list[EscrowDeal]:
+        """Сделки с выданным товаром, у которых истёк срок автозакрытия."""
+        query = select(EscrowDeal).where(
+            EscrowDeal.status == "delivered",
+            EscrowDeal.delivered_at <= threshold,
+        )
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
 
 
 class EscrowDealMessageRepository:

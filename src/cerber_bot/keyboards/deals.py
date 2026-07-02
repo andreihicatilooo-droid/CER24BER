@@ -23,10 +23,18 @@ DEAL_SUCCESS_PREFIX = "deal:success:"
 DEAL_DISPUTE_PREFIX = "deal:dispute:"
 DEAL_MODERATOR_PREFIX = "deal:moderator:"
 DEAL_MODERATION_PREFIX = "deal:moderate:"
+DEAL_DELIVERED_PREFIX = "deal:delivered:"
 DEAL_WITHDRAW_ACTION = "deal:withdraw"
 DEAL_WITHDRAW_CANCEL_PREFIX = "deal:withdraw:cancel:"
 DEAL_WITHDRAW_NETWORK_PREFIX = "deal:withdraw:network:"
 DEAL_WITHDRAW_MODERATION_PREFIX = "deal:withdraw:moderate:"
+
+REVIEW_START_PREFIX = "review:start:"
+REVIEW_RATE_PREFIX = "review:rate:"
+
+OFFER_ACCEPT_PREFIX = "ofr:"
+OFFER_NEW_ACTION = "offer:new"
+OFFER_ROLE_PREFIX = "offer:role:"
 
 DEAL_CREATE_ACTION = DEAL_NEW_ACTION
 DEAL_LIST_PAGE_PREFIX = DEAL_PAGE_PREFIX
@@ -95,8 +103,18 @@ def build_deals_keyboard(cards: tuple[DealCard, ...], page_info: PageInfo) -> In
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def build_deal_detail_keyboard(deal: DealView) -> InlineKeyboardMarkup:
+def build_deal_detail_keyboard(deal: DealView, *, can_review: bool = False) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
+
+    if can_review:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=DEAL_KEYBOARD_TEXT.LEAVE_REVIEW,
+                    callback_data=f"{REVIEW_START_PREFIX}{deal.deal_id}",
+                )
+            ]
+        )
 
     if deal.can_accept:
         action_row = [InlineKeyboardButton(text=DEAL_KEYBOARD_TEXT.ACCEPT, callback_data=f"{DEAL_ACCEPT_PREFIX}{deal.deal_id}")]
@@ -118,6 +136,16 @@ def build_deal_detail_keyboard(deal: DealView) -> InlineKeyboardMarkup:
         rows.append(
             [
                 InlineKeyboardButton(text=DEAL_KEYBOARD_TEXT.DECLINE, callback_data=f"{DEAL_DECLINE_PREFIX}{deal.deal_id}")
+            ]
+        )
+
+    if deal.can_mark_delivered:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=DEAL_KEYBOARD_TEXT.MARK_DELIVERED,
+                    callback_data=f"{DEAL_DELIVERED_PREFIX}{deal.deal_id}",
+                )
             ]
         )
 
@@ -211,6 +239,21 @@ def build_moderator_deal_keyboard(deal_id: int) -> InlineKeyboardMarkup:
                 )
             ],
             [InlineKeyboardButton(text=DEAL_KEYBOARD_TEXT.OPEN_DEAL, callback_data=f"{DEAL_OPEN_PREFIX}{deal_id}")],
+        ]
+    )
+
+
+def build_review_rating_keyboard(deal_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="⭐" * rating,
+                    callback_data=f"{REVIEW_RATE_PREFIX}{deal_id}:{rating}",
+                )
+                for rating in range(1, 6)
+            ],
+            [InlineKeyboardButton(text=DEAL_KEYBOARD_TEXT.DEAL_HOME, callback_data=DEAL_HOME_ACTION)],
         ]
     )
 
