@@ -10,7 +10,7 @@ from cerber_bot.services.deals import DealService
 from cerber_bot.services.exchange import WalletQuote
 from cerber_bot.services.ledger import LedgerInsufficientFundsError
 from cerber_bot.services.ledger.types import LedgerSnapshot
-from cerber_bot.services.reputation import ReputationService
+from CRP.service import ReputationService
 from cerber_bot.services.wallet_read import WalletReadService
 
 

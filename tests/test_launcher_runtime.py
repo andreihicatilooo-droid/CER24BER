@@ -16,13 +16,16 @@ def test_build_component_command_uses_unbuffered_python(monkeypatch) -> None:
     shop = runtime.build_component_command("shop")
     admin = runtime.build_component_command("admin")
     ceer = runtime.build_component_command("ceer")
+    crp = runtime.build_component_command("crp")
 
     assert Path(shop[0]).name == "python.exe"
     assert Path(admin[0]).name == "python.exe"
     assert Path(ceer[0]).name == "python.exe"
+    assert Path(crp[0]).name == "python.exe"
     assert shop[1:3] == ["-u", "-m"]
     assert admin[1:3] == ["-u", "-m"]
     assert ceer[1:3] == ["-u", "-m"]
+    assert crp[1:3] == ["-u", "-m"]
 
 
 def test_spawn_component_windows_detached_starts_python_directly(monkeypatch, tmp_path) -> None:
@@ -68,6 +71,19 @@ def test_build_component_command_for_tunnel(monkeypatch) -> None:
     command = runtime.build_component_command("tunnel")
 
     assert command == ["C:/tools/cloudflared.exe", "tunnel", "--url", "http://localhost:9099"]
+
+
+def test_default_start_targets_include_crp_when_token_exists(monkeypatch) -> None:
+    def _get_env(key: str, default: str = "") -> str:
+        if key == "BOT_TOKEN":
+            return "bot-token"
+        if key == "CRP_BOT_TOKEN":
+            return "crp-token"
+        return default
+
+    monkeypatch.setattr(runtime, "get_env", _get_env)
+
+    assert runtime.default_start_targets() == ["shop", "crp"]
 
 
 def test_spawn_tunnel_truncates_previous_log(monkeypatch, tmp_path) -> None:

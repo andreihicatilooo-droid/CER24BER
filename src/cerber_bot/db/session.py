@@ -58,5 +58,29 @@ def apply_lightweight_migrations(connection) -> None:  # type: ignore[no-untyped
             "ALTER TABLE telegram_users ADD COLUMN reputation_updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
         )
 
+    if "nickname" not in columns:
+        statements.append("ALTER TABLE telegram_users ADD COLUMN nickname VARCHAR(255)")
+
+    if "nickname_changed_at" not in columns:
+        statements.append("ALTER TABLE telegram_users ADD COLUMN nickname_changed_at DATETIME")
+
     for statement in statements:
         connection.execute(text(statement))
+
+    if not inspector.has_table("user_reviews"):
+        connection.execute(text(
+            """
+            CREATE TABLE user_reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                rater_telegram_id BIGINT NOT NULL,
+                rated_telegram_id BIGINT NOT NULL,
+                deal_id INTEGER,
+                score INTEGER NOT NULL,
+                comment TEXT,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        ))
+        connection.execute(text("CREATE INDEX ix_user_reviews_rater_telegram_id ON user_reviews (rater_telegram_id)"))
+        connection.execute(text("CREATE INDEX ix_user_reviews_rated_telegram_id ON user_reviews (rated_telegram_id)"))
+        connection.execute(text("CREATE INDEX ix_user_reviews_deal_id ON user_reviews (deal_id)"))

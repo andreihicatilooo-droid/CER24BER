@@ -1,4 +1,4 @@
-"""Маршруты раздела репутации пользователя."""
+"""Маршруты раздела CRP в вебе."""
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
@@ -15,9 +15,11 @@ async def reputation_index(request: Request):
     profile = await container.user_service.get_profile(user_id)
     reputation = await container.reputation_service.get_user_reputation(user_id)
     deal_dashboard = await container.deal_service.get_dashboard(user_id)
+    reviews = await container.reputation_service.get_reviews_for_user(user_id, limit=20)
     return templates.TemplateResponse(request, "reputation/index.html", context={
         "profile": profile,
         "reputation": reputation,
         "deal_stats": deal_dashboard.statistics,
+        "reviews": reviews,
         "session": request.session,
     })

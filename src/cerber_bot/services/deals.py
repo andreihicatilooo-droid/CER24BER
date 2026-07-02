@@ -18,7 +18,7 @@ from cerber_bot.db.repositories.users import UserRepository
 from cerber_bot.db.repositories.wallet import WalletTransactionRepository
 from cerber_bot.services.exchange import ExchangeRateError, ExchangeRateService, WalletQuote
 from cerber_bot.services.ledger import LedgerInsufficientFundsError, LedgerService
-from cerber_bot.services.reputation import ReputationService
+from CRP.service import ReputationService
 from cerber_bot.services.store import PageInfo, build_page_info, format_money, normalize_money_amount
 from cerber_bot.services.wallet_read import WalletReadService
 from cerber_bot.texts import DEAL_SERVICE_TEXT
@@ -156,6 +156,15 @@ class DealInvitationResult:
 class DealActionResult:
     deal: DealView
     counterparty_id: int | None
+    review_prompt: ReviewPrompt | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class ReviewPrompt:
+    deal_id: int
+    rater_telegram_id: int
+    rated_telegram_id: int
+    rated_display_name: str
 
 
 @dataclass(slots=True, frozen=True)
@@ -1138,6 +1147,8 @@ class DealService:
         )
 
     def _display_name(self, user: TelegramUser | None, telegram_id: int | None = None) -> str:
+        if user is not None and user.nickname:
+            return user.nickname
         if user is not None and user.username:
             return f"@{user.username}"
         if user is not None:

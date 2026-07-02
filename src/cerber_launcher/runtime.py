@@ -58,11 +58,12 @@ COMPONENT_SPECS: dict[str, ComponentSpec] = {
     "shop": ComponentSpec("shop", "cerber_bot", "shop", "shop_err"),
     "admin": ComponentSpec("admin", "cerber_admin", "admin", "admin_err"),
     "ceer": ComponentSpec("ceer", "ceer_bot", "ceer", "ceer_err"),
+    "crp": ComponentSpec("crp", "CRP", "crp", "crp_err"),
     "tunnel": ComponentSpec("tunnel", "cloudflared", "tunnel", None),
 }
 
-COMPONENT_ORDER = ("shop", "admin", "ceer", "tunnel")
-BOT_COMPONENTS = ("shop", "admin", "ceer")
+COMPONENT_ORDER = ("shop", "admin", "ceer", "crp", "tunnel")
+BOT_COMPONENTS = ("shop", "admin", "ceer", "crp")
 TUNNEL_COMPONENTS = ("tunnel",)
 
 
@@ -72,6 +73,8 @@ def default_start_targets() -> list[str]:
         targets.append("admin")
     if get_env("CEER_BOT_TOKEN"):
         targets.append("ceer")
+    if get_env("CRP_BOT_TOKEN"):
+        targets.append("crp")
     return targets
 
 
@@ -85,6 +88,7 @@ def expand_component_names(components: list[str] | None, *, default: list[str] |
         "shop": "shop",
         "admin": "admin",
         "ceer": "ceer",
+        "crp": "crp",
         "tunnel": "tunnel",
     }
     groups = {
@@ -116,6 +120,8 @@ def build_component_command(component: str) -> list[str]:
         return [python_bin, "-u", "-m", "cerber_admin"]
     if component == "ceer":
         return [python_bin, "-u", "-m", "ceer_bot"]
+    if component == "crp":
+        return [python_bin, "-u", "-m", "CRP"]
     if component == "tunnel":
         cloudflared = shutil.which("cloudflared") or shutil.which("cloudflared.exe")
         if not cloudflared:
@@ -137,6 +143,8 @@ def ensure_component_ready(component: str) -> None:
         raise LauncherRuntimeError("ADMIN_BOT_TOKEN не задан в .env.")
     if component == "ceer" and not get_env("CEER_BOT_TOKEN"):
         raise LauncherRuntimeError("CEER_BOT_TOKEN не задан в .env.")
+    if component == "crp" and not get_env("CRP_BOT_TOKEN"):
+        raise LauncherRuntimeError("CRP_BOT_TOKEN не задан в .env.")
     if component == "tunnel" and get_env("WEB_ENABLED", "true").lower() not in {"1", "true", "yes"}:
         raise LauncherRuntimeError("WEB_ENABLED=false, туннель не требуется.")
 

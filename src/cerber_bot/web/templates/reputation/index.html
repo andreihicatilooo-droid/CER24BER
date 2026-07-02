@@ -13,6 +13,12 @@
             <span class="key">Имя</span>
             <span class="val">{{ profile.first_name or '—' }}</span>
         </div>
+        {% if profile.nickname %}
+        <div class="info-row">
+            <span class="key">Никнейм</span>
+            <span class="val">{{ profile.nickname }}</span>
+        </div>
+        {% endif %}
         {% if profile.username %}
         <div class="info-row">
             <span class="key">Username</span>
@@ -49,6 +55,25 @@
         <a href="/profile" class="ghost-btn btn-sm">К профилю →</a>
         <a href="/deals" class="ghost-btn btn-sm">К сделкам →</a>
     </div>
+</div>
+
+<div class="surface fade-up" style="margin-top:12px">
+    <div class="section-heading"><h2>Отзывы</h2></div>
+    {% if reviews %}
+    <div class="info-table">
+        {% for review in reviews %}
+        <div class="info-row" style="align-items:flex-start">
+            <span class="key">{{ review.score }}⭐</span>
+            <span class="val">
+                {{ review.comment or 'Без комментария' }}
+                <br><small>от ID {{ review.rater_telegram_id }} • {{ review.created_at.strftime('%d.%m.%Y') }}</small>
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p>Пока нет отзывов.</p>
+    {% endif %}
 </div>
 
 {% endblock %}

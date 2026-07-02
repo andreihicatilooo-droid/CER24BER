@@ -26,6 +26,8 @@ LOGS = {
     "admin_err": LOG_DIR / "admin_error.log",
     "ceer": LOG_DIR / "ceer.log",
     "ceer_err": LOG_DIR / "ceer_error.log",
+    "crp": LOG_DIR / "crp.log",
+    "crp_err": LOG_DIR / "crp_error.log",
     "tunnel": LOG_DIR / "tunnel.log",
     "launcher": LOG_DIR / "launcher.log",
 }
@@ -34,6 +36,7 @@ PID_FILES = {
     "shop": RUN_DIR / "cerber_bot.pid.json",
     "admin": RUN_DIR / "cerber_admin.pid.json",
     "ceer": RUN_DIR / "ceer_bot.pid.json",
+    "crp": RUN_DIR / "crp.pid.json",
     "tunnel": RUN_DIR / "cloudflared.pid.json",
 }
 

@@ -49,7 +49,7 @@ def test_main_without_args_opens_menu_in_new_terminal(monkeypatch: pytest.Monkey
 
 
 def test_expand_component_names_supports_group_aliases() -> None:
-    assert expand_component_names(["bots"]) == ["shop", "admin", "ceer"]
+    assert expand_component_names(["bots"]) == ["shop", "admin", "ceer", "crp"]
     assert expand_component_names(["tunnels"]) == ["tunnel"]
 
 
@@ -109,6 +109,7 @@ def test_bots_command_lists_only_bots(monkeypatch: pytest.MonkeyPatch, capsys: p
     assert "cerber_bot" in output
     assert "cerber_admin" in output
     assert "ceer_bot" in output
+    assert "CRP" in output
     assert "cloudflared" not in output
 
 

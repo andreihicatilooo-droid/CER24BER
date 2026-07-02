@@ -26,6 +26,7 @@ class Settings(BaseSettings):
 
     bot_token: str = Field(alias="BOT_TOKEN")
     admin_bot_token: str = Field(default="", alias="ADMIN_BOT_TOKEN")
+    crp_bot_token: str = Field(default="", alias="CRP_BOT_TOKEN")
     database_url: str = Field(default="sqlite+aiosqlite:///./data/cerber.db", alias="DATABASE_URL")
     start_image_path: Path = Field(default_factory=lambda: PROJECT_ROOT / "START.jpg", alias="START_IMAGE_PATH")
     support_url: str = Field(default="https://t.me/cerber_support", alias="SUPPORT_URL")

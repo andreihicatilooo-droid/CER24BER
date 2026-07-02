@@ -24,7 +24,7 @@ from cerber_bot.services.admin_events import AdminEventService
 from cerber_bot.services.exchange import ExchangeRateService
 from cerber_bot.services.giftapi import GiftApiService
 from cerber_bot.services.ledger import LedgerService
-from cerber_bot.services.reputation import ReputationService
+from CRP.service import ReputationService
 from cerber_bot.services.payments import PaymentService
 from cerber_bot.services.store import StoreService
 from cerber_bot.services.tgaccounts import TgAccountService

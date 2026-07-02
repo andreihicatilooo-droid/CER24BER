@@ -26,6 +26,8 @@ class TelegramUser(Base):
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     first_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    nickname: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    nickname_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     language_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     is_bot: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Legacy local wallet (BILLING_MODE=local). Core-first: источник истины — Cerber Core.
@@ -215,3 +217,15 @@ class UserOrder(Base):
         onupdate=utcnow,
         nullable=False,
     )
+
+
+class UserReview(Base):
+    __tablename__ = "user_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rater_telegram_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
+    rated_telegram_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
+    deal_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
