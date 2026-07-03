@@ -1,0 +1,13 @@
+{% extends "admin/base.html" %}
+{% block title %}Не найдено — CERBER Admin{% endblock %}
+{% block topbar_title %}Не найдено{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="empty">
+    <div class="icon">?</div>
+    {{ msg if msg is defined else 'Запись не найдена' }}
+    <br><br>
+    <a href="/admin" class="btn sm">← Дашборд</a>
+  </div>
+</div>
+{% endblock %}

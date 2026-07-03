@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CERBER Admin{% endblock %}</title>
+    <style>
+/* ── TOKENS ── */
+:root {
+  --bg:        #05010a;
+  --bg-card:   rgba(14, 4, 28, 0.97);
+  --bg-panel:  rgba(10, 2, 22, 0.99);
+  --line:      rgba(140, 0, 255, 0.28);
+  --line-s:    rgba(180, 0, 255, 0.55);
+  --text:      #ddd4f5;
+  --text-m:    #8a7aaa;
+  --text-s:    #554d77;
+  --accent:    #8800ff;
+  --accent2:   #aa44ff;
+  --green:     #00ff88;
+  --warn:      #ffcc00;
+  --danger:    #ff2244;
+  --mono:      'Courier New', monospace;
+  --radius:    0;
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0;min-height:100vh;font-family:var(--mono);
+  background:var(--bg);color:var(--text);
+  background-image:
+    repeating-linear-gradient(0deg,rgba(0,0,0,.10) 0,rgba(0,0,0,.10) 1px,transparent 1px,transparent 4px);
+  overflow-x:hidden;
+}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(ellipse at 50% 0%,rgba(100,0,200,.18) 0%,transparent 60%),
+    radial-gradient(ellipse at 80% 100%,rgba(60,0,140,.12) 0%,transparent 50%);
+}
+a{color:inherit;text-decoration:none;}
+button,input,select,textarea{font:inherit;cursor:pointer;}
+img{max-width:100%;}
+::selection{background:rgba(140,0,255,.30);color:var(--text);}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-thumb{background:var(--line-s);}
+
+/* ── LAYOUT ── */
+.shell{max-width:1100px;margin:0 auto;padding:0 20px;}
+.page-wrap{display:flex;min-height:100vh;}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:220px;flex-shrink:0;
+  background:var(--bg-panel);
+  border-right:1px solid var(--line);
+  display:flex;flex-direction:column;
+  position:sticky;top:0;height:100vh;
+  padding:24px 0;
+  z-index:10;
+}
+.sidebar-brand{
+  padding:0 20px 20px;
+  border-bottom:1px solid var(--line);
+  margin-bottom:10px;
+}
+.sidebar-brand .logo{
+  font-size:1.15rem;font-weight:700;letter-spacing:.1em;
+  color:var(--accent2);text-transform:uppercase;
+}
+.sidebar-brand .sub{font-size:.68rem;color:var(--text-m);margin-top:2px;}
+.nav-item{
+  display:block;padding:10px 20px;font-size:.82rem;color:var(--text-m);
+  border-left:2px solid transparent;transition:all .15s;
+}
+.nav-item:hover{color:var(--text);background:rgba(140,0,255,.07);border-left-color:var(--accent);}
+.nav-item.active{color:var(--accent2);border-left-color:var(--accent);background:rgba(140,0,255,.10);}
+.nav-section{
+  padding:14px 20px 4px;font-size:.65rem;color:var(--text-s);
+  text-transform:uppercase;letter-spacing:.12em;
+}
+.sidebar-footer{margin-top:auto;padding:16px 20px;border-top:1px solid var(--line);}
+.sidebar-footer .admin-chip{font-size:.75rem;color:var(--text-m);}
+.sidebar-footer .admin-chip strong{color:var(--accent2);}
+
+/* ── TOPBAR ── */
+.topbar{
+  height:52px;background:var(--bg-panel);
+  border-bottom:1px solid var(--line);
+  display:flex;align-items:center;
+  padding:0 24px;gap:16px;
+  position:sticky;top:0;z-index:9;
+}
+.topbar-title{font-size:.9rem;font-weight:600;letter-spacing:.04em;}
+.topbar-badges{display:flex;gap:8px;margin-left:auto;}
+.badge{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 10px;font-size:.72rem;border:1px solid;
+}
+.badge.danger{color:var(--danger);border-color:rgba(255,34,68,.4);}
+.badge.warn{color:var(--warn);border-color:rgba(255,204,0,.4);}
+.badge.ok{color:var(--green);border-color:rgba(0,255,136,.4);}
+
+/* ── MAIN ── */
+.main{flex:1;min-width:0;display:flex;flex-direction:column;}
+.content{flex:1;padding:24px;position:relative;z-index:1;}
+
+/* ── CARDS ── */
+.card{
+  background:var(--bg-card);border:1px solid var(--line);
+  padding:20px;margin-bottom:16px;
+}
+.card-title{
+  font-size:.78rem;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--accent2);margin-bottom:14px;padding-bottom:10px;
+  border-bottom:1px solid var(--line);
+}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+.stat{background:var(--bg-card);border:1px solid var(--line);padding:16px 18px;}
+.stat .label{font-size:.7rem;color:var(--text-m);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;}
+.stat .val{font-size:1.6rem;font-weight:700;line-height:1;}
+.stat .sub{font-size:.72rem;color:var(--text-m);margin-top:4px;}
+.val.green{color:var(--green);}
+.val.warn{color:var(--warn);}
+.val.danger{color:var(--danger);}
+.val.purple{color:var(--accent2);}
+
+/* ── TABLE ── */
+.tbl{width:100%;border-collapse:collapse;font-size:.82rem;}
+.tbl th{
+  text-align:left;padding:8px 12px;
+  font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--text-m);border-bottom:1px solid var(--line);
+}
+.tbl td{padding:10px 12px;border-bottom:1px solid rgba(140,0,255,.12);}
+.tbl tr:hover td{background:rgba(140,0,255,.05);}
+.tbl a{color:var(--accent2);}
+.tbl a:hover{color:var(--text);}
+
+/* ── STATUS PILLS ── */
+.pill{display:inline-block;padding:2px 9px;font-size:.70rem;border:1px solid;}
+.pill.active{color:#4af;border-color:rgba(68,170,255,.4);}
+.pill.pending{color:var(--warn);border-color:rgba(255,204,0,.4);}
+.pill.completed{color:var(--green);border-color:rgba(0,255,136,.4);}
+.pill.disputed{color:var(--danger);border-color:rgba(255,34,68,.4);}
+.pill.delivered{color:#fa0;border-color:rgba(255,170,0,.4);}
+.pill.rejected{color:var(--text-m);border-color:var(--line);}
+.pill.approved{color:var(--green);border-color:rgba(0,255,136,.4);}
+.pill.requested{color:var(--warn);border-color:rgba(255,204,0,.4);}
+
+/* ── BUTTONS ── */
+.btn{
+  display:inline-block;padding:8px 18px;font-size:.8rem;
+  background:transparent;border:1px solid var(--accent);color:var(--accent2);
+  transition:all .15s;
+}
+.btn:hover{background:rgba(140,0,255,.15);color:var(--text);}
+.btn.sm{padding:5px 12px;font-size:.76rem;}
+.btn.danger{border-color:var(--danger);color:var(--danger);}
+.btn.danger:hover{background:rgba(255,34,68,.12);}
+.btn.ok{border-color:var(--green);color:var(--green);}
+.btn.ok:hover{background:rgba(0,255,136,.10);}
+
+/* ── FORM ── */
+.form-group{margin-bottom:14px;}
+.form-group label{display:block;font-size:.74rem;color:var(--text-m);margin-bottom:5px;text-transform:uppercase;letter-spacing:.06em;}
+.form-group input,.form-group select,.form-group textarea{
+  width:100%;padding:9px 12px;
+  background:rgba(10,2,22,.97);border:1px solid var(--line);
+  color:var(--text);font-size:.85rem;
+}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{
+  outline:none;border-color:var(--accent);
+}
+.form-group textarea{resize:vertical;min-height:80px;}
+
+/* ── ALERTS ── */
+.alert{padding:10px 14px;font-size:.82rem;margin-bottom:14px;border-left:3px solid;}
+.alert.err{border-color:var(--danger);background:rgba(255,34,68,.06);color:var(--danger);}
+.alert.suc{border-color:var(--green);background:rgba(0,255,136,.06);color:var(--green);}
+.alert.info{border-color:var(--accent);background:rgba(140,0,255,.06);color:var(--accent2);}
+
+/* ── BREADCRUMB ── */
+.bc{display:flex;align-items:center;gap:8px;font-size:.76rem;color:var(--text-m);margin-bottom:16px;}
+.bc a{color:var(--accent2);}
+.bc .sep{color:var(--text-s);}
+
+/* ── DEAL DETAIL ── */
+.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px;}
+.info-row{display:flex;justify-content:space-between;align-items:center;
+  padding:8px 0;border-bottom:1px solid rgba(140,0,255,.12);font-size:.82rem;}
+.info-row .key{color:var(--text-m);font-size:.78rem;}
+.info-row .val{color:var(--text);}
+.info-row .val.accent{color:var(--accent2);font-weight:700;}
+
+/* ── CHAT LOG ── */
+.msg-list{display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;padding:4px 0;}
+.msg-bubble{padding:10px 12px;background:rgba(20,8,40,.85);border-left:2px solid var(--accent);}
+.msg-meta{display:flex;gap:10px;margin-bottom:4px;font-size:.72rem;color:var(--text-m);}
+.msg-author{color:var(--accent2);}
+.msg-body{font-size:.82rem;line-height:1.55;}
+.msg-system{padding:6px 10px;font-size:.76rem;color:var(--text-s);border-left:2px solid var(--line);font-style:italic;}
+
+/* ── EMPTY STATE ── */
+.empty{padding:40px;text-align:center;color:var(--text-m);font-size:.85rem;}
+.empty .icon{font-size:2.5rem;margin-bottom:12px;opacity:.4;}
+
+/* ── RESOLUTION BTNS ── */
+.resolve-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}
+
+/* ── MOBILE ── */
+@media(max-width:720px){
+  .sidebar{display:none;}
+  .content{padding:16px;}
+  .stat-grid{grid-template-columns:1fr 1fr;}
+  .tbl td:nth-child(3),.tbl th:nth-child(3){display:none;}
+}
+
+/* ── FLASH ANIM ── */
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+.card,.stat{animation:fadeIn .25s ease both;}
+
+/* ── CRT line ── */
+body::after{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.06) 0,rgba(0,0,0,.06) 1px,transparent 1px,transparent 3px);
+}
+    </style>
+</head>
+<body>
+<div class="page-wrap">
+  {% if admin_id is defined and admin_id %}
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">⬡ CERBER</div>
+      <div class="sub">Admin Panel</div>
+    </div>
+
+    <div class="nav-section">Управление</div>
+    <a href="/admin" class="nav-item {% if request.url.path == '/admin' %}active{% endif %}">▣ Дашборд</a>
+    <a href="/admin/disputes" class="nav-item {% if '/disputes' in request.url.path %}active{% endif %}">⚖ Диспуты</a>
+    <a href="/admin/withdrawals" class="nav-item {% if '/withdrawals' in request.url.path %}active{% endif %}">↑ Выводы</a>
+
+    <div class="sidebar-footer">
+      <div class="admin-chip">Мод. ID: <strong>#{{ admin_id }}</strong></div>
+      <a href="/admin/logout" style="display:block;margin-top:10px;font-size:.75rem;color:var(--text-s);">→ Выход</a>
+    </div>
+  </aside>
+  {% endif %}
+
+  <!-- Main area -->
+  <div class="main">
+    {% if admin_id is defined and admin_id %}
+    <div class="topbar">
+      <span class="topbar-title">{% block topbar_title %}CERBER Admin{% endblock %}</span>
+      <div class="topbar-badges">
+        {% block topbar_badges %}{% endblock %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="content">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+</body>
+</html>

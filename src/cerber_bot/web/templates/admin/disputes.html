@@ -1,0 +1,55 @@
+{% extends "admin/base.html" %}
+{% block title %}Диспуты — CERBER Admin{% endblock %}
+{% block topbar_title %}Диспуты{% endblock %}
+{% block topbar_badges %}
+  <span class="badge {% if deals %}danger{% else %}ok{% endif %}">{{ deals|length }} активных</span>
+{% endblock %}
+
+{% block content %}
+<div class="bc">
+  <a href="/admin">Дашборд</a>
+  <span class="sep">/</span>
+  <span>Диспуты</span>
+</div>
+
+{% if not deals %}
+<div class="card">
+  <div class="empty">
+    <div class="icon">⚖</div>
+    Активных диспутов нет
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-title">Открытые диспуты ({{ deals|length }})</div>
+  <div style="overflow-x:auto;">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Покупатель</th>
+          <th>Продавец</th>
+          <th>Сумма</th>
+          <th>Статус</th>
+          <th>Дата</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for deal in deals %}
+        <tr>
+          <td><a href="/admin/disputes/{{ deal.deal_id }}">#{{ deal.deal_id }}</a></td>
+          <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ deal.buyer.display_name }}</td>
+          <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ deal.seller.display_name }}</td>
+          <td><span style="color:var(--warn);font-weight:700;">{{ "%.2f"|format(deal.amount) }}</span> {{ deal.currency }}</td>
+          <td><span class="pill disputed">disputed</span></td>
+          <td style="color:var(--text-m);font-size:.76rem;">{{ deal.created_at.strftime('%d.%m.%Y') if deal.created_at else '-' }}</td>
+          <td><a href="/admin/disputes/{{ deal.deal_id }}" class="btn sm danger">Разрешить</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,122 @@
+{% extends "admin/base.html" %}
+{% block title %}Диспут #{{ deal.deal_id }} — CERBER Admin{% endblock %}
+{% block topbar_title %}Диспут #{{ deal.deal_id }}{% endblock %}
+
+{% block content %}
+<div class="bc">
+  <a href="/admin">Дашборд</a>
+  <span class="sep">/</span>
+  <a href="/admin/disputes">Диспуты</a>
+  <span class="sep">/</span>
+  <span>#{{ deal.deal_id }}</span>
+</div>
+
+{% if request.query_params.get('resolved') == '1' %}
+<div class="alert suc">✓ Диспут разрешён. Средства переведены согласно решению.</div>
+{% endif %}
+{% if error is defined and error %}
+<div class="alert err">{{ error }}</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+  <div class="card">
+    <div class="card-title">Детали сделки</div>
+
+    <div class="info-row">
+      <span class="key">ID</span>
+      <span class="val accent">#{{ deal.deal_id }}</span>
+    </div>
+    <div class="info-row">
+      <span class="key">Статус</span>
+      <span class="val"><span class="pill {{ deal.status }}">{{ deal.status }}</span></span>
+    </div>
+    <div class="info-row">
+      <span class="key">Сумма</span>
+      <span class="val accent">{{ "%.2f"|format(deal.amount) }} {{ deal.currency }}</span>
+    </div>
+    {% if deal.amount_quote is defined %}
+    <div class="info-row">
+      <span class="key">≈ USDT</span>
+      <span class="val">{{ "%.2f"|format(deal.amount_quote.usdt_amount) }} USDT</span>
+    </div>
+    {% endif %}
+    <div class="info-row">
+      <span class="key">Покупатель</span>
+      <span class="val">{{ deal.buyer.display_name }}</span>
+    </div>
+    <div class="info-row">
+      <span class="key">Продавец</span>
+      <span class="val">{{ deal.seller.display_name }}</span>
+    </div>
+    <div class="info-row">
+      <span class="key">Создана</span>
+      <span class="val" style="color:var(--text-m);">{{ deal.created_at.strftime('%d.%m.%Y %H:%M') if deal.created_at else '-' }}</span>
+    </div>
+    {% if deal.resolution %}
+    <div class="info-row">
+      <span class="key">Решение</span>
+      <span class="val" style="color:var(--green);">{{ deal.resolution }}</span>
+    </div>
+    {% endif %}
+
+    <div style="margin-top:14px;padding:12px;background:rgba(10,2,22,.9);border-left:2px solid var(--accent);">
+      <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-m);margin-bottom:6px;">Условия сделки</div>
+      <div style="font-size:.82rem;color:var(--text-m);line-height:1.65;">{{ deal.terms }}</div>
+    </div>
+  </div>
+
+  <div>
+    <!-- Resolve form (only for active disputed deals) -->
+    {% if deal.status == 'disputed' %}
+    <div class="card">
+      <div class="card-title">⚖ Разрешить диспут</div>
+      <form method="post" action="/admin/disputes/{{ deal.deal_id }}/resolve">
+        <div class="form-group">
+          <label>Решение</label>
+          <select name="resolution" required>
+            <option value="">— выберите —</option>
+            <option value="buyer_wins">Победа покупателя (возврат)</option>
+            <option value="seller_wins">Победа продавца (оплата)</option>
+          </select>
+        </div>
+        <div class="resolve-row">
+          <button type="submit" class="btn ok" onclick="return confirm('Разрешить диспут? Это действие необратимо.')">Применить решение</button>
+        </div>
+      </form>
+    </div>
+    {% else %}
+    <div class="card">
+      <div class="card-title">Статус</div>
+      <div class="alert info">Диспут уже разрешён ({{ deal.status }}){% if deal.resolution %}: {{ deal.resolution }}{% endif %}.</div>
+    </div>
+    {% endif %}
+
+    <!-- Chat log -->
+    <div class="card">
+      <div class="card-title">История чата ({{ deal.messages|length }})</div>
+      {% if deal.messages %}
+      <div class="msg-list">
+        {% for msg in deal.messages %}
+        {% if msg.sender_role == 'system' %}
+        <div class="msg-system">{{ msg.body }}</div>
+        {% else %}
+        <div class="msg-bubble">
+          <div class="msg-meta">
+            <span class="msg-author">{{ msg.sender_display }}</span>
+            <span style="color:var(--text-s);">[{{ msg.sender_role }}]</span>
+            <span>{{ msg.created_at.strftime('%d.%m %H:%M') if msg.created_at else '' }}</span>
+          </div>
+          <div class="msg-body">{{ msg.body }}</div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty" style="padding:20px 0;">Сообщений нет</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

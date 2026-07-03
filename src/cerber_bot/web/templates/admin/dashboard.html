@@ -1,0 +1,68 @@
+{% extends "admin/base.html" %}
+{% block title %}Дашборд — CERBER Admin{% endblock %}
+{% block topbar_title %}Дашборд{% endblock %}
+{% block topbar_badges %}
+  {% if disputes_count > 0 %}<span class="badge danger">{{ disputes_count }} диспут{{ 'а' if disputes_count in [2,3,4] else ('ов' if disputes_count > 4 else '') }}</span>{% endif %}
+  {% if withdrawals_count > 0 %}<span class="badge warn">{{ withdrawals_count }} вывод{{ 'а' if withdrawals_count in [2,3,4] else ('ов' if withdrawals_count > 4 else '') }}</span>{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="stat-grid">
+  <div class="stat">
+    <div class="label">Диспуты</div>
+    <div class="val {% if disputes_count > 0 %}danger{% else %}green{% endif %}">{{ disputes_count }}</div>
+    <div class="sub">требуют решения</div>
+  </div>
+  <div class="stat">
+    <div class="label">Заявки на вывод</div>
+    <div class="val {% if withdrawals_count > 0 %}warn{% else %}green{% endif %}">{{ withdrawals_count }}</div>
+    <div class="sub">ожидают обработки</div>
+  </div>
+  <div class="stat">
+    <div class="label">Статус</div>
+    <div class="val green" style="font-size:1.1rem;">● ONLINE</div>
+    <div class="sub">система работает</div>
+  </div>
+  <div class="stat">
+    <div class="label">Модератор</div>
+    <div class="val purple" style="font-size:1.1rem;">#{{ admin_id }}</div>
+    <div class="sub">ваш Telegram ID</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px;">
+  <div class="card">
+    <div class="card-title">⚖ Диспуты</div>
+    {% if disputes_count > 0 %}
+    <p style="font-size:.84rem;color:#ddd4f5;margin-bottom:14px;">{{ disputes_count }} активных диспутов ожидают вашего решения.</p>
+    <a href="/admin/disputes" class="btn danger">Перейти к диспутам →</a>
+    {% else %}
+    <div class="empty"><div class="icon">✓</div>Активных диспутов нет</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-title">↑ Заявки на вывод</div>
+    {% if withdrawals_count > 0 %}
+    <p style="font-size:.84rem;color:#ddd4f5;margin-bottom:14px;">{{ withdrawals_count }} заявок ожидают одобрения или отклонения.</p>
+    <a href="/admin/withdrawals" class="btn" style="border-color:var(--warn);color:var(--warn);">Перейти к заявкам →</a>
+    {% else %}
+    <div class="empty"><div class="icon">✓</div>Заявок на вывод нет</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card" style="margin-top:0">
+  <div class="card-title">🔍 Быстрый поиск сделки</div>
+  <form action="/admin/deals/0" method="get" id="deal-search-form"
+        onsubmit="event.preventDefault(); window.location='/admin/deals/'+document.getElementById('did').value;">
+    <div style="display:flex;gap:10px;align-items:flex-end;">
+      <div class="form-group" style="margin:0;flex:1;">
+        <label>ID сделки</label>
+        <input type="number" id="did" placeholder="12345" min="1">
+      </div>
+      <button type="submit" class="btn sm">Найти</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
