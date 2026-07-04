@@ -24,6 +24,7 @@ from cerber_bot.container import AppContainer
 from cerber_bot.handlers.giftapi import build_giftapi_router
 from cerber_bot.handlers.inline import build_inline_router
 from cerber_bot.handlers.menu import build_deals_router, build_menu_router
+from cerber_bot.handlers.moderation import build_moderation_router
 from CRP.bot import build_crp_router
 from cerber_bot.handlers.start import build_start_router
 from cerber_bot.handlers.storefront import build_storefront_router

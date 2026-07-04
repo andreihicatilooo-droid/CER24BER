@@ -55,7 +55,6 @@ class AppContainer:
     store_service: StoreService
     nbox_service: NboxService
     user_service: UserService
-    reputation_service: ReputationService
     referral_service: ReferralService
     admin_group_service: AdminGroupService
 
@@ -211,7 +210,6 @@ class AppContainer:
             store_service=store_service,
             nbox_service=NboxService(),
             user_service=user_service,
-            reputation_service=ReputationService(session_factory),
             referral_service=ReferralService(
                 session_factory,
                 bot_username=resolved_settings.bot_username,
