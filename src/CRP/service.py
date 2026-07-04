@@ -60,6 +60,27 @@ class ReputationService:
                 return ReputationView.empty(telegram_id)
             return self._to_view(user)
 
+    def apply_success(self, buyer: TelegramUser, seller: TelegramUser) -> None:
+        self._increase_score(buyer, SUCCESS_REPUTATION_POINTS)
+        self._increase_score(seller, SUCCESS_REPUTATION_POINTS)
+
+    def apply_dispute_resolution(self, buyer: TelegramUser, seller: TelegramUser, *, resolution: str) -> None:
+        normalized = resolution.strip().lower()
+        if normalized == "refund":
+            self._penalize(seller, DISPUTE_REFUND_PENALTY)
+        elif normalized == "release":
+            self._increase_score(seller, SUCCESS_REPUTATION_POINTS)
+            self._penalize(buyer, DISPUTE_RELEASE_PENALTY)
+
+    def _increase_score(self, user: TelegramUser, delta: int) -> None:
+        user.reputation_score = int(user.reputation_score or 0) + delta
+        user.reputation_updated_at = utcnow()
+
+    def _penalize(self, user: TelegramUser, delta: int) -> None:
+        user.reputation_score = int(user.reputation_score or 0) - delta
+        user.reputation_dispute_losses = int(user.reputation_dispute_losses or 0) + 1
+        user.reputation_updated_at = utcnow()
+
     async def get_display_name(self, telegram_id: int) -> str:
         async with self.session_factory() as session:
             repository = UserRepository(session)

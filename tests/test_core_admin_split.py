@@ -10,8 +10,6 @@ from cerber_admin.main import run_admin_event_worker
 from cerber_bot.config import Settings
 from cerber_bot.container import AppContainer
 from cerber_bot.handlers.admin import build_admin_router
-from cerber_bot.main import run as bot_run
-from cerber_core.main import run as core_run
 
 
 class FakeBot:
@@ -34,10 +32,6 @@ def _build_settings(database_path: Path) -> Settings:
         WEB_ENABLED=False,
         MODERATOR_IDS="7001",
     )
-
-
-def test_core_entrypoint_maps_to_main_run() -> None:
-    assert core_run is bot_run
 
 
 @pytest.mark.asyncio

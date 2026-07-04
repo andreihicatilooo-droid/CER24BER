@@ -26,6 +26,13 @@ import pytest
 import requests
 from requests.exceptions import RequestException
 
+pytest.importorskip("google.adk", reason="google-adk не установлен — e2e-тест Gemini-сервера пропущен")
+
+try:
+    import app.fast_api_app  # noqa: F401 - проверка GCP-кредов до старта сервера
+except Exception as error:  # noqa: BLE001 - нет GCP-кредов / Vertex AI недоступен
+    pytest.skip(f"Gemini-сервер недоступен: {error}", allow_module_level=True)
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

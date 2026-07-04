@@ -23,7 +23,6 @@ from cerber_bot.services.deals import DealService
 from cerber_bot.services.admin_events import AdminEventService
 from cerber_bot.services.admin_group import AdminGroupService
 from cerber_bot.services.referrals import ReferralService
-from cerber_bot.services.reputation import ReputationService
 from cerber_bot.services.exchange import ExchangeRateService
 from cerber_bot.services.giftapi import GiftApiService
 from cerber_bot.services.ledger import LedgerService

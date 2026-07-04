@@ -99,33 +99,33 @@ def _build_parser() -> argparse.ArgumentParser:
     component_choices = [*COMPONENT_ORDER, "all", "bot", "bots", "tunnels"]
 
     start_parser = subparsers.add_parser("start", help="Запустить компоненты в фоне")
-    start_parser.add_argument("components", nargs="*", choices=component_choices)
+    start_parser.add_argument("components", nargs="*", metavar="{" + ",".join(component_choices) + "}")
     start_parser.add_argument("--with-tunnel", action="store_true", help="Добавить cloudflared к стандартному набору")
 
     stop_parser = subparsers.add_parser("stop", help="Остановить компоненты")
-    stop_parser.add_argument("components", nargs="*", choices=component_choices)
+    stop_parser.add_argument("components", nargs="*", metavar="{" + ",".join(component_choices) + "}")
 
     restart_parser = subparsers.add_parser("restart", help="Перезапустить компоненты")
-    restart_parser.add_argument("components", nargs="*", choices=component_choices)
+    restart_parser.add_argument("components", nargs="*", metavar="{" + ",".join(component_choices) + "}")
     restart_parser.add_argument("--with-tunnel", action="store_true", help="При пустом списке перезапустить и tunnel тоже")
 
     serve_parser = subparsers.add_parser("serve", help="Запустить компоненты в текущем терминале")
-    serve_parser.add_argument("components", nargs="*", choices=component_choices)
+    serve_parser.add_argument("components", nargs="*", metavar="{" + ",".join(component_choices) + "}")
     serve_parser.add_argument("--with-tunnel", action="store_true", help="Добавить cloudflared к стандартному набору")
 
     status_parser = subparsers.add_parser("status", help="Показать статус компонентов")
-    status_parser.add_argument("components", nargs="*", choices=component_choices)
+    status_parser.add_argument("components", nargs="*", metavar="{" + ",".join(component_choices) + "}")
 
     subparsers.add_parser("bots", help="Показать список всех ботов")
     subparsers.add_parser("tunnels", help="Показать список туннелей")
 
     doctor_parser = subparsers.add_parser("doctor", help="Проверить готовность компонентов к запуску")
-    doctor_parser.add_argument("components", nargs="*", choices=component_choices)
+    doctor_parser.add_argument("components", nargs="*", metavar="{" + ",".join(component_choices) + "}")
     doctor_parser.add_argument("--with-tunnel", action="store_true", help="Добавить cloudflared к стандартному набору")
 
     log_choices = [*COMPONENT_ORDER, "launcher", "all", "bot", "bots", "tunnels"]
     logs_parser = subparsers.add_parser("logs", help="Показать последние строки логов")
-    logs_parser.add_argument("targets", nargs="*", choices=log_choices)
+    logs_parser.add_argument("targets", nargs="*", metavar="{" + ",".join(log_choices) + "}")
     logs_parser.add_argument("--lines", type=_positive_int, default=DEFAULT_LOG_LINES, help="Сколько последних строк вывести")
     logs_parser.add_argument("--errors", action="store_true", help="Показать только error-логи")
 
